@@ -1,0 +1,134 @@
+/**
+ * President verifier workspace — WLC-SMART design system (Design of the system).
+ * Builds on dashboard.css; do not redefine sidebar / page-header colors.
+ */
+
+/* Main column height: use .gsd-main from gsd.css on president pages (same as GSD dashboard). */
+
+/* Workspace kicker: use .gsd-kicker from gsd.css for identical type to GSD */
+
+.pv-placeholder {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  padding: 2.5rem 2rem;
+  text-align: center;
+  max-width: 560px;
+}
+
+.pv-placeholder-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 1.25rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #16a34a, #22c55e);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+}
+
+.pv-placeholder h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.5rem;
+}
+
+.pv-placeholder p {
+  font-size: 0.95rem;
+  color: #64748b;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/*
+ * Data tables — match GSD / comptroller request tables: inherit font size from
+ * dashboard.css + dean_requisition_management.css (same as pages without .pv-data-table).
+ * History keeps fixed layout; President Request (.pv-requests-table) uses auto layout + centered body like GSD.
+ */
+.pv-data-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: inherit;
+}
+
+/* Request list only: GSD-style centered cells; auto layout so Request No. keeps a stable column width */
+.pv-data-table.pv-requests-table {
+  table-layout: auto;
+}
+
+.pv-data-table.pv-requests-table tbody td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.pv-data-table .actions-cell {
+  justify-content: center;
+}
+
+.pv-data-table thead th:first-child,
+.pv-data-table tbody td:first-child {
+  width: 2.5rem;
+  max-width: 50px;
+  min-width: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.pv-data-table tbody td:first-child {
+  color: #475569;
+}
+
+/* Request No. column (2) — do not let REQ-* crowd adjacent columns (history uses different column order) */
+.pv-data-table.pv-requests-table thead th:nth-child(2),
+.pv-data-table.pv-requests-table tbody td:nth-child(2) {
+  min-width: 10.5rem;
+  max-width: 13rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Long text: same ellipsis behavior as dense list tables; font size unchanged */
+.pv-data-table tbody td:not(:first-child) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pv-data-table .pv-td-center {
+  text-align: center;
+}
+
+.pv-data-table .pv-td-num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-empty-row td {
+  text-align: center !important;
+  padding: 2rem 1rem !important;
+  color: #64748b;
+  white-space: normal;
+}
+
+.management-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.management-header p {
+  color: #64748b;
+  font-size: 1rem;
+  margin: 0;
+  line-height: 1.5;
+}

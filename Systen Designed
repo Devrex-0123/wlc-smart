@@ -1,0 +1,175 @@
+You are working on my system: WLC-SMART (Integrated Supplier Management, School Assets, Requisition, and Monitoring System).
+
+You MUST strictly follow this DESIGN SYSTEM. These rules are mandatory and must not be ignored or overridden.
+
+DESIGN SYSTEM:
+
+LAYOUT:
+- Fixed sidebar (width: 280px) with green gradient (#16a34a → #15803d)
+- Main content: margin-left: 280px, padding: 2rem
+- All pages must start with a .page-header (card style)
+- Use card-based sections (border-radius: 16px, padding: 2rem)
+
+TABLE RULES:
+- ALL tables must use green striped headers (no gray headers allowed)
+- Header text: uppercase, white, centered
+
+"# COLUMN RULE":
+- Must be very small
+- max-width: 50px only
+- must NOT use percentage width
+- must NOT expand or dominate the table
+
+TABLE CELLS:
+- padding: 0.5rem 0.4rem
+- text aligned LEFT
+- numbers aligned CENTER
+- use ellipsis for overflow text
+
+TABLE BEHAVIOR:
+- use table-layout: fixed
+- prevent layout breaking
+
+FORMS:
+- Inputs:
+  - border: 1px solid #e2e8f0
+  - padding: 0.6rem
+  - border-radius: 8px
+- Focus:
+  - border: #16a34a
+  - green glow shadow
+- Location / facility (requester-facing forms, e.g. requisition & canvass):
+  - **Do not** show internal facility **code** to requesters (codes are for superadmin / facility management only).
+  - Label format: **room or laboratory first**, then **building**, separated by a middle dot (` · `) when both exist; omit empty segments.
+
+BUTTONS:
+- Primary: #16a34a
+- Hover: #15803d
+- Edit: #059669
+- Delete: #ef4444
+- View: #06b6d4
+- All buttons must be consistent in size and style
+
+TYPOGRAPHY:
+- Font: Inter
+- Page title: 2rem bold
+- Table text: 0.8rem
+
+SPACING:
+- Section padding: 2rem
+- Gap between elements: 1.5rem
+
+COMPONENTS TO USE:
+- page-header
+- filter-section
+- table-wrapper
+- modal
+- action-btn
+- status-badge
+
+STRICT RULES:
+- Do NOT introduce new colors
+- Do NOT change spacing system
+- Do NOT redesign layout
+- Do NOT create inconsistent styles
+- Reuse existing components only
+
+STATUS MODULE / PROGRESS PAGE RULES (ADDED):
+- Sidebar label should be "Status" (avoid redundant "Request Status" wording).
+- Status listing page should prefer card-based status items instead of dense data tables.
+- Avoid duplicated information blocks on one page:
+  - Do not show the same request details in both top hero and another details card.
+  - Do not show duplicate progress indicators (e.g., large overall % and another repeated progress value).
+- Keep one clear progress indicator area (workflow bar + stage icons).
+- Place navigation/actions in a top bar:
+  - Back button must appear at the upper section of the page.
+  - Primary action button (view form) must align with system green palette (#16a34a / #15803d).
+- Tooltip-first principle for step explanations:
+  - Keep step labels short.
+  - Show long explanation on hover/focus tooltip only.
+- Summary stat cards in Status page should not be flat:
+- Summary stat cards in ALL modules/pages should not be flat:
+  - Use subtle gradient backgrounds per card type (Total/Pending/Ongoing/Completed).
+  - Add a left accent strip color for quick visual grouping.
+  - Add one concise icon per summary card to improve glanceability.
+  - Keep color palette aligned with existing theme and status semantics.
+  - Use soft shadows and mild hover lift for depth, without changing layout spacing.
+
+FACILITY MANAGEMENT — DEPARTMENT LIST LAYOUT (ADDED):
+- Departments list supports two presentations: **table (default)** and **card grid**.
+- **Default is table**; optional grid is for visual scanning (logo + stats on cards).
+- **Pagination**: department list uses **five rows per page** with **Previous / Next** and **Page X of Y**, matching **pagination-controls** / **pagination-btn** / **page-info** styling used on inventory and requisition pages. Search and sort apply on the **server** before paging; URL may include `dept_page` when not on page 1 (departments view only). Breadcrumb **Departments** returns to **page 1** and reloads.
+- **URL state**: add `dept_layout=grid` only when grid is active; omit the param for the default table (consistent with other Facility Management query params).
+- **Layout control is secondary**: use a single **icon-only** control (no filled background, no border, no primary-button styling). It must not compete with main actions (e.g. Add Department).
+- **Labeling**: do not show a permanent text label beside the icon; put the full explanation in **native `title`**, **`aria-label`**, and a **hover/focus tooltip** (e.g. `data-tooltip` + CSS) so keyboard users see the same hint as hover.
+- **Facilities list** inside a department stays a **table only**; this toggle applies to the **department list step** only.
+- Reuse standard **View / Edit / Delete** `.action-btn` styles for row/card actions; do not introduce alternate button colors for this feature.
+
+CANVASS VERIFICATION CHAIN (ADDED):
+- After the **requester** completes and saves the **Canvass sheet / Abstract of quotation**, approvals proceed in this order (distinct from inventory’s initial requisition accept/reject):
+  1. **Canvasser** — department staff **assigned by GSD** to confirm canvass quotes / matrix (system: `canvas_status` / assignee on `request_approval`).
+  2. **GSD** (verifier).
+  3. **Comptroller**.
+  4. **President**.
+- The canvass form page should briefly surface this chain so requesters know what happens next (short note; no duplicate long policy text).
+
+REQUISITION → CANVASS CONTINUATION (ADDED):
+- On the requisition form, when the request is inventory-accepted and the canvass step applies, show a **short** status line only (e.g. “Next step: Your requisition was accepted.”).
+- Do **not** repeat long instructional copy in that banner (no multi-sentence explanations of item names, specs, or supplier matrix layout—the canvass form page carries its own context).
+- Present the block as a **notification**: left accent border + light green background, include a clear **icon** (e.g. exclamation-in-circle) beside the message, and use `role="status"` / `aria-live="polite"` where appropriate.
+- The **Open canvass form** control must **not** use solid primary fill (no `.btn-submit` green block). Use an **outline / border-only** button: transparent background, `1px` border in brand green (`#16a34a` / `#15803d`), text weight 600–700, optional light green hover fill (`#ecfdf5`).
+- Keep copy minimal; the notification styling carries “this needs attention” without extra paragraphs.
+
+CANVASS MATRIX INFO NOTICE (ADDED):
+- For comptroller/president canvass review, show the “GSD suggested supplier per item” info notice in the **upper part of the canvass data area**, directly above the supplier/quoted-price matrix.
+- Do not place this notice inside the approval-strip cards.
+- Reuse existing system notification styling (same green notification language used in canvass/requisition flow context: left accent, light green surface, icon, concise text).
+- The notice may be dismissible (close icon/button) as long as visual style remains aligned with the system notification component.
+- Keep message short and state-based:
+  - all items selected
+  - partial selection (X out of Y)
+
+PURCHASE REQUISITION FORM (ADDED):
+- Provide a dedicated page for approved canvass output named **PURCHASE REQUISITION**.
+- The page must be viewable by requester, inventory manager, and verifier roles (G.S.D., comptroller, president).
+- **Purchase requisition verification** (inventory officer + president on this form only) must be stored separately from:
+  - `requisition_status` (initial accept/reject of the **requisition form** by inventory), and
+  - `pres_status` (president decision on the **canvass** chain).
+- Use dedicated columns on `request_approval`: `pr_inv_status`, `pr_inv_note`, `pr_inv_at`, `pr_pres_status`, `pr_pres_note`, `pr_pres_at` (see migration `20260502_purchase_requisition_verifier.sql`). The purchase requisition API reads/writes these fields; do not overload the original requisition or canvass approval fields for this step.
+- Reuse the existing requisition/canvass header shell and card layout; do not introduce a new page style.
+- Table column order for purchase lines is fixed as:
+  1. **Description**
+  2. **Qty**
+  3. **Supplier**
+  4. **Unit price**
+  5. **Amount**
+- Description should surface item identity details in one cell (name, brand, model, optional spec).
+- Amount is computed as `qty * unit price`.
+- Include a clear **Total Amount** summary aligned with the system table section style.
+- Keep implementation modular:
+  - backend API endpoint for purchase requisition data
+  - dedicated JS for rendering/formatting
+  - dedicated CSS for purchase requisition-only presentation tweaks
+
+CONFIRMATION MODAL CONSISTENCY (ADDED):
+- Do not use browser-native `window.confirm()` for workflow approvals/rejections/undo actions.
+- Reuse the existing shared confirmation modal component (`.confirm-modal`) used by requisition/canvass pages.
+- Modal structure must include:
+  - green header with title **Please Confirm**
+  - body message text area
+  - actions row with **Cancel** and **Confirm** buttons using existing `.confirm-btn-*` styles
+- Behavior must match existing modal UX:
+  - close on backdrop click
+  - close on `Esc`
+  - no custom color variants beyond the current confirm modal palette
+- Applies to all verifier decision actions (accept/reject/undo) to keep confirmation UI consistent system-wide.
+
+INVENTORY MANAGEMENT — DEPARTMENT STEP (ADDED):
+- The first step (department list) is **paginated**: **five departments per page**, with **Previous / Next** controls and page indicator, using the same **pagination-controls** / **pagination-btn** / **page-info** pattern as requisition and history pages (green gradient buttons, disabled gray when not applicable).
+- Departments are ranked by **total inventory** (sum of `inventory.quantity` across all facilities in the department), **highest first** by default; ties break alphabetically by department name. Search and sort apply to the **full** department list before paging.
+- URL may include `dept_page` when not on page 1 and the view is **departments**; returning to Departments via the breadcrumb resets to page 1.
+- Deeper navigation (facilities/inventory for a department) is unchanged; bookmarked URLs that include `dept_id` / `dept_name` still resolve via the facilities-by-department API.
+
+TASK:
+Create or modify the page while strictly following the design system above.
+Ensure the UI is consistent with existing pages and does not introduce design conflicts.

@@ -1,0 +1,310 @@
+/* Dean inventory (UI module) — aligns with WLC-SMART design system */
+
+.dean-inventory-page .table-wrapper table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.dean-inventory-page .table-wrapper thead th:first-child,
+.dean-inventory-page .table-wrapper tbody td:first-child {
+    max-width: 50px;
+    width: 50px;
+    box-sizing: border-box;
+}
+
+.dean-inventory-page .table-wrapper tbody td {
+    padding: 0.5rem 0.4rem;
+    font-size: 0.8rem;
+    text-align: left;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dean-inventory-page .table-wrapper tbody td.col-num,
+.dean-inventory-page .table-wrapper tbody td.col-qty {
+    text-align: center;
+}
+
+.dean-inventory-page .table-wrapper tbody tr:hover {
+    transform: none;
+}
+
+.dean-inventory-page .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+/* Match inventory management “view” / row actions (green gradient) */
+.dean-inventory-page .action-btn.view-inventory,
+.dean-inventory-page .action-btn.view-facilities {
+    padding: 0.5rem 0.75rem;
+    min-width: 2.25rem;
+    min-height: 2rem;
+    border-radius: 6px;
+    font-weight: 500;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    gap: 0.5rem;
+}
+
+.dean-inventory-page .action-btn.view-inventory:hover,
+.dean-inventory-page .action-btn.view-facilities:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.dean-inventory-page .table-wrapper tbody td.col-action,
+.dean-inventory-page .table-wrapper thead th.col-action {
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.dean-inventory-page .inventory-hint {
+    margin: 0 0 1.25rem;
+    padding: 0.85rem 1rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    color: #14532d;
+    font-size: 0.85rem;
+}
+
+.dean-lab-manager-panel {
+    margin-bottom: 1.25rem;
+}
+
+.dean-lab-manager-heading {
+    margin: 0 0 0.5rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.dean-lab-manager-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.dean-lab-manager-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #334155;
+}
+
+.dean-lab-manager-select {
+    min-width: 16rem;
+    flex: 1 1 12rem;
+}
+
+.dean-lab-manager-save {
+    padding: 0.5rem 1.1rem;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+}
+
+.dean-lab-manager-save:hover {
+    filter: brightness(1.05);
+}
+
+.dean-lab-manager-status {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    color: #0f766e;
+}
+
+.dean-lab-manager-status.is-error {
+    color: #b91c1c;
+}
+
+/* Modal (read-only detail) — matches dean account modal behavior */
+.dean-inventory-page .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.dean-inventory-page .modal.open {
+    display: flex;
+}
+
+.dean-inventory-page .modal-content {
+    background: #fefefe;
+    padding: 2rem;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 640px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    position: relative;
+    box-sizing: border-box;
+}
+
+.dean-inventory-page .modal-content .close-modal {
+    position: absolute;
+    right: 1.25rem;
+    top: 1rem;
+    font-size: 1.75rem;
+    font-weight: bold;
+    color: #94a3b8;
+    cursor: pointer;
+    line-height: 1;
+    border: 0;
+    background: transparent;
+    padding: 0.25rem;
+}
+
+.dean-inventory-page .modal-content .close-modal:hover {
+    color: #1e293b;
+}
+
+.dean-inventory-page .modal-content h2 {
+    margin: 0 0 1.25rem;
+    color: #1e293b;
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.dean-inventory-detail {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.dean-inventory-detail .detail-row {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.dean-inventory-detail .detail-row dt {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.dean-inventory-detail .detail-row dd {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #1e293b;
+    word-break: break-word;
+}
+
+.dean-inventory-page .modal-actions {
+    margin-top: 1.25rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.dean-inventory-page .modal-actions .btn-muted {
+    border: 0;
+    border-radius: 8px;
+    padding: 0.55rem 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.dean-inventory-page .modal-actions .btn-muted:hover {
+    background: #cbd5e1;
+}
+
+.dean-inv-breadcrumb {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+    color: #64748b;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.35rem;
+}
+
+.dean-bc-link {
+    color: #16a34a;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.dean-bc-link:hover {
+    text-decoration: underline;
+}
+
+.dean-bc-current {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.dean-bc-sep {
+    color: #94a3b8;
+    user-select: none;
+}
+
+.dean-inv-loading,
+.dean-inv-error {
+    text-align: center;
+    padding: 2rem;
+}
+
+.dean-inv-error {
+    color: #b91c1c;
+}
+
+.dean-inv-facility-title {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+    color: #1e293b;
+}
+
+.dean-fac-row:hover {
+    background: #f8fafc;
+}
+
+.dean-inv-parts-h {
+    font-size: 0.95rem;
+    margin: 1rem 0 0.5rem;
+    color: #1e293b;
+}
+
+.dean-inv-parts-table th,
+.dean-inv-parts-table td {
+    padding: 0.4rem 0.35rem;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.78rem;
+}
+
+.dean-inv-parts-table thead th {
+    background: #f1f5f9;
+    font-weight: 600;
+    color: #334155;
+}
+
+.dean-inv-search {
+    max-width: 24rem;
+    margin-top: 0.5rem;
+}

@@ -1,0 +1,3 @@
+-- OBSOLETE: verifier columns are on `purchase_requisition_approval` (see `20260529_split_request_approval_tables.sql`).
+-- This file is kept so migration lists stay chronological; do not run the old ALTER unless you still have a legacy
+-- `request_approval` table and have not yet run 20260529.

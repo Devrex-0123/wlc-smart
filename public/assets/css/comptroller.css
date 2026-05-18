@@ -1,0 +1,284 @@
+/**
+ * Comptroller-only additions (e.g. history timeline). Main layout uses dashboard.css.
+ */
+
+.comp-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.comp-tl-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1rem;
+    padding: 1.15rem 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.comp-tl-item:last-child {
+    border-bottom: none;
+}
+
+.comp-tl-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #16a34a;
+    margin-top: 0.35rem;
+    box-shadow: 0 0 0 4px #dcfce7;
+}
+
+.comp-tl-body h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.comp-tl-meta {
+    font-size: 0.82rem;
+    color: #64748b;
+    margin-bottom: 0.35rem;
+}
+
+.comp-tl-desc {
+    font-size: 0.88rem;
+    color: #475569;
+    line-height: 1.45;
+}
+
+.comp-empty-hint {
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+.comp-empty-hint i {
+    font-size: 2rem;
+    color: #cbd5e1;
+    display: block;
+    margin-bottom: 0.75rem;
+}
+
+.comp-empty-hint--inline {
+    padding: 1.5rem 1rem;
+}
+
+.comp-empty-hint--inline i {
+    display: inline-block;
+    font-size: 1.25rem;
+    margin-right: 0.5rem;
+    margin-bottom: 0;
+    vertical-align: middle;
+}
+
+.comp-history-empty-cell {
+    text-align: center;
+    vertical-align: middle;
+    padding: 0;
+}
+
+/* History module — comptroller action log (pills; table uses shared management styles) */
+.comp-history-action {
+    display: inline-block;
+    font-weight: 700;
+    font-size: 0.78rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.comp-history-action--accept {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.comp-history-action--reject {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.comp-history-action--pending {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+/* Comptroller history — filters: labeled columns so search icon centers on input, not stretched row */
+.comp-history-filters {
+    align-items: flex-start;
+}
+
+.comp-history-search-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1 1 260px;
+    min-width: min(100%, 240px);
+    max-width: 440px;
+}
+
+.comp-history-field-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #475569;
+    line-height: 1.2;
+}
+
+.comp-history-search-field.search-container {
+    max-width: none;
+    width: 100%;
+    flex: none;
+}
+
+.comp-history-search-field.search-container i {
+    line-height: 1;
+    z-index: 1;
+}
+
+.comp-history-search-field .search-input {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    line-height: 1.35;
+    min-height: 2.5rem;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+}
+
+.comp-history-date-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 200px;
+    flex: 0 1 auto;
+}
+
+.comp-history-date-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.comp-history-date-input {
+    padding: 0.55rem 0.65rem;
+    border: 1px solid #cfe0d3;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: #1e293b;
+    font-family: inherit;
+    min-height: 2.5rem;
+    box-sizing: border-box;
+    background: #fff;
+}
+
+.comp-history-date-input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.comp-history-date-clear {
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: 2.5rem;
+    box-sizing: border-box;
+    align-self: stretch;
+}
+
+/*
+ * Action history log (GSD + President + Canvasser) — fit main column without horizontal scroll:
+ * fixed layout, compact padding (overrides global tbody td), wrap long text columns.
+ */
+.main-content .table-wrapper table.history-action-log {
+    table-layout: fixed;
+    width: 100%;
+    max-width: 100%;
+}
+
+.main-content .table-wrapper table.history-action-log thead th,
+.main-content .table-wrapper table.history-action-log tbody td {
+    padding: 0.55rem 0.45rem;
+    box-sizing: border-box;
+}
+
+/* # — narrow; date & time — wider; other six columns equal (sums to 100%) */
+.main-content .table-wrapper table.history-action-log thead th:nth-child(1),
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(1) {
+    width: 5%;
+    max-width: 50px;
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+}
+
+.main-content .table-wrapper table.history-action-log thead th:nth-child(2),
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(2) {
+    width: 24%;
+}
+
+.main-content .table-wrapper table.history-action-log thead th:nth-child(n + 3):nth-child(-n + 8),
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(n + 3):nth-child(-n + 8) {
+    width: 12.166%;
+}
+
+.main-content .table-wrapper table.history-action-log tbody tr:hover {
+    transform: none;
+}
+
+.main-content .table-wrapper table.history-action-log tbody td {
+    vertical-align: middle;
+    text-align: center;
+}
+
+/* Row index — typography */
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(1) {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* Date & time — single line so AM/PM stays with the clock */
+.main-content .table-wrapper table.history-action-log thead th:nth-child(2),
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(2) {
+    white-space: nowrap;
+}
+
+/* Your action */
+.main-content .table-wrapper table.history-action-log thead th:nth-child(3),
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(3) {
+    white-space: nowrap;
+}
+
+/* Request no. */
+.main-content .table-wrapper table.history-action-log thead th:nth-child(4),
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(4) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Actions */
+.main-content .table-wrapper table.history-action-log thead th:nth-child(8),
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(8) {
+    white-space: nowrap;
+}
+
+/* Long text: wrap instead of forcing table wider */
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(5),
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(6),
+.main-content .table-wrapper table.history-action-log tbody td:nth-child(7) {
+    text-align: left;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
+.main-content .table-wrapper table.history-action-log .actions-cell {
+    justify-content: center;
+}
+
+.main-content .table-wrapper table.history-action-log .actions-cell .edit {
+    white-space: nowrap;
+}

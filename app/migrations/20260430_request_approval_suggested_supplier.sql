@@ -1,0 +1,6 @@
+-- OBSOLETE for installs using split approval tables: `suggested_supplier_id` / `suggested_supplier_name`
+-- are on `canvass_verification_approval` (see cwirms.sql or `20260529_split_request_approval_tables.sql`).
+-- Legacy ALTER (only if `request_approval` still exists and columns are missing):
+-- ALTER TABLE `request_approval`
+--   ADD COLUMN `suggested_supplier_id` int(11) DEFAULT NULL AFTER `canvas_assignee_user_id`,
+--   ...

@@ -1,0 +1,615 @@
+/* Requisition status / progress — matches IMRMS green dashboard theme */
+
+:root {
+    --rsp-primary: #16a34a;
+    --rsp-primary-dark: #15803d;
+    --rsp-primary-soft: #dcfce7;
+    --rsp-primary-glow: rgba(22, 163, 74, 0.12);
+    --rsp-slate-900: #0f172a;
+    --rsp-slate-600: #475569;
+    --rsp-slate-500: #64748b;
+    --rsp-border: #e2e8f0;
+    --rsp-card: #ffffff;
+    --rsp-radius: 16px;
+    --rsp-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+}
+
+/* Align with .page-header: full width inside .main-content (same horizontal bounds) */
+.rsp-wrap {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.rsp-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 10px;
+    border: 1px solid var(--rsp-border);
+    background: #f0fdf4;
+    color: #166534;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.rsp-back:hover {
+    background: #dcfce7;
+    border-color: #bbf7d0;
+    color: #14532d;
+}
+
+/* First control in main content: upper-left, tight spacing above page title */
+.main-content > .rsp-back-upper-left {
+    display: inline-flex;
+    margin: 0 0 0.5rem 0;
+}
+
+.rsp-hero {
+    background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 48%, #ecfdf5 100%);
+    border: 1px solid #d1fae5;
+    border-radius: var(--rsp-radius);
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--rsp-shadow);
+}
+
+.rsp-hero-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+/* Workflow + stepper live inside the hero (single card) */
+.rsp-hero-workflow {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(16, 185, 129, 0.22);
+}
+
+/* Inside “Form” card: items + plain-text form rows with minimal View links */
+.rsp-form-items-block {
+    margin-bottom: 1rem;
+}
+
+.rsp-form-links-inner {
+    margin-top: 0.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rsp-border);
+}
+
+.rsp-form-links-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.rsp-form-link-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+}
+
+.rsp-form-link-text {
+    font-size: 0.92rem;
+    color: var(--rsp-slate-600);
+    line-height: 1.45;
+}
+
+.rsp-form-link-hint {
+    font-weight: 500;
+    color: var(--rsp-slate-500);
+    font-size: 0.88rem;
+}
+
+/* “View” — link-like only: no background, no border */
+.rsp-form-view {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem 0.55rem;
+    margin: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #15803d;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    cursor: pointer;
+    border-radius: 6px;
+    min-height: 2.5rem;
+}
+
+.rsp-form-view:hover {
+    color: #14532d;
+    text-decoration-thickness: 2px;
+}
+
+.rsp-form-view:focus-visible {
+    outline: 2px solid var(--rsp-primary);
+    outline-offset: 2px;
+    border-radius: 6px;
+    text-decoration: none;
+}
+
+a.rsp-form-view-disabled,
+a.rsp-form-view-disabled:hover {
+    color: #94a3b8;
+    cursor: not-allowed;
+    text-decoration: none;
+    pointer-events: none;
+}
+
+
+.rsp-hero-title {
+    margin: 0 0 0.35rem 0;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--rsp-slate-900);
+    letter-spacing: -0.02em;
+}
+
+.rsp-hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    align-items: center;
+    font-size: 0.9rem;
+    color: var(--rsp-slate-500);
+}
+
+.rsp-hero-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.rsp-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.rsp-badge.pending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.rsp-badge.ongoing {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.rsp-badge.completed {
+    background: var(--rsp-primary-soft);
+    color: #166534;
+}
+
+/* Progress bar (nested in .rsp-hero-workflow) */
+.rsp-progress-label {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--rsp-slate-900);
+}
+
+.rsp-progress-track {
+    height: 12px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+    position: relative;
+    /* Align with .rsp-steps connector (left/right 8%) so fill % lines up with icons */
+    margin-left: 8%;
+    margin-right: 8%;
+}
+
+.rsp-progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--rsp-primary) 0%, #22c55e 50%, #4ade80 100%);
+    transition: width 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 0 20px var(--rsp-primary-glow);
+}
+
+/* Horizontal stepper */
+.rsp-steps {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    margin-top: 0.25rem;
+    padding: 0 0.25rem;
+}
+
+.rsp-steps::before {
+    content: "";
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    top: 22px;
+    height: 3px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    z-index: 0;
+}
+
+.rsp-step {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    text-align: center;
+    max-width: 25%;
+    padding: 0 0.25rem;
+}
+
+.rsp-step-node {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 0.65rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    border: 3px solid #e2e8f0;
+    background: #fff;
+    color: var(--rsp-slate-500);
+    transition: transform 0.25s, border-color 0.25s, background 0.25s, color 0.25s, box-shadow 0.25s;
+}
+
+.rsp-step.done .rsp-step-node {
+    border-color: var(--rsp-primary);
+    background: var(--rsp-primary);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(22, 163, 74, 0.35);
+}
+
+.rsp-step.current .rsp-step-node {
+    border-color: var(--rsp-primary);
+    background: #fff;
+    color: var(--rsp-primary);
+    box-shadow: 0 0 0 4px var(--rsp-primary-glow);
+    transform: scale(1.06);
+    animation: rsp-pulse 2s ease-in-out infinite;
+}
+
+.rsp-step.upcoming .rsp-step-node {
+    background: #f8fafc;
+}
+
+@keyframes rsp-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 4px var(--rsp-primary-glow);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(22, 163, 74, 0.08);
+    }
+}
+
+.rsp-step-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--rsp-slate-900);
+    line-height: 1.25;
+    margin-bottom: 0.2rem;
+}
+
+.rsp-step.current .rsp-step-title {
+    color: var(--rsp-primary-dark);
+}
+
+.rsp-step[data-tooltip],
+.rsp-vstep[data-tooltip] {
+    cursor: help;
+}
+
+.rsp-step[data-tooltip]:hover::after,
+.rsp-step[data-tooltip]:focus-visible::after,
+.rsp-vstep[data-tooltip]:hover::after,
+.rsp-vstep[data-tooltip]:focus-visible::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100% + 10px);
+    background: #0f172a;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.35;
+    padding: 0.45rem 0.55rem;
+    border-radius: 8px;
+    max-width: 220px;
+    white-space: normal;
+    z-index: 10;
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.24);
+}
+
+.rsp-step[data-tooltip]:focus-visible,
+.rsp-vstep[data-tooltip]:focus-visible {
+    outline: 2px solid #22c55e;
+    outline-offset: 3px;
+    border-radius: 8px;
+}
+
+/* Detail cards */
+.rsp-details {
+    display: grid;
+    gap: 1rem;
+}
+
+.rsp-card {
+    background: var(--rsp-card);
+    border: 1px solid var(--rsp-border);
+    border-radius: var(--rsp-radius);
+    padding: 1.25rem 1.35rem;
+    box-shadow: var(--rsp-shadow);
+}
+
+.rsp-card h3 {
+    margin: 0 0 0.85rem 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--rsp-slate-900);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.rsp-card h3 i {
+    color: var(--rsp-primary);
+}
+
+/* Form card: larger type; status only in badge (not repeated in workflow row) */
+.rsp-card.rsp-card-form > h3 {
+    font-size: 1.1rem;
+}
+
+.rsp-card.rsp-card-form .rsp-items-list {
+    font-size: 1rem;
+}
+
+.rsp-card.rsp-card-form .rsp-form-link-text {
+    font-size: 1.02rem;
+    color: var(--rsp-slate-900);
+}
+
+.rsp-card.rsp-card-form .rsp-form-view {
+    font-size: 1.08rem;
+    font-weight: 700;
+    text-underline-offset: 5px;
+    min-height: 2.75rem;
+    padding: 0.45rem 0.65rem;
+}
+
+.rsp-card.rsp-card-form .rsp-form-link-row {
+    align-items: center;
+}
+
+.rsp-card.rsp-card-form .rsp-form-items-block .rsp-step-desc {
+    font-size: 1rem;
+    color: var(--rsp-slate-600);
+}
+
+.rsp-kv {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 0.5rem 1rem;
+    font-size: 0.88rem;
+}
+
+.rsp-kv dt {
+    color: var(--rsp-slate-500);
+    font-weight: 500;
+}
+
+.rsp-kv dd {
+    margin: 0;
+    color: var(--rsp-slate-900);
+    font-weight: 500;
+}
+
+.rsp-items-list {
+    margin: 0;
+    padding-left: 1.15rem;
+    color: var(--rsp-slate-600);
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.rsp-empty {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    background: #f8fafc;
+    border: 2px dashed var(--rsp-border);
+    border-radius: var(--rsp-radius);
+    color: var(--rsp-slate-500);
+}
+
+.rsp-empty i {
+    font-size: 2.5rem;
+    color: #cbd5e1;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.rsp-empty h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.15rem;
+    color: var(--rsp-slate-900);
+}
+
+.rsp-update-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.rsp-update-row select.sort-dropdown {
+    min-width: 200px;
+    padding: 0.6rem 1rem;
+    border: 1px solid #cfe0d3;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.rsp-btn-save {
+    border: 0;
+    border-radius: 8px;
+    padding: 0.6rem 1.15rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    background: var(--rsp-primary);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35);
+    transition: background 0.2s, transform 0.15s;
+}
+
+.rsp-btn-save:hover {
+    background: var(--rsp-primary-dark);
+    transform: translateY(-1px);
+}
+
+.rsp-btn-save:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.rsp-status-msg {
+    margin: 0.65rem 0 0 0;
+    font-size: 0.82rem;
+    min-height: 1.2em;
+}
+
+.rsp-status-msg.ok {
+    color: #166534;
+    font-weight: 600;
+}
+
+.rsp-status-msg.err {
+    color: #b91c1c;
+    font-weight: 600;
+}
+
+/* Vertical timeline (mobile) */
+.rsp-steps-vertical {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .rsp-steps {
+        display: none;
+    }
+
+    .rsp-steps-vertical {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        margin-top: 1rem;
+    }
+
+    .rsp-vstep {
+        display: flex;
+        gap: 1rem;
+        padding-bottom: 1.25rem;
+        position: relative;
+    }
+
+    .rsp-vstep:last-child {
+        padding-bottom: 0;
+    }
+
+    .rsp-vstep::before {
+        content: "";
+        position: absolute;
+        left: 21px;
+        top: 48px;
+        bottom: 0;
+        width: 3px;
+        background: #e2e8f0;
+    }
+
+    .rsp-vstep:last-child::before {
+        display: none;
+    }
+
+    .rsp-vstep.done::before {
+        background: linear-gradient(#16a34a, #e2e8f0);
+    }
+
+    .rsp-vnode {
+        flex-shrink: 0;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 3px solid #e2e8f0;
+        background: #fff;
+        color: var(--rsp-slate-500);
+        z-index: 1;
+    }
+
+    .rsp-vstep.done .rsp-vnode {
+        border-color: var(--rsp-primary);
+        background: var(--rsp-primary);
+        color: #fff;
+    }
+
+    .rsp-vstep.current .rsp-vnode {
+        border-color: var(--rsp-primary);
+        color: var(--rsp-primary);
+        background: #fff;
+        box-shadow: 0 0 0 4px var(--rsp-primary-glow);
+    }
+
+    .rsp-vbody {
+        padding-top: 0.15rem;
+    }
+
+    .rsp-vbody .rsp-step-title {
+        text-align: left;
+        font-size: 0.9rem;
+    }
+
+    .rsp-vbody .rsp-step-desc {
+        text-align: left;
+        font-size: 0.8rem;
+    }
+
+    .rsp-vstep[data-tooltip]:hover::after,
+    .rsp-vstep[data-tooltip]:focus-visible::after {
+        left: 56px;
+        transform: none;
+        bottom: auto;
+        top: -6px;
+    }
+}

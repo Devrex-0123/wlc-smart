@@ -1,0 +1,138 @@
+.purchase-req-table {
+    table-layout: fixed;
+}
+
+.purchase-req-table th:nth-child(1) {
+    width: 40%;
+}
+
+.purchase-req-table th:nth-child(2) {
+    width: 10%;
+}
+
+.purchase-req-table th:nth-child(3) {
+    width: 22%;
+}
+
+.purchase-req-table th:nth-child(4),
+.purchase-req-table th:nth-child(5) {
+    width: 14%;
+}
+
+.purchase-req-table td {
+    vertical-align: top;
+}
+
+.purchase-req-table .pr-num {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.pr-desc-main {
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.pr-desc-meta {
+    margin-top: 0.2rem;
+    font-size: 0.8rem;
+    color: #475569;
+    line-height: 1.35;
+}
+
+.pr-desc-spec {
+    margin-top: 0.18rem;
+    font-size: 0.78rem;
+    color: #64748b;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.purchase-req-total {
+    margin-top: 0.85rem;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.7rem;
+    color: #14532d;
+    font-size: 0.95rem;
+}
+
+.purchase-req-total strong {
+    font-size: 1rem;
+}
+
+.purchase-approval-section {
+    margin-top: 0.25rem;
+}
+
+.purchase-approval-section .section-label {
+    margin-bottom: 0.75rem;
+}
+
+/* Rejection note block below verifier actions */
+.pr-rejection-panel {
+    margin-top: 0.5rem;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    border-left: 3px solid #94a3b8;
+}
+
+.pr-rejection-label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.45rem !important;
+}
+
+.pr-rejection-label i {
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+.pr-rejection-hint {
+    font-weight: 500;
+    color: #64748b;
+    font-size: 0.8rem;
+}
+
+.pr-rejection-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    padding: 0.55rem 0.65rem !important;
+    font-size: 0.9rem !important;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 64px;
+    background: #fff !important;
+    color: #0f172a !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pr-rejection-textarea:focus {
+    outline: none;
+    border-color: #16a34a !important;
+    box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+.pr-rejection-textarea::placeholder {
+    color: #94a3b8;
+}
+
+.pr-rejection-panel.pr-rejection-panel--hidden {
+    display: none;
+}
+
+.pr-rejection-panel.pr-rejection-panel--active {
+    border-left-color: #16a34a;
+    background: #f0fdf4;
+    box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.2);
+}
+

@@ -1,0 +1,3 @@
+ALTER TABLE `office`
+    ADD COLUMN `photo_url` VARCHAR(255) NULL AFTER `office_name`;
+
