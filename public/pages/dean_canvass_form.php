@@ -481,6 +481,33 @@ $pageTitle = $rfRequestId > 0
             <?php endif; ?>
             <div id="cvItemChips" class="item-chips"><p class="item-chips-empty">No canvass items yet.</p></div>
 
+            <?php if ($isRequesterOwnedCanvass || $isReviewerCanvassReadonly): ?>
+            <div class="cv-preferred-section" id="cvPreferredSection">
+                <div class="cv-preferred-section-head">
+                    <span class="section-label">Preferred Suppliers</span>
+                    <?php if ($isRequesterOwnedCanvass && !$verifierChainLocked): ?>
+                    <button type="button" class="btn-add-small" id="cvOpenAddPreferredBtn">
+                        <i class="fas fa-plus"></i> Add preferred supplier
+                    </button>
+                    <?php endif; ?>
+                </div>
+                <p class="cv-preferred-hint" id="cvPreferredHint"></p>
+                <div class="supplier-table-wrapper">
+                    <table id="cvPreferredTable" class="supplier-table">
+                        <thead>
+                            <tr>
+                                <th>SUPPLIER</th>
+                                <th>ACTION</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="2" class="empty-state">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <div class="supplier-section" id="cvCanvasSection" role="region" aria-label="Suppliers and pricing">
                 <?php if (!$isCanvassStructureUiHidden): ?>
                 <div class="supplier-picker">
@@ -650,6 +677,44 @@ $pageTitle = $rfRequestId > 0
 </div>
 <?php endif; ?>
 
+<?php if ($isRequesterOwnedCanvass && !$verifierChainLocked): ?>
+<div id="cvPrefSupModal" class="confirm-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cvPrefSupModalTitle">
+    <div class="confirm-modal-backdrop" id="cvPrefSupModalBackdrop"></div>
+    <div class="confirm-modal-card" style="max-width:420px;width:92%;">
+        <div class="confirm-modal-header">
+            <h3 id="cvPrefSupModalTitle">Add preferred supplier</h3>
+        </div>
+        <div class="confirm-modal-body" style="display:flex;flex-direction:column;gap:0.7rem;">
+            <input type="hidden" id="cvPrefSupModalSupplierId" value="">
+            <div class="field-group">
+                <label for="cvPrefSupName">Supplier name <em style="color:#b91c1c">*</em></label>
+                <input type="text" id="cvPrefSupName" placeholder="e.g. Lazada, SM Stationery" maxlength="100" autocomplete="organization">
+            </div>
+            <div class="field-group">
+                <label for="cvPrefSupContact">Contact person</label>
+                <input type="text" id="cvPrefSupContact" maxlength="100" autocomplete="name">
+            </div>
+            <div class="field-group">
+                <label for="cvPrefSupPhone">Phone</label>
+                <input type="text" id="cvPrefSupPhone" maxlength="30" autocomplete="tel">
+            </div>
+            <div class="field-group">
+                <label for="cvPrefSupEmail">Email</label>
+                <input type="email" id="cvPrefSupEmail" maxlength="100" autocomplete="email">
+            </div>
+            <div class="field-group">
+                <label for="cvPrefSupUrl">Shop / Website URL</label>
+                <input type="text" id="cvPrefSupUrl" maxlength="255" placeholder="https://...">
+            </div>
+        </div>
+        <div class="confirm-modal-actions">
+            <button type="button" id="cvPrefSupModalCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+            <button type="button" id="cvPrefSupModalSave" class="confirm-btn confirm-btn-ok">Save</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <div id="cvConfirmModal" class="confirm-modal" style="display:none;">
     <div class="confirm-modal-backdrop"></div>
     <div class="confirm-modal-card" role="dialog" aria-modal="true" aria-labelledby="cvConfirmTitle">
@@ -665,6 +730,14 @@ $pageTitle = $rfRequestId > 0
 </div>
 
 <?php if ($accessError === null): ?>
+<script>
+window.CWIRMS_PREF_SUP = <?php echo json_encode([
+    'editable'  => ($isRequesterOwnedCanvass && !$verifierChainLocked),
+    'requestId' => $requestId,
+    'api'       => '../../app/api/canvass_detail.php',
+    'isRequester' => $isRequesterOwnedCanvass,
+]); ?>;
+</script>
 <script src="../assets/js/dean_canvass_form.js"></script>
 <?php if ($isGsdCanvassReview): ?>
 <script>
