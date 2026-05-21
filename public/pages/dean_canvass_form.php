@@ -486,7 +486,7 @@ $pageTitle = $rfRequestId > 0
                 <div class="cv-preferred-section-head">
                     <span class="section-label">Preferred Suppliers</span>
                     <?php if ($isRequesterOwnedCanvass && !$verifierChainLocked): ?>
-                    <button type="button" class="btn-add-small" id="cvOpenAddPreferredBtn">
+                    <button type="button" class="btnPrfSupp" id="cvOpenAddPreferredBtn">
                         <i class="fas fa-plus"></i> Add preferred supplier
                     </button>
                     <?php endif; ?>

@@ -60,38 +60,89 @@
         }
     }
 
+    function formatItemHeader(item, index) {
+        const label = String(item.name || `ITEM ${index + 1}`).trim() || `ITEM ${index + 1}`;
+        return `ITEM ${index + 1} - ${escapeHtml(label)}`;
+    }
+
+    function getPreferredSupplierPrice(supplierId, itemIndex) {
+        const selected = state.selectedSuppliers.find((s) => Number(s.supplier_id) === Number(supplierId));
+        if (!selected || !selected.prices || typeof selected.prices !== 'object') {
+            return '—';
+        }
+        const value = selected.prices[itemIndex];
+        if (value === null || value === undefined || value === '') {
+            return '—';
+        }
+        return escapeHtml(String(value));
+    }
+
     function renderPreferredTable() {
         if (!cvPreferredTable) return;
         const editable = Boolean(window.CWIRMS_PREF_SUP && window.CWIRMS_PREF_SUP.editable);
+        const thead = cvPreferredTable.querySelector('thead');
         const tbody = cvPreferredTable.querySelector('tbody');
         const rows = Array.isArray(state.preferredSuppliers) ? state.preferredSuppliers : [];
+        const itemCount = Math.max(1, Array.isArray(state.items) ? state.items.length : 0);
+
+        const headerCells = [`<th>SUPPLIER</th>`].concat(
+            Array.from({ length: itemCount }, (_, index) => `<th>${formatItemHeader(state.items[index] || {}, index)}</th>`)
+        );
+        if (thead) {
+            thead.innerHTML = `<tr>${headerCells.join('')}</tr>`;
+        }
+
+        const colCount = headerCells.length;
         if (rows.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="2" class="empty-state">${editable ? 'No preferred suppliers yet.' : 'No preferred suppliers added by the requester.'}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${colCount}" class="empty-state">${editable ? 'No preferred suppliers yet.' : 'No preferred suppliers added by the requester.'}</td></tr>`;
             const hint = document.getElementById('cvPreferredHint');
             if (hint) hint.textContent = editable
-                ? 'Optional. Add suppliers you already know for this request (e.g. from an online shop). Canvassers use this as reference.'
-                : 'Preferred suppliers indicated by the requester.';
+                ? 'Preferred suppliers are listed here for item pricing only. Remove entries with the x icon if needed.'
+                : 'Preferred suppliers indicated by the requester. Prices appear here if the supplier is already in the matrix.';
             return;
         }
+
         tbody.innerHTML = rows.map((s) => {
             const avatar = escapeHtml(getSupplierImageUrl(s.supplier_image));
-            const nameHtml = `<div class="supplier-table-supplier"><img src="${avatar}" alt="" class="supplier-table-avatar" width="32" height="32" decoding="async" onerror="${supplierAvatarOnError}"><span class="supplier-table-name">${escapeHtml(s.supplier_name || '')}</span></div>`;
-            const actionHtml = [];
-            if (editable) {
-                actionHtml.push(`<button type="button" class="btn-add-small cv-pref-edit-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Edit"><i class="fas fa-pen"></i></button>`);
-                actionHtml.push(`<button type="button" class="remove-supplier-btn cv-pref-remove-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Remove"><i class="fas fa-times"></i></button>`);
-            }
-            // allow adding to matrix (available to requester and canvasser)
-            actionHtml.push(`<button type="button" class="btn-add-small cv-pref-addtomatrix-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Add to matrix"><i class="fas fa-plus"></i> Add to matrix</button>`);
+            const supplierNameHtml = `
+                <div class="supplier-table-supplier">
+                    <img src="${avatar}" alt="" class="supplier-table-avatar" width="32" height="32" decoding="async" onerror="${supplierAvatarOnError}">
+                    <span class="supplier-table-name">${escapeHtml(s.supplier_name || '')}</span>
+                </div>`;
+            const removeHtml = editable
+                ? `<button type="button" class="cv-pref-remove-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Remove preferred supplier">×</button>`
+                : '';
+            const supplierCell = `<div class="supplier-table-name-wrap">${supplierNameHtml}${removeHtml}</div>`;
+            const priceCells = Array.from({ length: itemCount }, (_, index) => `
+                <td>${getPreferredSupplierPrice(s.supplier_id, index)}</td>`);
             return `<tr>
-                <td class="supplier-table-name-cell">${nameHtml}</td>
-                <td>${actionHtml.join(' ')}</td>
+                <td class="supplier-table-name-cell">${supplierCell}</td>
+                ${priceCells.join('')}
             </tr>`;
         }).join('');
+
         const hint = document.getElementById('cvPreferredHint');
         if (hint) hint.textContent = editable
-            ? 'Optional. Add suppliers you already know for this request (e.g. from an online shop). Canvassers use this as reference.'
-            : 'Preferred suppliers indicated by the requester.';
+            ? 'Preferred suppliers are listed here for item pricing only. Remove entries with the x icon if needed.'
+            : 'Preferred suppliers indicated by the requester. Prices appear here if the supplier is already in the matrix.';
+    }
+
+    function updatePreferredSearchUi() {
+        const btn = document.getElementById('cvPrefAddSelectedBtn');
+        const preview = document.getElementById('cvPrefSelectedSupplierPreview');
+        const selected = state.preferredSearchSelection;
+        if (btn) {
+            btn.disabled = !selected;
+        }
+        if (preview) {
+            if (selected) {
+                preview.style.display = 'block';
+                preview.textContent = `Selected supplier: ${selected.supplier_name || '—'}${selected.contact_person ? ` · ${selected.contact_person}` : ''}`;
+            } else {
+                preview.style.display = 'none';
+                preview.textContent = '';
+            }
+        }
     }
 
     function renderPreferredPicker() {
@@ -99,17 +150,41 @@
         const list = document.getElementById('cvPrefSupplierSearchList');
         if (!input || !list) return;
         const q = String(input.value || '').trim().toLowerCase();
+        const focused = Boolean(state.preferredSearchFocused);
         const suppliers = Array.isArray(state.availableSuppliers) ? state.availableSuppliers : [];
         const suggested = unionSuggestedSupplierIds();
-        const filtered = suppliers
-            .filter((s) => {
-                if (!q) return true;
-                const name = String(s.supplier_name || '').toLowerCase();
-                const contact = String(s.contact_person || '').toLowerCase();
-                return name.includes(q) || contact.includes(q);
-            })
-            .slice(0, 50);
-        list.innerHTML = filtered
+
+        if (!focused && q.length < 2) {
+            list.innerHTML = '';
+            return;
+        }
+
+        const candidateSuppliers = q.length >= 2
+            ? suppliers.filter((s) => {
+                  const name = String(s.supplier_name || '').toLowerCase();
+                  const contact = String(s.contact_person || '').toLowerCase();
+                  return name.includes(q) || contact.includes(q);
+              })
+            : suppliers;
+
+        if (candidateSuppliers.length === 0) {
+            list.innerHTML = `<div class="supplier-option-empty">${q.length === 0 ? 'No suggested suppliers available.' : 'No suppliers found. Try another keyword.'}</div>`;
+            return;
+        }
+
+        const ordered = [...candidateSuppliers].sort((a, b) => {
+            const sa = suggested.has(Number(a.supplier_id)) ? 0 : 1;
+            const sb = suggested.has(Number(b.supplier_id)) ? 0 : 1;
+            if (sa !== sb) {
+                return sa - sb;
+            }
+            return String(a.supplier_name || '').localeCompare(String(b.supplier_name || ''), undefined, {
+                sensitivity: 'base',
+            });
+        });
+
+        list.innerHTML = ordered
+            .slice(0, 50)
             .map((s) => {
                 const sid = Number(s.supplier_id);
                 const isSugg = suggested.has(sid);
@@ -119,6 +194,29 @@
                 </button>`;
             })
             .join('');
+    }
+
+    function setPreferredSearchSelection(supplier) {
+        state.preferredSearchSelection = supplier || null;
+        const input = document.getElementById('cvPrefSupplierSearch');
+        if (input && supplier) {
+            input.value = supplier.supplier_name || '';
+        }
+        updatePreferredSearchUi();
+    }
+
+    async function confirmLinkPreferredSupplier() {
+        const selected = state.preferredSearchSelection;
+        if (!selected || !selected.supplier_id) {
+            showToast('Select a supplier first.', 'error');
+            return;
+        }
+        await linkPreferredSupplier(selected.supplier_id);
+        state.preferredSearchSelection = null;
+        const input = document.getElementById('cvPrefSupplierSearch');
+        if (input) input.value = '';
+        renderPreferredPicker();
+        updatePreferredSearchUi();
     }
 
     async function linkPreferredSupplier(supplierId) {
@@ -132,6 +230,10 @@
             const data = await res.json();
             if (!data.success) { showToast(data.message || 'Failed to add preferred.', 'error'); return; }
             showToast(data.message || 'Preferred supplier added.');
+            const prefSearch = document.getElementById('cvPrefSupplierSearch');
+            if (prefSearch) {
+                prefSearch.value = '';
+            }
             await loadPreferredSuppliers();
         } catch {
             showToast('Network error.', 'error');
@@ -158,7 +260,10 @@
             const prefApi = (window.CWIRMS_PREF_SUP && window.CWIRMS_PREF_SUP.api) || api;
             const res = await fetch(`${prefApi}?action=get_preferred&request_id=${encodeURIComponent(String(requestId))}`, { credentials: 'include' });
             const data = await res.json();
-            if (data && data.success && Array.isArray(data.preferred_suppliers)) {
+            if (!data || !data.success) {
+                showToast(data && data.message ? data.message : 'Unable to load preferred suppliers.', 'error');
+                state.preferredSuppliers = [];
+            } else if (Array.isArray(data.preferred_suppliers)) {
                 state.preferredSuppliers = data.preferred_suppliers.map((s) => ({
                     supplier_id: s.supplier_id,
                     supplier_name: s.supplier_name,
@@ -172,6 +277,7 @@
                 state.preferredSuppliers = [];
             }
         } catch {
+            showToast('Unable to load preferred suppliers.', 'error');
             state.preferredSuppliers = [];
         }
         renderPreferredTable();
@@ -266,6 +372,8 @@
         lastSuggestItems: [],
         suggestTimer: null,
         selectedSupplierId: null,
+        preferredSearchSelection: null,
+        preferredSearchFocused: false,
         suggestedByItem: {},
     };
     const gsdSuggestedHiddenInput = document.getElementById('gsdSuggestedSupplierId');
@@ -1664,7 +1772,21 @@
             const prefSearch = document.getElementById('cvPrefSupplierSearch');
             const prefList = document.getElementById('cvPrefSupplierSearchList');
             if (prefSearch) {
-                prefSearch.addEventListener('input', () => renderPreferredPicker());
+                prefSearch.addEventListener('input', () => {
+                    state.preferredSearchSelection = null;
+                    renderPreferredPicker();
+                    updatePreferredSearchUi();
+                });
+                prefSearch.addEventListener('focus', () => {
+                    state.preferredSearchFocused = true;
+                    renderPreferredPicker();
+                });
+                prefSearch.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        state.preferredSearchFocused = false;
+                        renderPreferredPicker();
+                    }, 120);
+                });
             }
             if (prefList) {
                 prefList.addEventListener('click', (e) => {
@@ -1672,8 +1794,14 @@
                     if (!opt) return;
                     const sid = opt.getAttribute('data-supplier-id');
                     if (!sid) return;
-                    linkPreferredSupplier(sid);
+                    const supplier = state.availableSuppliers.find((s) => String(s.supplier_id) === String(sid));
+                    if (!supplier) return;
+                    setPreferredSearchSelection(supplier);
                 });
+            }
+            const addSelectedBtn = document.getElementById('cvPrefAddSelectedBtn');
+            if (addSelectedBtn) {
+                addSelectedBtn.addEventListener('click', () => void confirmLinkPreferredSupplier());
             }
         }
     })();

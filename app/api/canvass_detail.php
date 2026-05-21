@@ -551,8 +551,18 @@ try {
             }
 
             $selectCols = 'rps.supplier_id, ' . ($hasShopUrl ? 's.shop_url, ' : '') . 's.supplier_name, s.contact_person, s.phone_number, s.email, s.supplier_image';
+            $orderClause = 'ORDER BY rps.request_id ASC, rps.supplier_id ASC';
+            try {
+                $colChkId = $db->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requisition_preferred_suppliers' AND COLUMN_NAME = 'id'");
+                $colChkId->execute();
+                if (((int) $colChkId->fetchColumn()) > 0) {
+                    $orderClause = 'ORDER BY rps.id ASC';
+                }
+            } catch (Throwable $e) {
+                // ignore and use fallback order
+            }
             $stmt = $db->prepare(
-                "SELECT {$selectCols} FROM requisition_preferred_suppliers rps LEFT JOIN suppliers s ON s.supplier_id = rps.supplier_id WHERE rps.request_id = ? ORDER BY rps.id ASC"
+                "SELECT {$selectCols} FROM requisition_preferred_suppliers rps LEFT JOIN suppliers s ON s.supplier_id = rps.supplier_id WHERE rps.request_id = ? {$orderClause}"
             );
             $stmt->execute([$requestId]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
