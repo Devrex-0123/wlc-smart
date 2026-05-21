@@ -76,19 +76,81 @@
         tbody.innerHTML = rows.map((s) => {
             const avatar = escapeHtml(getSupplierImageUrl(s.supplier_image));
             const nameHtml = `<div class="supplier-table-supplier"><img src="${avatar}" alt="" class="supplier-table-avatar" width="32" height="32" decoding="async" onerror="${supplierAvatarOnError}"><span class="supplier-table-name">${escapeHtml(s.supplier_name || '')}</span></div>`;
-            const actionHtml = editable
-                ? `<button type="button" class="btn-add-small cv-pref-edit-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Edit"><i class="fas fa-pen"></i></button>
-                   <button type="button" class="remove-supplier-btn cv-pref-remove-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Remove"><i class="fas fa-times"></i></button>`
-                : '';
+            const actionHtml = [];
+            if (editable) {
+                actionHtml.push(`<button type="button" class="btn-add-small cv-pref-edit-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Edit"><i class="fas fa-pen"></i></button>`);
+                actionHtml.push(`<button type="button" class="remove-supplier-btn cv-pref-remove-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Remove"><i class="fas fa-times"></i></button>`);
+            }
+            // allow adding to matrix (available to requester and canvasser)
+            actionHtml.push(`<button type="button" class="btn-add-small cv-pref-addtomatrix-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Add to matrix"><i class="fas fa-plus"></i> Add to matrix</button>`);
             return `<tr>
                 <td class="supplier-table-name-cell">${nameHtml}</td>
-                <td>${actionHtml}</td>
+                <td>${actionHtml.join(' ')}</td>
             </tr>`;
         }).join('');
         const hint = document.getElementById('cvPreferredHint');
         if (hint) hint.textContent = editable
             ? 'Optional. Add suppliers you already know for this request (e.g. from an online shop). Canvassers use this as reference.'
             : 'Preferred suppliers indicated by the requester.';
+    }
+
+    function renderPreferredPicker() {
+        const input = document.getElementById('cvPrefSupplierSearch');
+        const list = document.getElementById('cvPrefSupplierSearchList');
+        if (!input || !list) return;
+        const q = String(input.value || '').trim().toLowerCase();
+        const suppliers = Array.isArray(state.availableSuppliers) ? state.availableSuppliers : [];
+        const suggested = unionSuggestedSupplierIds();
+        const filtered = suppliers
+            .filter((s) => {
+                if (!q) return true;
+                const name = String(s.supplier_name || '').toLowerCase();
+                const contact = String(s.contact_person || '').toLowerCase();
+                return name.includes(q) || contact.includes(q);
+            })
+            .slice(0, 50);
+        list.innerHTML = filtered
+            .map((s) => {
+                const sid = Number(s.supplier_id);
+                const isSugg = suggested.has(sid);
+                return `<button type="button" class="pref-search-option${isSugg ? ' supplier-option-suggested' : ''}" data-supplier-id="${escapeHtml(String(s.supplier_id))}">
+                    <img src="${escapeHtml(getSupplierImageUrl(s.supplier_image))}" alt="" class="supplier-option-avatar" onerror="${supplierAvatarOnError}">
+                    <span class="supplier-option-name">${escapeHtml(s.supplier_name)}${isSugg ? '<span class="supplier-suggest-badge">Suggested</span>' : ''}</span>
+                </button>`;
+            })
+            .join('');
+    }
+
+    async function linkPreferredSupplier(supplierId) {
+        try {
+            const prefApi = (window.CWIRMS_PREF_SUP && window.CWIRMS_PREF_SUP.api) || api;
+            const body = new URLSearchParams();
+            body.set('action', 'link_preferred');
+            body.set('request_id', String(requestId));
+            body.set('supplier_id', String(supplierId));
+            const res = await fetch(prefApi, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString(), credentials: 'include' });
+            const data = await res.json();
+            if (!data.success) { showToast(data.message || 'Failed to add preferred.', 'error'); return; }
+            showToast(data.message || 'Preferred supplier added.');
+            await loadPreferredSuppliers();
+        } catch {
+            showToast('Network error.', 'error');
+        }
+    }
+
+    function addPreferredToMatrix(supplierId) {
+        const id = Number(supplierId || 0);
+        if (!id) return;
+        if (state.selectedSuppliers.some((s) => Number(s.supplier_id) === id)) {
+            showToast('That supplier is already in the matrix.', 'error');
+            return;
+        }
+        const full = state.availableSuppliers.find((x) => Number(x.supplier_id) === id);
+        if (!full) { showToast('Supplier not found in catalog.', 'error'); return; }
+        const prices = {};
+        state.items.forEach((_, i) => { prices[i] = ''; });
+        state.selectedSuppliers.push({ supplier_id: full.supplier_id, supplier_name: full.supplier_name, supplier_image: full.supplier_image, prices });
+        renderSupplierTable();
     }
 
     async function loadPreferredSuppliers() {
@@ -113,6 +175,7 @@
             state.preferredSuppliers = [];
         }
         renderPreferredTable();
+        renderPreferredPicker();
     }
 
     function openPrefSupModal(mode, existing) {
@@ -1591,7 +1654,27 @@
                     const sid = removeBtn.getAttribute('data-pref-id');
                     if (sid) void removePrefSup(sid);
                 }
+                const addMat = e.target.closest('.cv-pref-addtomatrix-btn');
+                if (addMat) {
+                    const pid = addMat.getAttribute('data-pref-id');
+                    if (pid) addPreferredToMatrix(pid);
+                }
             });
+
+            const prefSearch = document.getElementById('cvPrefSupplierSearch');
+            const prefList = document.getElementById('cvPrefSupplierSearchList');
+            if (prefSearch) {
+                prefSearch.addEventListener('input', () => renderPreferredPicker());
+            }
+            if (prefList) {
+                prefList.addEventListener('click', (e) => {
+                    const opt = e.target.closest('.pref-search-option');
+                    if (!opt) return;
+                    const sid = opt.getAttribute('data-supplier-id');
+                    if (!sid) return;
+                    linkPreferredSupplier(sid);
+                });
+            }
         }
     })();
 

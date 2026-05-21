@@ -523,6 +523,207 @@ try {
         ]);
     }
 
+        // Preferred suppliers API (requester-owned)
+        if ($action === 'get_preferred') {
+            $requestId = (int) ($_GET['request_id'] ?? 0);
+            if ($requestId <= 0) {
+                sendJson(['success' => false, 'message' => 'Invalid request id.']);
+            }
+            loadCanvassGetRequest($db, $requestId, $uid);
+            // Create junction table if missing (no shop_url stored here)
+            $db->exec(
+                'CREATE TABLE IF NOT EXISTS requisition_preferred_suppliers (
+                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    request_id INT NOT NULL,
+                    supplier_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+            );
+
+            // Detect if suppliers table has a shop_url column; prefer storing shop_url on suppliers
+            $hasShopUrl = false;
+            try {
+                $colChk = $db->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'suppliers' AND COLUMN_NAME = 'shop_url'");
+                $colChk->execute();
+                $hasShopUrl = ((int) $colChk->fetchColumn()) > 0;
+            } catch (Throwable $e) {
+                $hasShopUrl = false;
+            }
+
+            $selectCols = 'rps.supplier_id, ' . ($hasShopUrl ? 's.shop_url, ' : '') . 's.supplier_name, s.contact_person, s.phone_number, s.email, s.supplier_image';
+            $stmt = $db->prepare(
+                "SELECT {$selectCols} FROM requisition_preferred_suppliers rps LEFT JOIN suppliers s ON s.supplier_id = rps.supplier_id WHERE rps.request_id = ? ORDER BY rps.id ASC"
+            );
+            $stmt->execute([$requestId]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $out = [];
+            foreach ($rows as $r) {
+                $out[] = [
+                    'supplier_id' => isset($r['supplier_id']) ? (int) $r['supplier_id'] : 0,
+                    'supplier_name' => (string) ($r['supplier_name'] ?? ''),
+                    'contact_person' => (string) ($r['contact_person'] ?? ''),
+                    'phone_number' => (string) ($r['phone_number'] ?? ''),
+                    'email' => (string) ($r['email'] ?? ''),
+                    'shop_url' => (string) ($r['shop_url'] ?? ''),
+                    'supplier_image' => (string) ($r['supplier_image'] ?? ''),
+                ];
+            }
+            sendJson(['success' => true, 'preferred_suppliers' => $out]);
+        }
+
+        if ($action === 'add_preferred') {
+            $requestId = (int) ($_POST['request_id'] ?? 0);
+            if ($requestId <= 0) sendJson(['success' => false, 'message' => 'Invalid request id.']);
+            // only requester may add preferred suppliers
+            loadOwnedRequest($db, $requestId, $uid);
+            if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
+                sendJson(['success' => false, 'message' => 'This request can no longer be edited.']);
+            }
+            $supplierName = trim((string) ($_POST['supplier_name'] ?? ''));
+            if ($supplierName === '') sendJson(['success' => false, 'message' => 'Supplier name is required.']);
+            $contactPerson = trim((string) ($_POST['contact_person'] ?? ''));
+            $phoneNumber = trim((string) ($_POST['phone_number'] ?? ''));
+            $email = trim((string) ($_POST['email'] ?? ''));
+            $shopUrl = trim((string) ($_POST['shop_url'] ?? ''));
+
+            // avoid duplicate supplier names in suppliers table
+            $stmtChk = $db->prepare('SELECT supplier_id FROM suppliers WHERE LOWER(supplier_name) = LOWER(?) LIMIT 1');
+            $stmtChk->execute([$supplierName]);
+            if ($stmtChk->fetch(PDO::FETCH_ASSOC)) {
+                sendJson(['success' => false, 'message' => 'A supplier with this name already exists. Choose it from the list instead.']);
+            }
+
+            $ins = $db->prepare('INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, status, supplier_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $ins->execute([
+                $supplierName,
+                $contactPerson !== '' ? $contactPerson : null,
+                $phoneNumber !== '' ? $phoneNumber : null,
+                $email !== '' ? $email : null,
+                null,
+                null,
+                null,
+                null,
+                'Active',
+                null,
+            ]);
+            $newSid = (int) $db->lastInsertId();
+
+            // Ensure junction exists (no shop_url stored on junction)
+            $db->exec(
+                'CREATE TABLE IF NOT EXISTS requisition_preferred_suppliers (
+                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    request_id INT NOT NULL,
+                    supplier_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+            );
+
+            $ins2 = $db->prepare('INSERT INTO requisition_preferred_suppliers (request_id, supplier_id) VALUES (?, ?)');
+            $ins2->execute([$requestId, $newSid]);
+
+            // If suppliers table includes shop_url, persist it there
+            try {
+                if ($shopUrl !== '') {
+                    $colChk2 = $db->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'suppliers' AND COLUMN_NAME = 'shop_url'");
+                    $colChk2->execute();
+                    $hasShop = ((int) $colChk2->fetchColumn()) > 0;
+                    if ($hasShop) {
+                        $updShop = $db->prepare('UPDATE suppliers SET shop_url = ? WHERE supplier_id = ?');
+                        $updShop->execute([$shopUrl, $newSid]);
+                    }
+                }
+            } catch (Throwable $e) {
+                // ignore if column missing or update fails
+            }
+
+            $sel = $db->prepare('SELECT supplier_id, supplier_name, supplier_image, contact_person, phone_number, email FROM suppliers WHERE supplier_id = ?');
+            $sel->execute([$newSid]);
+            $row = $sel->fetch(PDO::FETCH_ASSOC);
+            sendJson(['success' => true, 'message' => 'Preferred supplier added.', 'supplier' => $row]);
+        }
+
+        if ($action === 'update_preferred') {
+            $requestId = (int) ($_POST['request_id'] ?? 0);
+            $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+            if ($requestId <= 0 || $supplierId <= 0) sendJson(['success' => false, 'message' => 'Invalid payload.']);
+            loadOwnedRequest($db, $requestId, $uid);
+            if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
+                sendJson(['success' => false, 'message' => 'This request can no longer be edited.']);
+            }
+            $supplierName = trim((string) ($_POST['supplier_name'] ?? ''));
+            if ($supplierName === '') sendJson(['success' => false, 'message' => 'Supplier name is required.']);
+            $contactPerson = trim((string) ($_POST['contact_person'] ?? ''));
+            $phoneNumber = trim((string) ($_POST['phone_number'] ?? ''));
+            $email = trim((string) ($_POST['email'] ?? ''));
+            $shopUrl = trim((string) ($_POST['shop_url'] ?? ''));
+
+            $upd = $db->prepare('UPDATE suppliers SET supplier_name = ?, contact_person = ?, phone_number = ?, email = ? WHERE supplier_id = ?');
+            $upd->execute([
+                $supplierName,
+                $contactPerson !== '' ? $contactPerson : null,
+                $phoneNumber !== '' ? $phoneNumber : null,
+                $email !== '' ? $email : null,
+                $supplierId,
+            ]);
+
+            // If suppliers table has shop_url, update it there
+            try {
+                $colChk3 = $db->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'suppliers' AND COLUMN_NAME = 'shop_url'");
+                $colChk3->execute();
+                $hasShop2 = ((int) $colChk3->fetchColumn()) > 0;
+                if ($hasShop2) {
+                    $updShop2 = $db->prepare('UPDATE suppliers SET shop_url = ? WHERE supplier_id = ?');
+                    $updShop2->execute([$shopUrl !== '' ? $shopUrl : null, $supplierId]);
+                }
+            } catch (Throwable $e) {
+                // ignore
+            }
+
+            sendJson(['success' => true, 'message' => 'Preferred supplier updated.']);
+        }
+
+        if ($action === 'remove_preferred') {
+            $requestId = (int) ($_POST['request_id'] ?? 0);
+            $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+            if ($requestId <= 0 || $supplierId <= 0) sendJson(['success' => false, 'message' => 'Invalid payload.']);
+            loadOwnedRequest($db, $requestId, $uid);
+            if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
+                sendJson(['success' => false, 'message' => 'This request can no longer be edited.']);
+            }
+            $del = $db->prepare('DELETE FROM requisition_preferred_suppliers WHERE request_id = ? AND supplier_id = ?');
+            $del->execute([$requestId, $supplierId]);
+            sendJson(['success' => true, 'message' => 'Preferred supplier removed.']);
+        }
+
+        if ($action === 'link_preferred') {
+            $requestId = (int) ($_POST['request_id'] ?? 0);
+            $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+            if ($requestId <= 0 || $supplierId <= 0) sendJson(['success' => false, 'message' => 'Invalid payload.']);
+            // only requester may link preferred suppliers
+            loadOwnedRequest($db, $requestId, $uid);
+            if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
+                sendJson(['success' => false, 'message' => 'This request can no longer be edited.']);
+            }
+            // ensure supplier exists
+            $sel = $db->prepare('SELECT supplier_id FROM suppliers WHERE supplier_id = ? LIMIT 1');
+            $sel->execute([$supplierId]);
+            if (!$sel->fetch(PDO::FETCH_ASSOC)) {
+                sendJson(['success' => false, 'message' => 'Supplier not found.']);
+            }
+            // create junction table if missing
+            $db->exec(
+                'CREATE TABLE IF NOT EXISTS requisition_preferred_suppliers (
+                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                    request_id INT NOT NULL,
+                    supplier_id INT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+            );
+            $ins = $db->prepare('INSERT IGNORE INTO requisition_preferred_suppliers (request_id, supplier_id) VALUES (?, ?)');
+            $ins->execute([$requestId, $supplierId]);
+            sendJson(['success' => true, 'message' => 'Preferred supplier added.']);
+        }
+
     if ($action === 'suggest_suppliers') {
         $requestId = (int) ($_GET['request_id'] ?? 0);
         $itemName = trim((string) ($_GET['item_name'] ?? ''));

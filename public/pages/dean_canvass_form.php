@@ -492,6 +492,11 @@ $pageTitle = $rfRequestId > 0
                     <?php endif; ?>
                 </div>
                 <p class="cv-preferred-hint" id="cvPreferredHint"></p>
+                <div class="cv-preferred-picker" style="margin:0.5rem 0;">
+                    <label for="cvPrefSupplierSearch" class="sr-only">Search suppliers</label>
+                    <input type="text" id="cvPrefSupplierSearch" placeholder="Search suppliers (name, contact)…" autocomplete="off">
+                    <div id="cvPrefSupplierSearchList" class="supplier-dropdown-list" style="max-height:240px;overflow:auto;margin-top:0.4rem;"></div>
+                </div>
                 <div class="supplier-table-wrapper">
                     <table id="cvPreferredTable" class="supplier-table">
                         <thead>
