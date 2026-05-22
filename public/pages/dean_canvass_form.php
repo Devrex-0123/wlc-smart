@@ -492,13 +492,18 @@ $pageTitle = $rfRequestId > 0
                     <?php endif; ?>
                 </div>
                 <p class="cv-preferred-hint" id="cvPreferredHint"></p>
-                <div class="cv-preferred-picker" style="margin:0.5rem 0;">
+                <div class="cv-preferred-picker">
                     <label for="cvPrefSupplierSearch" class="sr-only">Search suppliers</label>
-                    <input type="text" id="cvPrefSupplierSearch" placeholder="Search suppliers (name, contact)…" autocomplete="off">
-                    <div id="cvPrefSupplierSearchList" class="supplier-dropdown-list" style="max-height:240px;overflow:auto;margin-top:0.4rem;"></div>
+                    <div class="cv-pref-search-row">
+                        <input type="text" id="cvPrefSupplierSearch" class="cv-pref-search-input" placeholder="Search suppliers (name, contact)…" autocomplete="off" >
+                        <button type="button" id="cvPrefAddSelectedBtn" class="btn-submit">Add selected supplier</button>
+                    </div>
+                    <div id="cvPrefSelectedSupplierPreview" class="cv-pref-selected-supplier"></div>
+                    <div id="cvPrefSupplierSearchList" class="cv-pref-search-list"></div>
                 </div>
+                <div class="supplier-table-group-label preferred-supplier-label">Preferred supplier matrix</div>
                 <div class="supplier-table-wrapper">
-                    <table id="cvPreferredTable" class="supplier-table">
+                    <table id="cvPreferredTable" class="supplier-table" aria-label="Preferred supplier matrix">
                         <thead>
                             <tr>
                                 <th>SUPPLIER</th>
@@ -555,8 +560,9 @@ $pageTitle = $rfRequestId > 0
                     </div>
                 </div>
 
+                <div class="supplier-table-group-label canvassed-supplier-label">Canvassed supplier matrix</div>
                 <div class="supplier-table-wrapper">
-                    <table id="cvSupplierTable" class="supplier-table">
+                    <table id="cvSupplierTable" class="supplier-table" aria-label="Canvassed supplier matrix">
                         <thead>
                             <tr>
                                 <th>SUPPLIER</th>

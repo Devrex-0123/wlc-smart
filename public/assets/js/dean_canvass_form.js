@@ -65,16 +65,119 @@
         return `ITEM ${index + 1} - ${escapeHtml(label)}`;
     }
 
-    function getPreferredSupplierPrice(supplierId, itemIndex) {
+    function getPreferredDraftPrice(supplierId, itemIndex) {
+        const drafts = state.preferredPriceDrafts[String(supplierId)] || {};
+        if (drafts[itemIndex] !== undefined) {
+            return drafts[itemIndex];
+        }
         const selected = state.selectedSuppliers.find((s) => Number(s.supplier_id) === Number(supplierId));
         if (!selected || !selected.prices || typeof selected.prices !== 'object') {
-            return '—';
+            return '';
         }
         const value = selected.prices[itemIndex];
-        if (value === null || value === undefined || value === '') {
-            return '—';
+        return value === null || value === undefined ? '' : String(value);
+    }
+
+    function setPreferredDraftPrice(supplierId, itemIndex, value) {
+        const key = String(supplierId);
+        if (!state.preferredPriceDrafts[key]) {
+            state.preferredPriceDrafts[key] = {};
         }
-        return escapeHtml(String(value));
+        state.preferredPriceDrafts[key][itemIndex] = value;
+    }
+
+    function scheduleRequesterAutosave() {
+        if (canvasserRegister || !requestId || state.items.length === 0) {
+            return;
+        }
+        if (state.autoSaveTimer) {
+            clearTimeout(state.autoSaveTimer);
+        }
+        state.autoSaveTimer = setTimeout(async () => {
+            state.autoSaveTimer = null;
+            try {
+                const result = await persistCanvassToServer();
+                if (!result.ok) {
+                    console.warn('Requester autosave failed:', result.message);
+                }
+            } catch (error) {
+                console.warn('Requester autosave error:', error);
+            }
+        }, 1200);
+    }
+
+    function clearRequesterAutosaveTimer() {
+        if (state.autoSaveTimer) {
+            clearTimeout(state.autoSaveTimer);
+            state.autoSaveTimer = null;
+        }
+    }
+
+    function flushRequesterAutosave() {
+        if (canvasserRegister || !requestId || state.items.length === 0) {
+            return;
+        }
+        if (!window.navigator.sendBeacon) {
+            return;
+        }
+        const itemsPayload = state.items.map((it) => ({
+            item_name: it.name,
+            brand: it.brand || '',
+            model: it.model || '',
+            specification: it.specification,
+            requisition_line_id: it.requisition_line_id,
+        }));
+        const suppliersPayload = state.selectedSuppliers.map((s) => ({
+            supplier_id: s.supplier_id,
+            prices: s.prices,
+        }));
+        const body = new URLSearchParams();
+        body.set('action', 'save');
+        body.set('request_id', String(requestId));
+        body.set('items', JSON.stringify(itemsPayload));
+        body.set('suppliers', JSON.stringify(suppliersPayload));
+        body.set('preferred_suppliers', JSON.stringify(state.preferredSuppliers || []));
+        const blob = new Blob([body.toString()], { type: 'application/x-www-form-urlencoded' });
+        window.navigator.sendBeacon(api, blob);
+    }
+
+    function syncPreferredSupplierPrices(supplierId) {
+        const sidNum = Number(supplierId || 0);
+        if (!sidNum) {
+            showToast('Invalid preferred supplier.', 'error');
+            return;
+        }
+        const preferred = state.preferredSuppliers.find((s) => Number(s.supplier_id) === sidNum);
+        if (!preferred) {
+            showToast('Preferred supplier not found.', 'error');
+            return;
+        }
+        const drafts = state.preferredPriceDrafts[String(sidNum)] || {};
+        let hasValue = false;
+        const target = state.selectedSuppliers.find((s) => Number(s.supplier_id) === sidNum);
+        if (!target) {
+            state.selectedSuppliers.push({
+                supplier_id: preferred.supplier_id,
+                supplier_name: preferred.supplier_name,
+                supplier_image: preferred.supplier_image,
+                prices: {},
+            });
+        }
+        const supplierRow = state.selectedSuppliers.find((s) => Number(s.supplier_id) === sidNum);
+        state.items.forEach((_, itemIndex) => {
+            const draftVal = drafts[itemIndex];
+            if (draftVal !== undefined && draftVal !== '') {
+                hasValue = true;
+                supplierRow.prices[itemIndex] = draftVal;
+            }
+        });
+        if (!hasValue) {
+            showToast('Enter at least one price before syncing.', 'error');
+            return;
+        }
+        showToast('Preferred supplier prices added to the canvass matrix.');
+        renderPreferredTable();
+        renderSupplierTable();
     }
 
     function renderPreferredTable() {
@@ -88,6 +191,7 @@
         const headerCells = [`<th>SUPPLIER</th>`].concat(
             Array.from({ length: itemCount }, (_, index) => `<th>${formatItemHeader(state.items[index] || {}, index)}</th>`)
         );
+        headerCells.push('<th>ACTION</th>');
         if (thead) {
             thead.innerHTML = `<tr>${headerCells.join('')}</tr>`;
         }
@@ -109,15 +213,20 @@
                     <img src="${avatar}" alt="" class="supplier-table-avatar" width="32" height="32" decoding="async" onerror="${supplierAvatarOnError}">
                     <span class="supplier-table-name">${escapeHtml(s.supplier_name || '')}</span>
                 </div>`;
-            const removeHtml = editable
-                ? `<button type="button" class="cv-pref-remove-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Remove preferred supplier">×</button>`
-                : '';
-            const supplierCell = `<div class="supplier-table-name-wrap">${supplierNameHtml}${removeHtml}</div>`;
-            const priceCells = Array.from({ length: itemCount }, (_, index) => `
-                <td>${getPreferredSupplierPrice(s.supplier_id, index)}</td>`);
+            const supplierCell = `<div class="supplier-table-name-wrap">${supplierNameHtml}</div>`;
+            const priceCells = Array.from({ length: itemCount }, (_, index) => {
+                const value = getPreferredDraftPrice(s.supplier_id, index);
+                const readonly = editable ? '' : ' readonly';
+                return `
+                <td><div class="cv-price-select-inline"><input type="number" min="0" step="0.01" class="cv-preferred-price-input" data-pref-supplier-id="${escapeHtml(String(s.supplier_id))}" data-cv-item-index="${index}" value="${escapeHtml(String(value))}" placeholder="Price"${readonly}></div></td>`;
+            });
+            const actionCell = editable
+                ? `<td class="supplier-table-action-cell"><button type="button" class="cv-pref-remove-btn" data-pref-id="${escapeHtml(String(s.supplier_id || ''))}" title="Remove preferred supplier">×</button></td>`
+                : '<td class="supplier-table-action-cell"></td>';
             return `<tr>
                 <td class="supplier-table-name-cell">${supplierCell}</td>
                 ${priceCells.join('')}
+                ${actionCell}
             </tr>`;
         }).join('');
 
@@ -128,12 +237,8 @@
     }
 
     function updatePreferredSearchUi() {
-        const btn = document.getElementById('cvPrefAddSelectedBtn');
         const preview = document.getElementById('cvPrefSelectedSupplierPreview');
         const selected = state.preferredSearchSelection;
-        if (btn) {
-            btn.disabled = !selected;
-        }
         if (preview) {
             if (selected) {
                 preview.style.display = 'block';
@@ -207,13 +312,18 @@
 
     async function confirmLinkPreferredSupplier() {
         const selected = state.preferredSearchSelection;
+        const input = document.getElementById('cvPrefSupplierSearch');
         if (!selected || !selected.supplier_id) {
-            showToast('Select a supplier first.', 'error');
+            if (input) {
+                input.classList.add('input-invalid');
+                input.focus();
+            }
+            showToast('Supplier is required.', 'error');
             return;
         }
+        if (input) input.classList.remove('input-invalid');
         await linkPreferredSupplier(selected.supplier_id);
         state.preferredSearchSelection = null;
-        const input = document.getElementById('cvPrefSupplierSearch');
         if (input) input.value = '';
         renderPreferredPicker();
         updatePreferredSearchUi();
@@ -253,6 +363,7 @@
         state.items.forEach((_, i) => { prices[i] = ''; });
         state.selectedSuppliers.push({ supplier_id: full.supplier_id, supplier_name: full.supplier_name, supplier_image: full.supplier_image, prices });
         renderSupplierTable();
+        scheduleRequesterAutosave();
     }
 
     async function loadPreferredSuppliers() {
@@ -374,7 +485,9 @@
         selectedSupplierId: null,
         preferredSearchSelection: null,
         preferredSearchFocused: false,
+        preferredPriceDrafts: {},
         suggestedByItem: {},
+        autoSaveTimer: null,
     };
     const gsdSuggestedHiddenInput = document.getElementById('gsdSuggestedSupplierId');
     const canSelectSuggestedSupplierInTable = !!gsdSuggestedHiddenInput;
@@ -1435,6 +1548,9 @@
         const ok = await showConfirmModal('Save canvass items and supplier prices?');
         if (!ok) return;
 
+        if (state.autoSaveTimer) {
+            clearRequesterAutosaveTimer();
+        }
         if (cvSaveBtn) cvSaveBtn.disabled = true;
         try {
             const result = await persistCanvassToServer();
@@ -1483,6 +1599,7 @@
             if (cvItemSpecs) cvItemSpecs.value = '';
             renderCvItems();
             renderSupplierTable();
+            scheduleRequesterAutosave();
             (async () => {
                 try {
                     const qs = new URLSearchParams({
@@ -1555,6 +1672,7 @@
             renderCvItems();
             renderSupplierTable();
             renderSupplierDropdown();
+            scheduleRequesterAutosave();
         });
     }
 
@@ -1607,6 +1725,7 @@
                 prices,
             });
             renderSupplierTable();
+            scheduleRequesterAutosave();
         });
     }
 
@@ -1629,6 +1748,7 @@
             if (Number.isNaN(idx)) return;
             removeSupplierAt(idx);
             renderSupplierTable();
+            scheduleRequesterAutosave();
         });
 
         cvSupplierTable.addEventListener('input', (e) => {
@@ -1640,6 +1760,7 @@
             const sup = state.selectedSuppliers[si];
             if (!sup) return;
             sup.prices[ii] = inp.value;
+            scheduleRequesterAutosave();
         });
 
         cvSupplierTable.addEventListener('change', (e) => {
@@ -1724,6 +1845,13 @@
         });
     }
 
+    window.addEventListener('beforeunload', () => {
+        if (state.autoSaveTimer) {
+            clearRequesterAutosaveTimer();
+            flushRequesterAutosave();
+        }
+    });
+
     // Preferred supplier UI bindings and requester view adjustments
     (function bindPreferredSupplierUi() {
         const prefCfg = window.CWIRMS_PREF_SUP || null;
@@ -1767,7 +1895,23 @@
                     const pid = addMat.getAttribute('data-pref-id');
                     if (pid) addPreferredToMatrix(pid);
                 }
+                const syncBtn = e.target.closest('.cv-pref-sync-btn');
+                if (syncBtn) {
+                    const sid = syncBtn.getAttribute('data-pref-id');
+                    if (sid) syncPreferredSupplierPrices(sid);
+                }
             });
+
+            if (cvPreferredTable) {
+                cvPreferredTable.addEventListener('input', (e) => {
+                    const input = e.target.closest('.cv-preferred-price-input');
+                    if (!input) return;
+                    const sid = input.getAttribute('data-pref-supplier-id');
+                    const itemIndex = Number(input.getAttribute('data-cv-item-index') || '0');
+                    if (!sid || Number.isNaN(itemIndex)) return;
+                    setPreferredDraftPrice(sid, itemIndex, input.value);
+                });
+            }
 
             const prefSearch = document.getElementById('cvPrefSupplierSearch');
             const prefList = document.getElementById('cvPrefSupplierSearchList');

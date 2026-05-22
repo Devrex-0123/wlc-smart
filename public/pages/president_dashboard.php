@@ -47,7 +47,7 @@ $pvActive = 'dashboard';
     <?php require __DIR__ . '/partials/dashboard_overview_charts.php'; ?>
 
     <div class="dashboard-grid">
-        <div class="dashboard-card">
+        <div class="dashboard-card" data-notification-key="president_pending">
             <div class="card-header">
                 <div>
                     <p class="card-title">Pending review</p>

@@ -45,7 +45,7 @@ $initials = strtoupper(substr($user['Email'] ?? 'A', 0, 1));
         <ul class="sidebar-nav">
             <li><a href="dashboard.php"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
             <li><a href="requisition_management.php"><i class="fas fa-file-signature"></i> <span>Requisition Management</span></a></li>
-            <li><a href="requisition_status.php" class="active"><i class="fas fa-bars-progress"></i> <span>Status</span></a></li>
+            <li><a href="requisition_status.php" class="active" data-notification-key="requester_attention" data-notification-view-key="requester_attention"><i class="fas fa-bars-progress"></i> <span>Status</span></a></li>
             <li><a href="audit_trail.php"><i class="fas fa-shield-alt"></i> <span>Audit Trail</span></a></li>
             <li><a href="account_management.php"><i class="fas fa-users-cog"></i> <span>Account Management</span></a></li>
             <li><a href="facility_management.php"><i class="fas fa-building"></i> <span>Facility Management</span></a></li>

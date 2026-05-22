@@ -13,3 +13,4 @@
         <p class="sidebar-brand-subtitle">WLC-SMART</p>
     </div>
 </div>
+<script defer src="../assets/js/notification_badges.js"></script>

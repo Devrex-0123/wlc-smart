@@ -39,7 +39,7 @@ $initials = strtoupper(substr($user['Email'] ?? 'D', 0, 1));
         <ul class="sidebar-nav">
             <li><a href="dean_dashboard.php"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
             <li><a href="dean_requisition_management.php"><i class="fas fa-file-signature"></i> <span>Requisition Management</span></a></li>
-            <li><a href="dean_requisition_status.php" class="active"><i class="fas fa-bars-progress"></i> <span>Status</span></a></li>
+            <li><a href="dean_requisition_status.php" class="active" data-notification-key="requester_attention" data-notification-view-key="requester_attention"><i class="fas fa-bars-progress"></i> <span>Status</span></a></li>
             <li><a href="dean_inventory.php"><i class="fas fa-cubes"></i> <span>Inventory</span></a></li>
             <li><a href="dean_account_management.php"><i class="fas fa-users-cog"></i> <span>Account Management</span></a></li>
         </ul>

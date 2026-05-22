@@ -271,6 +271,16 @@
     color: #166534;
 }
 
+.status-pill.accepted {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-pill.rejected {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
 .actions {
     display: flex;
     gap: 0.35rem;

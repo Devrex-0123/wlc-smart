@@ -47,7 +47,7 @@ $cvActive = 'dashboard';
     <?php require __DIR__ . '/partials/dashboard_overview_charts.php'; ?>
 
     <div class="dashboard-grid">
-        <div class="dashboard-card">
+        <div class="dashboard-card" data-notification-key="canvasser_assigned">
             <div class="card-header">
                 <div>
                     <p class="card-title">Pending canvass</p>

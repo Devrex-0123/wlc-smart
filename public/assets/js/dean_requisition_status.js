@@ -36,7 +36,23 @@ function updateStats(data) {
 }
 
 function statusClass(status) {
-    return status.toLowerCase();
+    return String(status || '').toLowerCase();
+}
+
+function requestIndicator(request) {
+    const reqStatus = String(request.requisition_status || '').toLowerCase();
+    const canvasStatus = String(request.canvas_status || '').toLowerCase();
+
+    if (reqStatus === 'accept' && canvasStatus === 'pending') {
+        return { label: 'Accepted — Canvass ready', css: 'accepted' };
+    }
+    if (reqStatus === 'reject') {
+        return { label: 'Rejected', css: 'rejected' };
+    }
+    if (request.status === 'Ongoing' && canvasStatus === 'pending') {
+        return { label: 'In review — Canvass pending', css: 'ongoing' };
+    }
+    return null;
 }
 
 function filteredData() {
@@ -81,12 +97,16 @@ function renderCards() {
     statusCards.innerHTML = pageRows.map((r, i) => {
         const rowNum = start + i + 1;
         const itemText = Array.isArray(r.items) && r.items.length ? r.items.slice(0, 3).join(', ') : '—';
+        const indicator = requestIndicator(r);
+        const indicatorHtml = indicator ? `<span class="status-pill ${indicator.css}">${indicator.label}</span>` : '';
+
         return `
         <article class="status-card">
             <div class="status-card-top">
                 <div>
                     <div class="status-card-id">${rowNum}. ${r.id}</div>
                     <div class="status-card-date">${new Date(r.date).toLocaleDateString()}</div>
+                    ${indicatorHtml}
                 </div>
                 <span class="status-pill ${statusClass(r.status)}">${r.status}</span>
             </div>
