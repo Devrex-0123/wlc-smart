@@ -47,8 +47,8 @@ $activeSessions = $db->query("SELECT COUNT(*) FROM log_history WHERE time_out IS
     <nav>
         <ul class="sidebar-nav">
             <li><a href="dashboard.php" class="active"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-            <li><a href="requisition_management.php" class="internal-link"><i class="fas fa-file-signature"></i> <span>Requisition Management</span></a></li>
-            <li><a href="requisition_status.php" class="internal-link"><i class="fas fa-bars-progress"></i> <span>Status</span></a></li>
+            <li><a href="requisition_management.php" class="internal-link" data-notification-key="inventory_review"><i class="fas fa-file-signature"></i> <span>Requisition Management</span></a></li>
+            <li><a href="requisition_status.php" class="internal-link" data-notification-key="requester_attention"><i class="fas fa-bars-progress"></i> <span>Status</span></a></li>
             <li><a href="audit_trail.php" class="internal-link"><i class="fas fa-shield-alt"></i> <span>Audit Trail</span></a></li>
             <li><a href="my_profile.php" class="internal-link"><i class="fas fa-user"></i><span>My Profile</span></a></li>
             <li><a href="account_management.php" class="internal-link"><i class="fas fa-users-cog"></i><span>Account Management</span></a></li>

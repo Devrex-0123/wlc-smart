@@ -16,7 +16,7 @@ $roleLabel = 'Canvasser';
                 </a>
             </li>
             <li>
-                <a href="canvasser_request.php" class="<?php echo $cvActive === 'request' ? 'active' : ''; ?>">
+                <a href="canvasser_request.php" class="<?php echo $cvActive === 'request' ? 'active' : ''; ?>" data-notification-key="canvasser_assigned">
                     <i class="fas fa-file-signature"></i> <span>Request</span>
                 </a>
             </li>

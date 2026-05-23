@@ -16,7 +16,7 @@ $roleLabel = htmlspecialchars(ucfirst(trim((string) ($user['role'] ?? 'GSD offic
                 </a>
             </li>
             <li>
-                <a href="gsd_request.php" class="<?php echo $gsdActive === 'request' ? 'active' : ''; ?>">
+                <a href="gsd_request.php" class="<?php echo $gsdActive === 'request' ? 'active' : ''; ?>" data-notification-key="gsd_total">
                     <i class="fas fa-file-signature"></i> <span>Request</span>
                 </a>
             </li>

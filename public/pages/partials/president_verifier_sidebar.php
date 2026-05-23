@@ -16,7 +16,7 @@ $roleLabel = 'President verifier';
                 </a>
             </li>
             <li>
-                <a href="president_request.php" class="<?php echo $pvActive === 'request' ? 'active' : ''; ?>">
+                <a href="president_request.php" class="<?php echo $pvActive === 'request' ? 'active' : ''; ?>" data-notification-key="president_pending">
                     <i class="fas fa-file-signature"></i> <span>Request</span>
                 </a>
             </li>

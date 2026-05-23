@@ -16,7 +16,7 @@ $roleLabel = htmlspecialchars(ucfirst(trim((string) ($user['role'] ?? 'Comptroll
                 </a>
             </li>
             <li>
-                <a href="comptroller_requests.php" class="<?php echo $comptrollerActive === 'requests' ? 'active' : ''; ?>">
+                <a href="comptroller_requests.php" class="<?php echo $comptrollerActive === 'requests' ? 'active' : ''; ?>" data-notification-key="comptroller_pending">
                     <i class="fas fa-file-invoice-dollar"></i> <span>Requests</span>
                 </a>
             </li>

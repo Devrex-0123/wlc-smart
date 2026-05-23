@@ -43,14 +43,17 @@ function requestIndicator(request) {
     const reqStatus = String(request.requisition_status || '').toLowerCase();
     const canvasStatus = String(request.canvas_status || '').toLowerCase();
 
-    if (reqStatus === 'accept' && canvasStatus === 'pending') {
-        return { label: 'Accepted — Canvass ready', css: 'accepted' };
-    }
     if (reqStatus === 'reject') {
-        return { label: 'Rejected', css: 'rejected' };
+        return { label: 'Needs Resubmission', css: 'rejected', icon: '●' };
+    }
+    if (reqStatus === 'accept' && canvasStatus === 'pending') {
+        return { label: 'Accepted — Canvass ready', css: 'accepted', icon: '✓' };
+    }
+    if (reqStatus === 'accept') {
+        return { label: 'Accepted — Processing', css: 'accepted', icon: '✓' };
     }
     if (request.status === 'Ongoing' && canvasStatus === 'pending') {
-        return { label: 'In review — Canvass pending', css: 'ongoing' };
+        return { label: 'In review — Canvass pending', css: 'ongoing', icon: '◈' };
     }
     return null;
 }
@@ -98,10 +101,10 @@ function renderCards() {
         const rowNum = start + i + 1;
         const itemText = Array.isArray(r.items) && r.items.length ? r.items.slice(0, 3).join(', ') : '—';
         const indicator = requestIndicator(r);
-        const indicatorHtml = indicator ? `<span class="status-pill ${indicator.css}">${indicator.label}</span>` : '';
+        const indicatorHtml = indicator ? `<span class="status-pill ${indicator.css}"><span class="status-icon">${indicator.icon}</span> ${indicator.label}</span>` : '';
 
         return `
-        <article class="status-card">
+        <article class="status-card ${indicator?.css === 'rejected' ? 'status-card--alert' : ''}">
             <div class="status-card-top">
                 <div>
                     <div class="status-card-id">${rowNum}. ${r.id}</div>

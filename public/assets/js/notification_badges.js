@@ -1,7 +1,7 @@
 (function () {
     const POLL_INTERVAL_MS = 45000;
-    const API_URL = '../app/api/notification_counts.php';
-    const VIEW_API_URL = '../app/api/notification_views.php';
+    const API_URL = '/CWIRMS/app/api/notification_counts.php';
+    const VIEW_API_URL = '/CWIRMS/app/api/notification_views.php';
     const NAV_MAP = {
         'requisition_management.php': 'inventory_review',
         'requisition_status.php': 'requester_attention',
