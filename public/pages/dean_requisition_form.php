@@ -273,6 +273,9 @@ if ($viewingRequest && $viewRequestId > 0) {
 
         <?php if (!$isCanvasserActiveReview): ?>
         <div class="btn-submit-wrapper">
+            <button id="saveDraftBtn" class="btn-secondary" title="Save form as draft - you can edit it later">
+                <i class="fas fa-floppy-disk"></i> Save as Draft
+            </button>
             <button id="submitRequisitionBtn" class="btn-submit">Submit →</button>
         </div>
         <?php endif; ?>

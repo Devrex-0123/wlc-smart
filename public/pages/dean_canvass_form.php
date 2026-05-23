@@ -647,6 +647,9 @@ $pageTitle = $rfRequestId > 0
             <button type="button" id="cvCompleteCanvassBtn" class="btn-submit">Complete canvassing</button>
             <button type="button" id="cvCanvasserUndoBtn" class="btn-secondary comptroller-undo-btn" hidden>Undo completion</button>
             <p class="cv-canvasser-save-hint" style="flex-basis:100%;margin:0.35rem 0 0;font-size:0.85rem;color:#64748b;">Save draft keeps your supplier quotes without finishing the step. Complete canvassing saves and records your approval. Use <strong>Undo completion</strong> to reopen the canvass step.</p>
+            <?php elseif ($isRequesterOwnedCanvass): ?>
+            <button type="button" id="cvSaveDraftBtn" class="btn-secondary">Save draft</button>
+            <button type="button" id="cvSaveBtn" class="btn-submit">Save and continue</button>
             <?php else: ?>
             <button type="button" id="cvSaveBtn" class="btn-submit">Save canvass form</button>
             <?php endif; ?>

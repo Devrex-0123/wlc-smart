@@ -202,6 +202,8 @@ try {
             LEFT JOIN requisition_form_approval rfa ON rfa.request_id = r.request_id
             LEFT JOIN canvass_verification_approval cva ON cva.request_id = r.request_id
             LEFT JOIN purchase_requisition_approval pra ON pra.request_id = r.request_id
+            WHERE r.submission_status = 'submitted'
+            AND (cva.request_id IS NULL OR LOWER(TRIM(COALESCE(cva.canvas_submission_status, 'draft'))) != 'draft')
             ORDER BY r.created_at DESC, r.request_id DESC
         ");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

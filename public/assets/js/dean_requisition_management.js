@@ -19,10 +19,56 @@ const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 const sidebar = document.getElementById('sidebar');
 
 const REQ_PROGRESS_KEY = 'imrms_req_progress_';
+const REQ_VIEWS_PREFIX = 'imrms_request_views_';
 
 let requests = [];
 const reqPerPage = 5;
 let currentReqPage = 1;
+
+/** Get timestamp when request was last viewed */
+function getRequestViewedTime(requestId) {
+    if (requestId == null) return null;
+    try {
+        const raw = localStorage.getItem(REQ_VIEWS_PREFIX + String(requestId));
+        return raw ? parseInt(raw, 10) : null;
+    } catch {
+        return null;
+    }
+}
+
+/** Mark a request as viewed */
+function markRequestViewed(requestId) {
+    if (requestId == null) return;
+    try {
+        localStorage.setItem(REQ_VIEWS_PREFIX + String(requestId), String(Date.now()));
+    } catch {
+        console.warn('Could not save request view status');
+    }
+}
+
+/** Check if request is unviewed */
+function isRequestUnviewed(requestId) {
+    return getRequestViewedTime(requestId) === null;
+}
+
+/** Check if request was changed since last viewed */
+function isRequestChanged(record) {
+    if (!record || record.request_id == null) return false;
+    const viewedTime = getRequestViewedTime(record.request_id);
+    if (viewedTime === null) return false; // Unviewed, doesn't matter if changed
+    
+    // Check if request has updated_at timestamp and if it's newer than view time
+    if (record.updated_at) {
+        const updatedTime = new Date(record.updated_at).getTime();
+        return updatedTime > viewedTime;
+    }
+    return false;
+}
+
+/** Check if request needs attention (unviewed or changed) */
+function requestNeedsAttention(record) {
+    return isRequestUnviewed(record.request_id) || isRequestChanged(record);
+}
 
 function verifierHasDecidedOnRequest(record) {
     if (!record || typeof record !== 'object') {
@@ -139,8 +185,11 @@ function renderTable() {
         const editable = canEditRequest(r);
         const editTitle = editable ? 'Edit request' : 'Can edit after requisition acceptance only';
         const rowNum = start + i + 1;
+        const needsAttention = requestNeedsAttention(r);
+        const rowClass = needsAttention ? ' class="request-row-highlight"' : '';
+        const indicatorHtml = needsAttention ? '<span class="request-indicator" title="New or updated request"></span>' : '';
         return `
-        <tr>
+        <tr${rowClass}>
             <td>${rowNum}</td>
             <td><strong>${r.id}</strong></td>
             <td>${new Date(r.date).toLocaleDateString()}</td>
@@ -149,8 +198,8 @@ function renderTable() {
             <td><span class="status-pill ${statusClass(r.status)}">${r.status}</span></td>
             <td>
                 <div class="actions-cell">
-                    <button type="button" class="view-progress" data-id="${r.id}" title="View status and workflow (read-only)">
-                        <i class="fas fa-eye"></i> View
+                    <button type="button" class="view-progress" data-id="${r.id}" data-request-id="${r.request_id}" title="View status and workflow (read-only)">
+                        <i class="fas fa-eye"></i> View${indicatorHtml}
                     </button>
                     <button type="button" class="edit" data-id="${r.id}" title="${editTitle}" ${editable ? '' : 'disabled'}>
                         <i class="fas fa-edit"></i> Edit
@@ -197,6 +246,13 @@ requestTableBody.addEventListener('click', async (e) => {
             } catch (err) {
                 showToast('Could not open progress view.', 'error');
                 return;
+            }
+            // Mark request as viewed
+            markRequestViewed(record.request_id);
+            // Remove indicator from button if present
+            const indicator = viewBtn.querySelector('.request-indicator');
+            if (indicator) {
+                indicator.remove();
             }
             window.location.href = `dean_requisition_status_progress.php?rid=${encodeURIComponent(String(record.request_id))}`;
         }

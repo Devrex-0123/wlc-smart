@@ -89,6 +89,8 @@ const state = {
     deanEditLocked: false,
     /** Latest request_approval-shaped object from detail payloads (for inventory lock, etc.). */
     approval: null,
+    /** Tracks if form has unsaved changes since last successful save */
+    hasUnsavedChanges: false,
 };
 
 /** Supplier matrix: editable on dean create/edit, or canvasser review while canvas step is open. */
@@ -1793,6 +1795,7 @@ function removeItemAt(index) {
         });
         supplier.prices = newPrices;
     });
+    state.hasUnsavedChanges = true;
 }
 
 async function loadBootstrapData() {
@@ -1982,7 +1985,22 @@ async function loadRequestForView(requestId) {
     syncCanvassContinueBanner();
 }
 
-officeSelect.addEventListener('change', renderFacilitiesByOffice);
+officeSelect.addEventListener('change', () => {
+    state.hasUnsavedChanges = true;
+    renderFacilitiesByOffice();
+});
+
+// Track dirty state for all form inputs
+[facilitySelect, requestDateInput, requestMessageInput, requestPurposeInput].forEach((el) => {
+    if (el) {
+        el.addEventListener('input', () => {
+            state.hasUnsavedChanges = true;
+        });
+        el.addEventListener('change', () => {
+            state.hasUnsavedChanges = true;
+        });
+    }
+});
 
 addItemBtn.addEventListener('click', (event) => {
     event.preventDefault();
@@ -2006,6 +2024,7 @@ addItemBtn.addEventListener('click', (event) => {
         quantity,
         unit_type: unitType
     });
+    state.hasUnsavedChanges = true;
 
     itemNameInput.value = '';
     itemQuantityInput.value = '1';
@@ -2065,6 +2084,7 @@ itemChips.addEventListener('click', async (event) => {
         return;
     }
     removeItemAt(itemIndex);
+    state.hasUnsavedChanges = true;
     renderItems();
     renderSupplierTable();
     showToast('Item removed.');
@@ -2181,13 +2201,93 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
         return;
     }
     const isEdit = state.editRequestId != null;
-    const confirmed = await showConfirmModal(isEdit ? 'Save changes to this requisition?' : 'Submit this requisition now?');
+    const confirmed = await showConfirmModal(isEdit ? 'Submit this requisition?\nIt will no longer be editable.' : 'Submit this requisition now?');
     if (!confirmed) {
         return;
     }
 
     const payload = new URLSearchParams();
-    payload.append('action', isEdit ? 'update_requisition' : 'submit');
+    if (isEdit) {
+        // For existing drafts: save changes first, then mark as submitted
+        payload.append('action', 'save_draft');
+        payload.append('request_id', String(state.editRequestId));
+    } else {
+        // For new forms: submit directly (sets submission_status to submitted)
+        payload.append('action', 'submit');
+    }
+    payload.append('office_id', officeSelect.value);
+    payload.append('facility_id', facilitySelect.value);
+    payload.append('request_date', requestDateInput.value);
+    payload.append('message', requestMessageInput.value.trim());
+    payload.append('purpose', requestPurposeInput.value.trim());
+    payload.append('urgent_note', '');
+    payload.append('items', JSON.stringify(state.requestedItems));
+    payload.append('suppliers', JSON.stringify(state.selectedSuppliers));
+
+    try {
+        const response = await fetch('../../app/api/dean_requisition.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: payload.toString(),
+            credentials: 'include'
+        });
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.message || 'Failed to submit requisition.', 'error');
+            return;
+        }
+
+        // If editing draft, now mark as submitted
+        if (isEdit && result.request_id) {
+            const submitPayload = new URLSearchParams();
+            submitPayload.append('action', 'change_submission_status');
+            submitPayload.append('request_id', String(result.request_id));
+            submitPayload.append('status', 'submitted');
+
+            const submitResponse = await fetch('../../app/api/dean_requisition.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: submitPayload.toString(),
+                credentials: 'include'
+            });
+            const submitResult = await submitResponse.json();
+            if (!submitResult.success) {
+                showToast(submitResult.message || 'Failed to mark as submitted.', 'error');
+                return;
+            }
+        }
+
+        showToast('Requisition submitted successfully.');
+        window.location.href = 'dean_requisition_management.php';
+    } catch (error) {
+        showToast('Submission error. Please try again.', 'error');
+    }
+});
+}
+
+// Save as Draft handler
+const saveDraftBtn = document.getElementById('saveDraftBtn');
+if (saveDraftBtn) {
+saveDraftBtn.addEventListener('click', async (event) => {
+    event.preventDefault();
+
+    if (formPageConfig.isComptrollerView || formPageConfig.isCanvasserView || formPageConfig.isInventoryManagerView || formPageConfig.isGsdView) {
+        showToast('You cannot save draft from this view.', 'error');
+        return;
+    }
+
+    if (state.viewOnly) {
+        return;
+    }
+
+    if (!officeSelect.value || !facilitySelect.value || !requestDateInput.value) {
+        showToast('Please set office, location, and date before saving.', 'error');
+        return;
+    }
+    
+    const isEdit = state.editRequestId != null;
+    const payload = new URLSearchParams();
+    payload.append('action', 'save_draft');
     if (isEdit) {
         payload.append('request_id', String(state.editRequestId));
     }
@@ -2209,18 +2309,42 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
         });
         const result = await response.json();
         if (!result.success) {
-            showToast(result.message || (isEdit ? 'Failed to update requisition.' : 'Failed to submit requisition.'), 'error');
+            showToast(result.message || 'Failed to save draft.', 'error');
             return;
         }
-        showToast(isEdit ? 'Requisition updated successfully.' : 'Requisition submitted successfully.');
-        if (isEdit) {
-            window.location.href = 'dean_requisition_management.php';
-            return;
+        showToast('Form saved as draft. You can edit it later.');
+        if (result.request_id) {
+            state.editRequestId = result.request_id;
+            submitRequisitionBtn.textContent = 'Update & Submit →';
         }
-        resetFormToDefault();
+        // Clear unsaved changes flag after successful save
+        state.hasUnsavedChanges = false;
     } catch (error) {
-        showToast(isEdit ? 'Update failed. Please try again.' : 'Submission error. Please try again.', 'error');
+        showToast('Save draft error. Please try again.', 'error');
     }
+});
+}
+
+// Close button confirmation dialog
+const closeBtn = document.querySelector('.requisition-close-btn');
+if (closeBtn) {
+closeBtn.addEventListener('click', async (event) => {
+    // Only show confirmation if there are actual unsaved changes and not in view-only mode
+    if (!state.viewOnly && state.hasUnsavedChanges) {
+        event.preventDefault();
+        const confirmed = await showConfirmModal('Do you want to save the changes as draft?\n\nYes: Save as draft\nNo: Discard changes');
+        if (confirmed) {
+            // Save as draft before leaving
+            event.preventDefault();
+            saveDraftBtn.click();
+            // Wait a moment for save to complete, then navigate
+            setTimeout(() => {
+                window.history.back();
+            }, 800);
+            return;
+        }
+    }
+    // Otherwise allow normal navigation
 });
 }
 

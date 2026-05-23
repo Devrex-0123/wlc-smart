@@ -150,6 +150,21 @@ function loadCanvassGetRequest(PDO $db, int $requestId, int $userId): array
         || userIsComptroller($db, $userId)
         || userIsPresidentVerifier($db, $userId)
     ) {
+        // For verifiers, check if canvas_submission_status is 'submitted'
+        $statusCheckStmt = $db->prepare(
+            'SELECT LOWER(TRIM(COALESCE(canvas_submission_status, \'draft\'))) as status
+             FROM canvass_verification_approval
+             WHERE request_id = ?'
+        );
+        $statusCheckStmt->execute([$requestId]);
+        $statusRow = $statusCheckStmt->fetch(PDO::FETCH_ASSOC);
+        $canvasStatus = $statusRow ? $statusRow['status'] : 'draft';
+        
+        // Only allow verifiers to see submitted canvass forms
+        if ($canvasStatus !== 'submitted') {
+            sendJson(['success' => false, 'message' => 'The canvass form is still in draft. Only the requester can view draft forms.']);
+        }
+        
         $stmt2 = $db->prepare(
             'SELECT r.*, d.`office_name` AS office_name,
                     f.building, f.room, f.laboratory
@@ -178,6 +193,21 @@ function loadCanvassGetRequest(PDO $db, int $requestId, int $userId): array
     if ($row3) {
         $ra = loadRequestApprovalCanvasRow($db, $requestId);
         if ($ra && userMayActAsCanvasAssigneeForCanvassApi($db, $ra, $userId)) {
+            // Check if canvas is submitted before allowing assignee to see it
+            $statusCheckStmt = $db->prepare(
+                'SELECT LOWER(TRIM(COALESCE(canvas_submission_status, \'draft\'))) as status
+                 FROM canvass_verification_approval
+                 WHERE request_id = ?'
+            );
+            $statusCheckStmt->execute([$requestId]);
+            $statusRow = $statusCheckStmt->fetch(PDO::FETCH_ASSOC);
+            $canvasStatus = $statusRow ? $statusRow['status'] : 'draft';
+            
+            // Canvass assignees can only see submitted forms
+            if ($canvasStatus !== 'submitted') {
+                sendJson(['success' => false, 'message' => 'The canvass form is still in draft. Only the requester can view draft forms.']);
+            }
+            
             // Allow GET after canvass is finalized so the assignee can see the sheet, undo, and refresh.
             // Saves while finalized are rejected in the save handler (code canvas_finalized).
             return $row3;
@@ -754,6 +784,10 @@ try {
         $requestId = (int) ($_POST['request_id'] ?? 0);
         $itemsRaw = $_POST['items'] ?? '[]';
         $suppliersRaw = $_POST['suppliers'] ?? '[]';
+        $submissionMode = strtolower(trim((string) ($_POST['submission_mode'] ?? 'draft')));
+        if ($submissionMode !== 'draft' && $submissionMode !== 'submitted') {
+            $submissionMode = 'draft';
+        }
         if ($requestId <= 0) {
             sendJson(['success' => false, 'message' => 'Invalid request id.']);
         }
@@ -1001,6 +1035,28 @@ try {
                     $cid = $newIds[$idx];
                     $insCell->execute([$cid, $sid, $p]);
                 }
+            }
+
+            // Update canvas_submission_status based on submission_mode
+            // Check if canvass_verification_approval row exists for this request
+            $checkStmt = $db->prepare(
+                'SELECT request_id FROM canvass_verification_approval WHERE request_id = ?'
+            );
+            $checkStmt->execute([$requestId]);
+            $exists = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($exists) {
+                // Update existing row
+                $statusUpdateStmt = $db->prepare(
+                    'UPDATE canvass_verification_approval SET canvas_submission_status = ? WHERE request_id = ?'
+                );
+                $statusUpdateStmt->execute([$submissionMode, $requestId]);
+            } else {
+                // Create new row with submission status (for requester editing before GSD assignment)
+                $insertStmt = $db->prepare(
+                    'INSERT INTO canvass_verification_approval (request_id, canvas_submission_status) VALUES (?, ?)'
+                );
+                $insertStmt->execute([$requestId, $submissionMode]);
             }
 
             $db->commit();

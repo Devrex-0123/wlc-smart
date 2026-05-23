@@ -159,6 +159,7 @@ try {
                        {$agg}
                 FROM requisition_item r
                 INNER JOIN canvass_verification_approval cva ON cva.request_id = r.request_id
+                LEFT JOIN requisition_form_approval rfa ON rfa.request_id = r.request_id
                 LEFT JOIN user u ON u.user_id = r.user_id
                 LEFT JOIN offices d ON d.office_id = r.office_id
                 WHERE (
@@ -170,6 +171,9 @@ try {
                     )
                 )
                 AND LOWER(TRIM(COALESCE(cva.canvas_status, 'pending'))) IN ('pending', '')
+                AND LOWER(TRIM(COALESCE(rfa.requisition_status, 'pending'))) = 'accept'
+                AND r.submission_status = 'submitted'
+                AND LOWER(TRIM(COALESCE(cva.canvas_submission_status, 'draft'))) != 'draft'
                 ORDER BY r.created_at DESC, r.request_id DESC
             ");
             $stmtAm->execute([$uid, $localKey]);

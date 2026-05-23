@@ -526,3 +526,34 @@
         justify-content: center;
     }
 }
+
+/* Request view tracking indicators */
+.request-row-highlight {
+    background: linear-gradient(90deg, rgba(220, 38, 38, 0.08) 0%, transparent 100%);
+    border-left: 3px solid #dc2626;
+}
+
+.request-row-highlight:hover {
+    background: linear-gradient(90deg, rgba(220, 38, 38, 0.12) 0%, transparent 100%);
+}
+
+.request-indicator {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background-color: #dc2626;
+    border-radius: 50%;
+    margin-left: 0.4rem;
+    animation: pulse-request 2s ease-in-out infinite;
+    vertical-align: middle;
+}
+
+@keyframes pulse-request {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}

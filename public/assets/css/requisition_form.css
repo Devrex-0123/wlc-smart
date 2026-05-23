@@ -842,6 +842,7 @@ a.req-flow-context-link:focus-visible {
     display: flex;
     justify-content: center;
     margin-top: 0.35rem;
+    gap: 20px;
 }
 
 .btn-submit-wrapper.cv-canvasser-submit-row {

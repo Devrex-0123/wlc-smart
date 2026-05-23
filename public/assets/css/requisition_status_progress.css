@@ -309,6 +309,16 @@ a.rsp-form-view-disabled:hover {
     }
 }
 
+@keyframes pulse-indicator {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
 .rsp-step-title {
     font-size: 0.78rem;
     font-weight: 700;
@@ -612,4 +622,16 @@ a.rsp-form-view-disabled:hover {
         bottom: auto;
         top: -6px;
     }
+}
+
+/* Unviewed form indicator */
+.form-unviewed-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #dc2626;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+    animation: pulse-indicator 2s ease-in-out infinite;
 }

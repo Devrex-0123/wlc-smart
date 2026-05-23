@@ -96,7 +96,7 @@
         state.autoSaveTimer = setTimeout(async () => {
             state.autoSaveTimer = null;
             try {
-                const result = await persistCanvassToServer();
+                const result = await persistCanvassToServer('draft');
                 if (!result.ok) {
                     console.warn('Requester autosave failed:', result.message);
                 }
@@ -242,10 +242,10 @@
         if (preview) {
             if (selected) {
                 preview.style.display = 'block';
-                preview.textContent = `Selected supplier: ${selected.supplier_name || '—'}${selected.contact_person ? ` · ${selected.contact_person}` : ''}`;
+                preview.innerHTML = '<strong>Selected:</strong> ' + escapeHtml(selected.supplier_name || '—') + (selected.contact_person ? ' · ' + escapeHtml(selected.contact_person) : '');
             } else {
                 preview.style.display = 'none';
-                preview.textContent = '';
+                preview.innerHTML = '';
             }
         }
     }
@@ -253,7 +253,10 @@
     function renderPreferredPicker() {
         const input = document.getElementById('cvPrefSupplierSearch');
         const list = document.getElementById('cvPrefSupplierSearchList');
-        if (!input || !list) return;
+        if (!input || !list) {
+            console.warn('renderPreferredPicker: search input or list not found');
+            return;
+        }
         const q = String(input.value || '').trim().toLowerCase();
         const focused = Boolean(state.preferredSearchFocused);
         const suppliers = Array.isArray(state.availableSuppliers) ? state.availableSuppliers : [];
@@ -308,6 +311,11 @@
             input.value = supplier.supplier_name || '';
         }
         updatePreferredSearchUi();
+        // Hide the picker list after selection
+        const list = document.getElementById('cvPrefSupplierSearchList');
+        if (list && supplier) {
+            list.innerHTML = '';
+        }
     }
 
     async function confirmLinkPreferredSupplier() {
@@ -325,6 +333,17 @@
         await linkPreferredSupplier(selected.supplier_id);
         state.preferredSearchSelection = null;
         if (input) input.value = '';
+        state.hasUnsavedChanges = true;
+        // Hide the picker list
+        const list = document.getElementById('cvPrefSupplierSearchList');
+        if (list) {
+            list.innerHTML = '';
+        }
+        const preview = document.getElementById('cvPrefSelectedSupplierPreview');
+        if (preview) {
+            preview.style.display = 'none';
+            preview.innerHTML = '';
+        }
         renderPreferredPicker();
         updatePreferredSearchUi();
     }
@@ -488,6 +507,7 @@
         preferredPriceDrafts: {},
         suggestedByItem: {},
         autoSaveTimer: null,
+        hasUnsavedChanges: false,
     };
     const gsdSuggestedHiddenInput = document.getElementById('gsdSuggestedSupplierId');
     const canSelectSuggestedSupplierInTable = !!gsdSuggestedHiddenInput;
@@ -1081,6 +1101,10 @@
         });
     }
 
+    function onSupplierTableChange() {
+        state.hasUnsavedChanges = true;
+    }
+
     function renderSupplierTable() {
         if (!cvSupplierTable) return;
         const thead = cvSupplierTable.querySelector('thead');
@@ -1338,7 +1362,7 @@
         }
     }
 
-    async function persistCanvassToServer() {
+    async function persistCanvassToServer(submissionMode = 'draft') {
         if (state.items.length === 0) {
             return {
                 ok: false,
@@ -1367,6 +1391,7 @@
         body.set('items', JSON.stringify(itemsPayload));
         body.set('suppliers', JSON.stringify(suppliersPayload));
         body.set('preferred_suppliers', JSON.stringify(state.preferredSuppliers || []));
+        body.set('submission_mode', submissionMode);
 
         const res = await fetch(api, {
             method: 'POST',
@@ -1447,16 +1472,19 @@
         }
         setCanvasserActionBusy(true);
         try {
-            const result = await persistCanvassToServer();
+            const result = await persistCanvassToServer('draft');
             if (!result.ok) {
                 showToast(result.message || 'Save failed.', 'error');
+                setCanvasserActionBusy(false);
                 return;
             }
-            showToast('Draft saved. Complete canvassing when you are ready to approve.');
-            await loadForm();
+            showToast('✓ Draft saved successfully.');
+            state.hasUnsavedChanges = false;
+            setTimeout(() => {
+                window.history.back();
+            }, 800);
         } catch {
             showToast('Network error.', 'error');
-        } finally {
             setCanvasserActionBusy(false);
         }
     }
@@ -1482,7 +1510,8 @@
         }
         setCanvasserActionBusy(true);
         try {
-            let persistResult = await persistCanvassToServer();
+            // First save the canvass as submitted
+            let persistResult = await persistCanvassToServer('submitted');
             if (!persistResult.ok) {
                 if (persistResult.code === 'canvas_finalized') {
                     persistResult = { ok: true };
@@ -1491,6 +1520,8 @@
                     return;
                 }
             }
+            
+            // Then mark canvass as accepted through approval API
             const data = await postCanvasApproval('accept');
             if (!data.success) {
                 showToast(
@@ -1553,12 +1584,13 @@
         }
         if (cvSaveBtn) cvSaveBtn.disabled = true;
         try {
-            const result = await persistCanvassToServer();
+            const result = await persistCanvassToServer('draft');
             if (!result.ok) {
                 showToast(result.message || 'Save failed.', 'error');
                 return;
             }
-            showToast(result.message || 'Saved.');
+            showToast('✓ Changes saved as draft');
+            state.hasUnsavedChanges = false;
             await loadForm();
         } catch {
             showToast('Network error.', 'error');
@@ -1587,6 +1619,7 @@
                 requisition_line_id: null,
                 suggested_supplier_ids: [],
             });
+            state.hasUnsavedChanges = true;
             const newIdx = state.items.length - 1;
             state.selectedSuppliers.forEach((s) => {
                 if (s.prices[newIdx] === undefined) {
@@ -1730,6 +1763,9 @@
     }
 
     if (cvSupplierTable) {
+        cvSupplierTable.addEventListener('change', () => {
+            onSupplierTableChange();
+        });
         cvSupplierTable.addEventListener('click', (e) => {
             const contactBtn = e.target.closest('.supplier-table-contact-name-btn');
             if (contactBtn) {
@@ -1779,8 +1815,31 @@
         cvSaveBtn.addEventListener('click', () => void saveForm());
     }
     if (cvSaveDraftBtn) {
-        cvSaveDraftBtn.addEventListener('click', () => void saveDraft());
-    }
+    cvSaveDraftBtn.addEventListener('click', () => {
+        if (canvasserRegister) {
+            void saveDraft();
+        } else {
+            // Requester "Save draft" — same as saveForm() but skip the confirm dialog
+            if (state.items.length === 0) {
+                showToast('Add at least one canvass item.', 'error');
+                return;
+            }
+            clearRequesterAutosaveTimer();
+            cvSaveDraftBtn.disabled = true;
+            persistCanvassToServer('draft')
+                .then((result) => {
+                    if (!result.ok) {
+                        showToast(result.message || 'Save failed.', 'error');
+                        return;
+                    }
+                    showToast('✓ Changes saved as draft');
+                    state.hasUnsavedChanges = false;
+                })
+                .catch(() => showToast('Network error.', 'error'))
+                .finally(() => { cvSaveDraftBtn.disabled = false; });
+        }
+    });
+}
     if (cvCompleteCanvassBtn) {
         cvCompleteCanvassBtn.addEventListener('click', () => void completeCanvassing());
     }
@@ -1926,22 +1985,38 @@
                     renderPreferredPicker();
                 });
                 prefSearch.addEventListener('blur', () => {
+                    // Use a longer delay to ensure click events on list items complete
                     setTimeout(() => {
                         state.preferredSearchFocused = false;
                         renderPreferredPicker();
-                    }, 120);
+                    }, 250);
                 });
             }
             if (prefList) {
+                // Prevent input blur when clicking on list
+                prefList.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                });
                 prefList.addEventListener('click', (e) => {
                     const opt = e.target.closest('.pref-search-option');
                     if (!opt) return;
+                    // Prevent default button behavior only
+                    e.preventDefault();
                     const sid = opt.getAttribute('data-supplier-id');
-                    if (!sid) return;
+                    if (!sid) {
+                        console.warn('No data-supplier-id found on clicked element');
+                        return;
+                    }
                     const supplier = state.availableSuppliers.find((s) => String(s.supplier_id) === String(sid));
-                    if (!supplier) return;
+                    if (!supplier) {
+                        console.warn('Supplier not found in state.availableSuppliers for ID:', sid, 'Available suppliers:', state.availableSuppliers.map(s => ({ id: s.supplier_id, name: s.supplier_name })));
+                        return;
+                    }
+                    console.log('Selected supplier:', supplier.supplier_name);
                     setPreferredSearchSelection(supplier);
                 });
+            } else {
+                console.warn('cvPrefSupplierSearchList element not found - preferred supplier search will not work');
             }
             const addSelectedBtn = document.getElementById('cvPrefAddSelectedBtn');
             if (addSelectedBtn) {
@@ -1949,6 +2024,57 @@
             }
         }
     })();
+
+    // Close button handler with unsaved changes confirmation
+    const closeBtn = document.querySelector('.requisition-close-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', async (event) => {
+            if (state.hasUnsavedChanges) {
+                event.preventDefault();
+                const confirmed = await showConfirmModal('Do you want to save the changes as draft?\n\nYes: Save as draft\nNo: Discard changes');
+                if (confirmed) {
+                    // For requesters, use saveForm; for canvassers/verifiers, use saveDraft
+                    if (!canvasserRegister && cvSaveBtn) {
+                        // Requester mode - save without the extra confirmation dialog
+                        if (state.items.length === 0) {
+                            showToast('Add at least one canvass item.', 'error');
+                            return;
+                        }
+                        if (state.autoSaveTimer) {
+                            clearRequesterAutosaveTimer();
+                        }
+                        if (cvSaveBtn) cvSaveBtn.disabled = true;
+                        try {
+                            const result = await persistCanvassToServer('draft');
+                            if (!result.ok) {
+                                showToast(result.message || 'Save failed.', 'error');
+                                if (cvSaveBtn) cvSaveBtn.disabled = false;
+                                return;
+                            }
+                            showToast('✓ Changes saved as draft');
+                            state.hasUnsavedChanges = false;
+                            setTimeout(() => {
+                                window.history.back();
+                            }, 600);
+                        } catch {
+                            showToast('Network error.', 'error');
+                            if (cvSaveBtn) cvSaveBtn.disabled = false;
+                        }
+                    } else if (canvasserRegister && cvSaveDraftBtn) {
+                        // Canvasser mode - use existing saveDraft function
+                        await saveDraft();
+                        setTimeout(() => {
+                            window.history.back();
+                        }, 600);
+                    }
+                } else {
+                    // User clicked "No" - just go back without saving
+                    event.preventDefault();
+                    window.history.back();
+                }
+            }
+        });
+    }
 
     applyGsdReadonlyUi();
     loadForm();

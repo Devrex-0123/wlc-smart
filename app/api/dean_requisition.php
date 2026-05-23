@@ -18,15 +18,15 @@ function sendJson($payload) {
  * @param array<int, mixed> $items
  * @param array<int, mixed> $suppliers
  */
-function insertRequisitionBatch(PDO $db, int $userId, int $officeId, int $facilityId, string $requestDate, string $message, string $purpose, string $urgentNote, array $items, array $suppliers): void
+function insertRequisitionBatch(PDO $db, int $userId, int $officeId, int $facilityId, string $requestDate, string $message, string $purpose, string $urgentNote, array $items, array $suppliers, string $submissionStatus = 'draft'): void
 {
     $msgVal = $message !== '' ? $message : null;
     $purposeVal = $purpose !== '' ? $purpose : null;
     $urgentNoteVal = $urgentNote !== '' ? $urgentNote : null;
     // Keep the requested date, but stamp with actual current time (not 12:00 AM).
     $createdAt = $requestDate . ' ' . date('H:i:s');
-    $stmt = $db->prepare("INSERT INTO requisition_item (user_id, office_id, facility_id, status, created_at, message, purpose, urgent_note) VALUES (?, ?, ?, 'Pending', ?, ?, ?, ?)");
-    $stmt->execute([$userId, $officeId, $facilityId, $createdAt, $msgVal, $purposeVal, $urgentNoteVal]);
+    $stmt = $db->prepare("INSERT INTO requisition_item (user_id, office_id, facility_id, status, created_at, message, purpose, urgent_note, submission_status) VALUES (?, ?, ?, 'Pending', ?, ?, ?, ?, ?)");
+    $stmt->execute([$userId, $officeId, $facilityId, $createdAt, $msgVal, $purposeVal, $urgentNoteVal, $submissionStatus]);
     $requestId = (int) $db->lastInsertId();
     requisitionInsertLinesForRequest($db, $requestId, $items, is_array($suppliers) ? $suppliers : []);
 }
@@ -154,6 +154,7 @@ try {
                 'id' => 'REQ-' . str_pad((string)$row['request_id'], 6, '0', STR_PAD_LEFT),
                 'request_id' => (int)$row['request_id'],
                 'date' => $row['created_at'],
+                'updated_at' => $row['created_at'],
                 'items' => requisitionExplodePipeOrDefault($row['items_concat'] ?? null, '—'),
                 'suppliers' => requisitionExplodePipeOrDefault($row['suppliers_concat'] ?? null, 'N/A'),
                 'status' => $row['status'] ?? 'Pending',
@@ -393,7 +394,8 @@ try {
                 $purpose,
                 $urgentNote,
                 $items,
-                is_array($suppliers) ? $suppliers : []
+                is_array($suppliers) ? $suppliers : [],
+                'submitted'
             );
             $db->commit();
         } catch (Exception $e) {
@@ -402,6 +404,110 @@ try {
         }
 
         sendJson(['success' => true, 'message' => 'Requisition submitted successfully.']);
+    }
+
+    if ($action === 'save_draft') {
+        $requestId = (int)($_POST['request_id'] ?? 0);
+        $officeId = (int)($_POST['office_id'] ?? 0);
+        $facilityId = (int)($_POST['facility_id'] ?? 0);
+        $requestDate = trim($_POST['request_date'] ?? '');
+        $message = trim($_POST['message'] ?? '');
+        $purpose = trim($_POST['purpose'] ?? '');
+        $urgentNote = trim($_POST['urgent_note'] ?? '');
+        $itemsRaw = $_POST['items'] ?? '[]';
+        $suppliersRaw = $_POST['suppliers'] ?? '[]';
+        $items = json_decode($itemsRaw, true);
+        $suppliers = json_decode($suppliersRaw, true);
+
+        if (!$officeId || !$facilityId || !$requestDate) {
+            sendJson(['success' => false, 'message' => 'Office, location, and date are required.']);
+        }
+        if (!is_array($items) || count($items) === 0) {
+            sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
+        }
+
+        $db->beginTransaction();
+        try {
+            if ($requestId <= 0) {
+                // Create new draft requisition
+                insertRequisitionBatch(
+                    $db,
+                    (int)$_SESSION['user_id'],
+                    $officeId,
+                    $facilityId,
+                    $requestDate,
+                    $message,
+                    $purpose,
+                    $urgentNote,
+                    $items,
+                    is_array($suppliers) ? $suppliers : [],
+                    'draft'
+                );
+                $newRequestId = (int) $db->lastInsertId();
+                $db->commit();
+                sendJson(['success' => true, 'message' => 'Draft saved successfully.', 'request_id' => $newRequestId]);
+            } else {
+                // Update existing draft requisition
+                $checkStmt = $db->prepare('SELECT request_id, submission_status FROM requisition_item WHERE request_id = ? AND user_id = ?');
+                $checkStmt->execute([$requestId, $_SESSION['user_id']]);
+                $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$existing) {
+                    $db->rollBack();
+                    sendJson(['success' => false, 'message' => 'Request not found.']);
+                }
+                
+                if ($existing['submission_status'] === 'submitted') {
+                    $db->rollBack();
+                    sendJson(['success' => false, 'message' => 'Cannot modify submitted requisition.']);
+                }
+
+                $msgVal = $message !== '' ? $message : null;
+                $purposeVal = $purpose !== '' ? $purpose : null;
+                $urgentNoteVal = $urgentNote !== '' ? $urgentNote : null;
+
+                $updateStmt = $db->prepare('UPDATE requisition_item SET office_id = ?, facility_id = ?, message = ?, purpose = ?, urgent_note = ?, submission_status = ? WHERE request_id = ? AND user_id = ?');
+                $updateStmt->execute([$officeId, $facilityId, $msgVal, $purposeVal, $urgentNoteVal, 'draft', $requestId, $_SESSION['user_id']]);
+
+                // Delete old items and re-insert
+                $delItemsStmt = $db->prepare('DELETE FROM requisition_line WHERE request_id = ?');
+                $delItemsStmt->execute([$requestId]);
+
+                requisitionInsertLinesForRequest($db, $requestId, $items, is_array($suppliers) ? $suppliers : []);
+
+                $db->commit();
+                sendJson(['success' => true, 'message' => 'Draft saved successfully.', 'request_id' => $requestId]);
+            }
+        } catch (Exception $e) {
+            $db->rollBack();
+            throw $e;
+        }
+    }
+
+    if ($action === 'change_submission_status') {
+        $requestId = (int)($_POST['request_id'] ?? 0);
+        $newStatus = trim($_POST['status'] ?? '');
+
+        if ($requestId <= 0 || !in_array($newStatus, ['draft', 'submitted'], true)) {
+            sendJson(['success' => false, 'message' => 'Invalid request or status.']);
+        }
+
+        $checkStmt = $db->prepare('SELECT request_id, submission_status FROM requisition_item WHERE request_id = ? AND user_id = ?');
+        $checkStmt->execute([$requestId, $_SESSION['user_id']]);
+        $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$existing) {
+            sendJson(['success' => false, 'message' => 'Request not found.']);
+        }
+
+        if ($newStatus === 'submitted' && $existing['submission_status'] === 'submitted') {
+            sendJson(['success' => false, 'message' => 'Requisition is already submitted.']);
+        }
+
+        $updateStmt = $db->prepare('UPDATE requisition_item SET submission_status = ? WHERE request_id = ? AND user_id = ?');
+        $updateStmt->execute([$newStatus, $requestId, $_SESSION['user_id']]);
+
+        sendJson(['success' => true, 'message' => 'Status updated successfully.', 'new_status' => $newStatus]);
     }
 
     sendJson(['success' => false, 'message' => 'Invalid action.']);

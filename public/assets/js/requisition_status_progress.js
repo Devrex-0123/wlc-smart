@@ -4,6 +4,7 @@
  */
 
 const STORAGE_PREFIX = 'imrms_req_progress_';
+const FORM_VIEWS_PREFIX = 'imrms_form_views_';
 const ADMIN_API = '../../app/api/admin_requisition.php';
 const ADMIN_LIST_API = '../../app/api/admin_requisition.php?action=list_requests';
 const DEAN_LIST_API = '../../app/api/dean_requisition.php?action=list_requests';
@@ -79,6 +80,42 @@ function loadRecord(requestId) {
     } catch {
         return null;
     }
+}
+
+/** Track which forms have been viewed for a given request */
+function getViewedForms(requestId) {
+    if (requestId == null) return new Set();
+    try {
+        const raw = localStorage.getItem(FORM_VIEWS_PREFIX + String(requestId));
+        return new Set(raw ? JSON.parse(raw) : []);
+    } catch {
+        return new Set();
+    }
+}
+
+/** Mark a form as viewed */
+function markFormViewed(requestId, formType) {
+    if (requestId == null || !formType) return;
+    const viewed = getViewedForms(requestId);
+    viewed.add(formType);
+    try {
+        localStorage.setItem(FORM_VIEWS_PREFIX + String(requestId), JSON.stringify([...viewed]));
+    } catch {
+        console.warn('Could not save form view status');
+    }
+}
+
+/** Check if a form has been viewed */
+function isFormViewed(requestId, formType) {
+    return getViewedForms(requestId).has(formType);
+}
+
+/** Create indicator for unviewed forms */
+function createUnviewedIndicator() {
+    const indicator = document.createElement('span');
+    indicator.className = 'form-unviewed-indicator';
+    indicator.title = 'New form - not yet viewed';
+    return indicator;
 }
 
 function statusClass(status) {
@@ -411,16 +448,16 @@ function renderApp(root, record, config) {
 
     const canvassRow = showCanvassCta
         ? `<li class="rsp-form-link-row">
-                <span class="rsp-form-link-text">Canvass sheet / abstract of quotation</span>
-                <a href="${canvassHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
+                <span class="rsp-form-link-text">Canvass sheet / abstract of quotation${!isFormViewed(numericRequestId(record), 'canvass') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>
+                <a href="${canvassHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}" data-form-type="canvass"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
             </li>`
         : '';
     const showPurchaseCta =
         (config.viewer === 'inventory' || config.deanFlow) && canvasCanvassAccepted(record);
     const purchaseRow = showPurchaseCta
         ? `<li class="rsp-form-link-row">
-                <span class="rsp-form-link-text">Purchase requisition form</span>
-                <a href="${purchaseHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
+                <span class="rsp-form-link-text">Purchase requisition form${!isFormViewed(numericRequestId(record), 'purchase') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>
+                <a href="${purchaseHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}" data-form-type="purchase"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
             </li>`
         : '';
 
@@ -465,8 +502,8 @@ function renderApp(root, record, config) {
                     <div class="rsp-form-links-inner" aria-label="Requisition and canvass forms">
                         <ul class="rsp-form-links-list">
                             <li class="rsp-form-link-row">
-                                <span class="rsp-form-link-text">Requisition form</span>
-                                <a href="${formHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
+                                <span class="rsp-form-link-text">Requisition form${!isFormViewed(numericRequestId(record), 'requisition') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>
+                                <a href="${formHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}" data-form-type="requisition"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
                             </li>
                             ${canvassRow}
                             ${purchaseRow}
@@ -484,6 +521,29 @@ function renderApp(root, record, config) {
             fill.style.width = `${fillPct}%`;
         }
     });
+
+    // Handle form view tracking
+    const reqId = numericRequestId(progressRecord);
+    if (reqId != null) {
+        const formLinks = root.querySelectorAll('.rsp-form-view[data-form-type]');
+        formLinks.forEach((link) => {
+            link.addEventListener('click', (e) => {
+                if (link.classList.contains('rsp-form-view-disabled')) {
+                    e.preventDefault();
+                    return;
+                }
+                const formType = link.getAttribute('data-form-type');
+                if (formType) {
+                    markFormViewed(reqId, formType);
+                    // Remove the unviewed indicator
+                    const indicator = link.parentElement.querySelector('.form-unviewed-indicator');
+                    if (indicator) {
+                        indicator.remove();
+                    }
+                }
+            });
+        });
+    }
 }
 
 async function handleStatusSave(root) {
