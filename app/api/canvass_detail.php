@@ -713,8 +713,8 @@ try {
         if ($requestId <= 0) {
             sendJson(['success' => false, 'message' => 'Invalid request id.']);
         }
-        if (!userIsGsdOfficer($db, $uid)) {
-            sendJson(['success' => false, 'message' => 'Pricing overview is available to G.S.D. officers only.']);
+        if (!userIsGsdOfficer($db, $uid) && !userIsComptroller($db, $uid)) {
+            sendJson(['success' => false, 'message' => 'Pricing overview is available to G.S.D. officers and comptrollers only.']);
         }
         loadCanvassGetRequest($db, $requestId, $uid);
         require_once __DIR__ . '/../helpers/canvass_pricing_overview.php';

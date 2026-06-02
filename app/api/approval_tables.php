@@ -200,3 +200,36 @@ function ensureSuggestedSupplierSelectionSourceColumn(PDO $db): void
         );
     }
 }
+
+function ensureComptrollerPartialQtyColumns(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $columns = [
+        'accepted_qty' => 'INT UNSIGNED NULL',
+        'deferred_qty' => 'INT UNSIGNED NULL DEFAULT 0',
+        'deferred_message' => 'TEXT NULL',
+        'comptroller_qty_status' => "ENUM('fully_approved','deferred') NULL",
+        'comptroller_approved_by_user_id' => 'INT NULL',
+        'comptroller_approved_at' => 'DATETIME NULL',
+    ];
+
+    foreach ($columns as $name => $definition) {
+        $colCheck = $db->prepare(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'request_approval_suggested_supplier_item'
+               AND COLUMN_NAME = ?"
+        );
+        $colCheck->execute([$name]);
+        if (((int) $colCheck->fetchColumn()) === 0) {
+            $db->exec(
+                "ALTER TABLE request_approval_suggested_supplier_item ADD COLUMN {$name} {$definition}"
+            );
+        }
+    }
+}

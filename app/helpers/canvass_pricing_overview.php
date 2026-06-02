@@ -24,6 +24,79 @@ declare(strict_types=1);
  *     currency: string
  * }
  */
+function cwirmsRequestProcurementBaselineFromLines(array $requisitionLines): array
+{
+    if ($requisitionLines === []) {
+        return ['quantity' => 1, 'unit_type' => 'unit'];
+    }
+
+    $setRows = [];
+    foreach ($requisitionLines as $row) {
+        if (strtolower(trim((string) ($row['unit_type'] ?? ''))) === 'set') {
+            $setRows[] = $row;
+        }
+    }
+
+    if ($setRows !== []) {
+        $best = $setRows[0];
+        foreach ($setRows as $row) {
+            if ((int) ($row['quantity'] ?? 0) > (int) ($best['quantity'] ?? 0)) {
+                $best = $row;
+            }
+        }
+
+        return [
+            'quantity' => max(1, (int) ($best['quantity'] ?? 1)),
+            'unit_type' => 'set',
+        ];
+    }
+
+    if (count($requisitionLines) === 1) {
+        $only = $requisitionLines[0];
+
+        return [
+            'quantity' => max(1, (int) ($only['quantity'] ?? 1)),
+            'unit_type' => trim((string) ($only['unit_type'] ?? 'unit')) ?: 'unit',
+        ];
+    }
+
+    return ['quantity' => 1, 'unit_type' => 'unit'];
+}
+
+/**
+ * @param array<int, int>    $lineQty
+ * @param array<int, string> $lineUnit
+ * @return array{quantity: int, unit_type: string, qty_per_set: int, requisition_qty: int}
+ */
+function cwirmsPricingQuantityForCanvassDetail(
+    int $lineId,
+    array $lineQty,
+    array $lineUnit,
+    array $baseline
+): array {
+    $qtyPerSet = 1;
+
+    if ($lineId > 0 && isset($lineQty[$lineId])) {
+        $rlQty = max(1, (int) $lineQty[$lineId]);
+        $rlUnit = $lineUnit[$lineId] ?? 'unit';
+        if ($rlUnit === 'set' || $rlQty > 1) {
+            return [
+                'quantity' => $rlQty,
+                'unit_type' => $rlUnit,
+                'qty_per_set' => $qtyPerSet,
+                'requisition_qty' => $rlQty,
+            ];
+        }
+    }
+
+    return [
+        'quantity' => max(1, (int) ($baseline['quantity'] ?? 1)),
+        'unit_type' => (string) ($baseline['unit_type'] ?? 'unit'),
+        'qty_per_set' => $qtyPerSet,
+        'requisition_qty' => max(1, (int) ($baseline['quantity'] ?? 1)),
+    ];
+}
+
 function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
 {
     $currency = 'PHP';
@@ -56,11 +129,13 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
 
     $lineQty = [];
     $lineUnit = [];
+    $requisitionLines = [];
     $rlStmt = $db->prepare(
         'SELECT requisition_line_id, quantity, unit_type FROM requisition_line WHERE request_id = ?'
     );
     $rlStmt->execute([$requestId]);
     while ($rl = $rlStmt->fetch(PDO::FETCH_ASSOC)) {
+        $requisitionLines[] = $rl;
         $lid = (int) ($rl['requisition_line_id'] ?? 0);
         if ($lid <= 0) {
             continue;
@@ -68,6 +143,7 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
         $lineQty[$lid] = max(1, (int) ($rl['quantity'] ?? 1));
         $lineUnit[$lid] = trim((string) ($rl['unit_type'] ?? 'unit')) ?: 'unit';
     }
+    $procurementBaseline = cwirmsRequestProcurementBaselineFromLines($requisitionLines);
 
     $selStmt = $db->prepare(
         'SELECT rassi.canvass_detail_id, rassi.supplier_id, rassi.selection_source, s.supplier_name
@@ -111,8 +187,11 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
         $detailId = (int) ($row['canvass_detail_id'] ?? 0);
         $lineId = isset($row['requisition_line_id']) ? (int) $row['requisition_line_id'] : 0;
         $sortOrder = (int) ($row['sort_order'] ?? $idx);
-        $qty = $lineId > 0 && isset($lineQty[$lineId]) ? $lineQty[$lineId] : 1;
-        $unit = $lineId > 0 && isset($lineUnit[$lineId]) ? $lineUnit[$lineId] : 'unit';
+        $qtyMeta = cwirmsPricingQuantityForCanvassDetail($lineId, $lineQty, $lineUnit, $procurementBaseline);
+        $qty = (int) $qtyMeta['quantity'];
+        $unit = (string) $qtyMeta['unit_type'];
+        $qtyPerSet = (int) $qtyMeta['qty_per_set'];
+        $requisitionQty = (int) $qtyMeta['requisition_qty'];
 
         $sel = $selectionByDetail[$detailId] ?? null;
         $supplierId = $sel ? (int) ($sel['supplier_id'] ?? 0) : 0;
@@ -148,6 +227,8 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
             'canvass_detail_id' => $detailId,
             'item_name' => (string) ($row['component_label'] ?? ''),
             'quantity' => $qty,
+            'qty_per_set' => $qtyPerSet,
+            'requisition_qty' => $requisitionQty,
             'unit_type' => $unit,
             'supplier_id' => $supplierId,
             'supplier_name' => $supplierName !== '' ? $supplierName : null,

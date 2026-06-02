@@ -257,6 +257,63 @@ $isReviewerCanvassReadonly = $isGsdCanvassReview
     || $isPresidentCanvassHistory;
 $showCanvassPricingOverview = $isGsdCanvassReview;
 
+$canViewQtyPricingOverview = $isComptrollerCanvassReview
+    || $isComptrollerCanvassHistory
+    || $isGsdCanvassReview
+    || $isInventoryManagerCanvassReview
+    || $isRequesterOwnedCanvass
+    || $isPresidentCanvassReview
+    || $isPresidentCanvassHistory;
+$showComptrollerPricingOverview = false;
+$pricingOverviewViewerRole = '';
+$pricingOverviewInteractive = false;
+
+$comptrollerCompStatus = 'pending';
+$comptrollerPricingOverview = null;
+$comptrollerPricingReadonly = $isComptrollerCanvassHistory;
+$comptrollerApprovalFlash = null;
+if ($accessError === null && $requestId > 0 && $canViewQtyPricingOverview) {
+    require_once __DIR__ . '/../../app/api/approval_tables.php';
+    require_once __DIR__ . '/../../app/helpers/comptroller_qty_approval.php';
+    ensureComptrollerPartialQtyColumns($db);
+    ensureRequisitionPreferredQuoteColumns($db);
+    ensureSuggestedSupplierSelectionSourceColumn($db);
+
+    if (cwirmsComptrollerRequestHasSuggestedSuppliersPerItem($db, $requestId)) {
+        $showComptrollerPricingOverview = true;
+
+        if ($isComptrollerCanvassReview || $isComptrollerCanvassHistory) {
+            $pricingOverviewViewerRole = 'comptroller';
+        } elseif ($isGsdCanvassReview) {
+            $pricingOverviewViewerRole = 'gsd_officer';
+        } elseif ($isInventoryManagerCanvassReview) {
+            $pricingOverviewViewerRole = 'inventory_manager';
+        } elseif ($isPresidentCanvassReview || $isPresidentCanvassHistory) {
+            $pricingOverviewViewerRole = 'president';
+        } elseif ($isRequesterOwnedCanvass) {
+            $pricingOverviewViewerRole = 'requester';
+        }
+
+        $compStmt = $db->prepare(
+            'SELECT LOWER(TRIM(COALESCE(comp_status, \'pending\'))) FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+        );
+        $compStmt->execute([$requestId]);
+        $comptrollerCompStatus = strtolower(trim((string) ($compStmt->fetchColumn() ?: 'pending')));
+        if ($comptrollerCompStatus === '') {
+            $comptrollerCompStatus = 'pending';
+        }
+        $comptrollerPricingReadonly = $isComptrollerCanvassHistory
+            || in_array($comptrollerCompStatus, ['accept', 'reject'], true);
+        $pricingOverviewInteractive = $isComptrollerCanvassReview && !$comptrollerPricingReadonly;
+        $comptrollerPricingOverview = cwirmsComptrollerPricingOverviewForRequest($db, $requestId);
+    }
+}
+$approvalMsg = trim((string) ($_GET['approval_msg'] ?? ''));
+$approvalType = trim((string) ($_GET['approval_type'] ?? ''));
+if ($approvalMsg !== '' && in_array($approvalType, ['success', 'error'], true) && $showComptrollerPricingOverview) {
+    $comptrollerApprovalFlash = ['type' => $approvalType, 'message' => $approvalMsg];
+}
+
 $verifierChainLocked = ($accessError === null && $requestId > 0)
     ? requisitionVerifierChainLockedForRequest($db, $requestId)
     : false;
@@ -322,8 +379,11 @@ $pageTitle = $rfRequestId > 0
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/requisition_form.css">
-    <?php if ($showCanvassPricingOverview): ?>
+    <?php if ($showCanvassPricingOverview || $showComptrollerPricingOverview): ?>
     <link rel="stylesheet" href="../assets/css/gsd_canvass_pricing_overview.css">
+    <?php endif; ?>
+    <?php if ($showComptrollerPricingOverview): ?>
+    <link rel="stylesheet" href="../assets/css/comptroller_pricing_overview.css">
     <?php endif; ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -355,6 +415,12 @@ $pageTitle = $rfRequestId > 0
                 <img src="../assets/images/western-letye-logo.jpg" alt="College Logo" class="requisition-logo" />
             </div>
         </div>
+
+        <?php if ($comptrollerApprovalFlash): ?>
+        <div class="cv-comptroller-flash cv-comptroller-flash-<?php echo htmlspecialchars($comptrollerApprovalFlash['type']); ?>" role="status">
+            <?php echo htmlspecialchars($comptrollerApprovalFlash['message']); ?>
+        </div>
+        <?php endif; ?>
 
         <?php if ($rfRequestId > 0 && $accessError === null) {
             require __DIR__ . '/partials/requisition_flow_context.php';
@@ -560,6 +626,9 @@ $pageTitle = $rfRequestId > 0
         <?php if ($showCanvassPricingOverview): ?>
         <?php require __DIR__ . '/partials/canvass_pricing_overview.php'; ?>
         <?php endif; ?>
+        <?php if ($showComptrollerPricingOverview): ?>
+        <?php require __DIR__ . '/partials/comptroller_pricing_overview.php'; ?>
+        <?php endif; ?>
 
         <div class="approval-section cv-approval-section" aria-label="Canvass verification status">
             <div class="approval-card approval-card-canvass-verifiers" id="cvApprovalStrip">
@@ -607,6 +676,9 @@ $pageTitle = $rfRequestId > 0
                 </div>
             </div>
         </div>
+        <?php if ($showComptrollerPricingOverview): ?>
+        <div id="cvComptrollerDeferredBanners" class="cv-comptroller-deferred-banners" hidden aria-live="polite"></div>
+        <?php endif; ?>
         <?php if ($isGsdCanvassReview): ?>
         <div class="comptroller-approve-wrapper gsd-on-cv-actions">
             <button type="button" id="comptrollerApproveBtn" class="btn-submit">Verify</button>
@@ -760,6 +832,20 @@ window.CWIRMS_PREF_SUP = <?php echo json_encode([
 <script src="../assets/js/dean_canvass_form.js"></script>
 <?php if ($showCanvassPricingOverview): ?>
 <script src="../assets/js/gsd_canvass_pricing_overview.js"></script>
+<?php endif; ?>
+<?php if ($showComptrollerPricingOverview && $comptrollerPricingOverview): ?>
+<script>
+window.CWIRMS_COMPTROLLER_PRICING = <?php echo json_encode([
+    'requestId' => $requestId,
+    'readonly' => !$pricingOverviewInteractive,
+    'interactive' => $pricingOverviewInteractive,
+    'viewerRole' => $pricingOverviewViewerRole,
+    'comptrollerCompStatus' => $comptrollerCompStatus,
+    'currency' => $comptrollerPricingOverview['currency'] ?? 'PHP',
+    'lines' => $comptrollerPricingOverview['lines'] ?? [],
+], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS); ?>;
+</script>
+<script src="../assets/js/comptroller_pricing_overview.js"></script>
 <?php endif; ?>
 <?php if ($isGsdCanvassReview): ?>
 <script>

@@ -93,7 +93,7 @@
 .cv-pricing-overview-table td:nth-child(6),
 .cv-pricing-overview-table td:nth-child(7),
 .cv-pricing-overview-table tfoot td:last-child {
-    text-align: right;
+    text-align: left;
     white-space: nowrap;
 }
 

@@ -2794,3 +2794,22 @@ input[type="text"]:focus, input[type="number"]:focus {
 .confirm-btn-ok:hover {
     background: #25692a;
 }
+
+.cv-canvass-item-name-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+}
+
+.cv-requisition-qty-hint {
+    display: block;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.item-chip .cv-requisition-qty-hint {
+    margin-top: 0.1rem;
+}

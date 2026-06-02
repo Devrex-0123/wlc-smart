@@ -84,9 +84,11 @@
         const sid = Number(supplierId || 0);
         const key = preferredPhotoKey(sid, itemIndex);
         const local = state.preferredQuotePhotos[key] || {};
-        const localUrl = local.url || local.preview_url || '';
-        if (localUrl && !String(localUrl).startsWith('blob:')) {
-            return String(localUrl);
+        if (local.preview_url) {
+            return String(local.preview_url);
+        }
+        if (local.url) {
+            return String(local.url);
         }
         const pref = (state.preferredSuppliers || []).find((s) => Number(s.supplier_id) === sid);
         if (!pref || !pref.quote_photos) {
@@ -94,6 +96,64 @@
         }
         const fromApi = pref.quote_photos[itemIndex] ?? pref.quote_photos[String(itemIndex)];
         return fromApi ? String(fromApi) : '';
+    }
+
+    function getRequestProcurementQtyMeta() {
+        const lines = Array.isArray(state.requestedLines) ? state.requestedLines : [];
+        if (lines.length === 0) {
+            return { quantity: 1, unit_type: 'unit' };
+        }
+        const setLines = lines.filter((row) => String(row.unit_type || '').toLowerCase() === 'set');
+        if (setLines.length > 0) {
+            const best = setLines.reduce((acc, row) =>
+                Math.max(1, Number(row.quantity) || 1) > Math.max(1, Number(acc.quantity) || 1) ? row : acc
+            );
+            return {
+                quantity: Math.max(1, Number(best.quantity) || 1),
+                unit_type: 'set',
+            };
+        }
+        if (lines.length === 1) {
+            return {
+                quantity: Math.max(1, Number(lines[0].quantity) || 1),
+                unit_type: String(lines[0].unit_type || 'unit'),
+            };
+        }
+        return { quantity: 1, unit_type: 'unit' };
+    }
+
+    function pluralizeUnitType(unitType, qty) {
+        const unit = String(unitType || 'unit');
+        if (qty === 1) {
+            return unit;
+        }
+        if (unit === 'set') {
+            return 'sets';
+        }
+        if (unit.endsWith('s')) {
+            return unit;
+        }
+        return `${unit}s`;
+    }
+
+    function formatRequisitionQtyHint(meta) {
+        const reqQty = Math.max(1, Number(meta.quantity) || 1);
+        const unitLabel = pluralizeUnitType(meta.unit_type, reqQty);
+        if (reqQty <= 1) {
+            return '';
+        }
+        return `<span class="cv-requisition-qty-hint">Requisition qty: ${reqQty} ${escapeHtml(unitLabel)}</span>`;
+    }
+
+    function formatPricingOverviewQtyLabel(line) {
+        const reqQty = Math.max(1, Number(line.requisition_qty ?? line.quantity ?? 1));
+        const perSet = Math.max(1, Number(line.qty_per_set ?? 1));
+        const unitLabel = pluralizeUnitType(line.unit_type, reqQty);
+        if (reqQty > 1 && perSet === 1) {
+            const setWord = String(line.unit_type || 'unit') === 'set' ? 'sets' : unitLabel;
+            return `${reqQty} ${unitLabel} (1 per set × ${reqQty} ${setWord})`;
+        }
+        return `${reqQty} ${unitLabel}`;
     }
 
     function setPreferredDraftPrice(supplierId, itemIndex, value) {
@@ -316,9 +376,10 @@
     }
 
     function getItemQuantityMeta(itemIndex) {
+        const baseline = getRequestProcurementQtyMeta();
         const item = state.items[itemIndex];
         if (!item) {
-            return { quantity: 1, unit_type: 'unit' };
+            return { quantity: baseline.quantity, unit_type: baseline.unit_type, qty_per_set: 1, requisition_qty: baseline.quantity };
         }
         const lineId = item.requisition_line_id != null ? Number(item.requisition_line_id) : 0;
         if (lineId > 0) {
@@ -326,13 +387,24 @@
                 (r) => Number(r.requisition_line_id) === lineId
             );
             if (row) {
-                return {
-                    quantity: Math.max(1, Number(row.quantity) || 1),
-                    unit_type: String(row.unit_type || 'unit'),
-                };
+                const rlQty = Math.max(1, Number(row.quantity) || 1);
+                const rlUnit = String(row.unit_type || 'unit');
+                if (rlUnit === 'set' || rlQty > 1) {
+                    return {
+                        quantity: rlQty,
+                        unit_type: rlUnit,
+                        qty_per_set: 1,
+                        requisition_qty: rlQty,
+                    };
+                }
             }
         }
-        return { quantity: 1, unit_type: 'unit' };
+        return {
+            quantity: baseline.quantity,
+            unit_type: baseline.unit_type,
+            qty_per_set: 1,
+            requisition_qty: baseline.quantity,
+        };
     }
 
     function parseUnitPrice(raw) {
@@ -399,6 +471,8 @@
             const entry = normalizeSuggestedEntry(state.suggestedByItem[itemIndex]);
             const qtyMeta = getItemQuantityMeta(itemIndex);
             const quantity = qtyMeta.quantity;
+            const qtyPerSet = qtyMeta.qty_per_set;
+            const requisitionQty = qtyMeta.requisition_qty;
             let supplierId = null;
             let supplierName = null;
             let selectionSource = null;
@@ -434,6 +508,8 @@
                 canvass_detail_id: Number(item.canvass_detail_id || 0),
                 item_name: String(item.name || `Item ${itemIndex + 1}`),
                 quantity,
+                qty_per_set: qtyPerSet,
+                requisition_qty: requisitionQty,
                 unit_type: qtyMeta.unit_type,
                 supplier_id: supplierId,
                 supplier_name: supplierName,
@@ -535,7 +611,12 @@
                                 : '';
                         return `<tr class="${isSelectedForItem ? 'cv-gsd-suggested-row' : ''}">
                             <td>${index + 1}</td>
-                            <td>${escapeHtml(item.name || `Item ${index + 1}`)}</td>
+                            <td>
+                                <div class="cv-canvass-item-name-cell">
+                                    ${escapeHtml(item.name || `Item ${index + 1}`)}
+                                    ${formatRequisitionQtyHint(getItemQuantityMeta(index))}
+                                </div>
+                            </td>
                             <td>
                                 <div class="cv-pref-price-wrap">
                                     ${radioHtml}
@@ -1693,6 +1774,7 @@
             <div class="item-chip">
                 <div class="item-chip-number">Item ${index + 1}</div>
                 <div class="item-chip-name">${escapeHtml(item.name)}</div>
+                ${formatRequisitionQtyHint(getItemQuantityMeta(index))}
                 ${meta}
                 <div class="item-chip-spec">${escapeHtml(item.specification || '—')}</div>
                 ${removeBtn}
@@ -1801,7 +1883,12 @@
                                 : '';
                         return `<tr class="${isSelectedForItem ? 'cv-gsd-suggested-row' : ''}">
                             <td>${itemIndex + 1}</td>
-                            <td>${escapeHtml(it.name || `Item ${itemIndex + 1}`)}</td>
+                            <td>
+                                <div class="cv-canvass-item-name-cell">
+                                    ${escapeHtml(it.name || `Item ${itemIndex + 1}`)}
+                                    ${formatRequisitionQtyHint(getItemQuantityMeta(itemIndex))}
+                                </div>
+                            </td>
                             <td>
                                 <div class="cv-pref-price-wrap cv-canvas-price-wrap">
                                     ${radioHtml}
@@ -2712,12 +2799,13 @@
                     if (!sid || Number.isNaN(itemIndex) || !file) return;
                     const key = preferredPhotoKey(sid, itemIndex);
                     const existing = state.preferredQuotePhotos[key] || {};
-                    if (existing.preview_url && existing.preview_url.startsWith('blob:')) {
+                    if (existing.preview_url && String(existing.preview_url).startsWith('blob:')) {
                         URL.revokeObjectURL(existing.preview_url);
                     }
+                    const previewUrl = URL.createObjectURL(file);
                     state.preferredQuotePhotos[key] = {
                         file,
-                        preview_url: URL.createObjectURL(file),
+                        preview_url: previewUrl,
                         url: existing.url || '',
                     };
                     state.hasUnsavedChanges = true;
@@ -2853,6 +2941,7 @@
 
     window.CWIRMSCanvassForm = {
         buildPricingSnapshot: buildCanvassPricingSnapshot,
+        formatPricingOverviewQtyLabel,
     };
 
     window.IMRMS_DEAN_CANVASS_SYNC = {

@@ -24,11 +24,16 @@ function requisitionSqlSelectListAggregates(): string
 {
     return '(SELECT GROUP_CONCAT(rl.item_name ORDER BY rl.sort_order ASC, rl.requisition_line_id ASC SEPARATOR \'||\')
         FROM requisition_line rl WHERE rl.request_id = r.request_id) AS items_concat,
-        (SELECT GROUP_CONCAT(DISTINCT s.supplier_name ORDER BY s.supplier_name ASC SEPARATOR \'||\')
-        FROM requisition_canvass_detail cd
-        INNER JOIN requisition_canvass_detail_supplier cds ON cds.canvass_detail_id = cd.canvass_detail_id
-        INNER JOIN suppliers s ON s.supplier_id = cds.supplier_id
-        WHERE cd.request_id = r.request_id) AS suppliers_concat,
+        (SELECT GROUP_CONCAT(
+            COALESCE(NULLIF(TRIM(s.supplier_name), \'\'), \'—\')
+            ORDER BY cd.sort_order ASC, rassi.canvass_detail_id ASC
+            SEPARATOR \'||\')
+        FROM request_approval_suggested_supplier_item rassi
+        INNER JOIN requisition_canvass_detail cd
+            ON cd.canvass_detail_id = rassi.canvass_detail_id
+           AND cd.request_id = rassi.request_id
+        LEFT JOIN suppliers s ON s.supplier_id = rassi.supplier_id
+        WHERE rassi.request_id = r.request_id) AS suppliers_concat,
         (SELECT MIN(cds.price) FROM requisition_canvass_detail cd2
         INNER JOIN requisition_canvass_detail_supplier cds ON cds.canvass_detail_id = cd2.canvass_detail_id
         WHERE cd2.request_id = r.request_id AND cds.price IS NOT NULL) AS list_min_price';

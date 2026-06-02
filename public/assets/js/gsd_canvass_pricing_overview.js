@@ -1,5 +1,5 @@
 /**
- * Real-time pricing overview for G.S.D. canvass review.
+ * Real-time pricing overview for G.S.D. and comptroller canvass review.
  * Depends on window.CWIRMSCanvassForm.buildPricingSnapshot() from dean_canvass_form.js.
  */
 (function () {
@@ -83,7 +83,10 @@
         bodyEl.innerHTML = snapshot.lines
             .map((line, index) => {
                 const pending = !line.supplier_id;
-                const qtyLabel = `${line.quantity} ${line.unit_type || 'unit'}`;
+                const qtyFormatter = window.CWIRMSCanvassForm && window.CWIRMSCanvassForm.formatPricingOverviewQtyLabel;
+                const qtyLabel = qtyFormatter
+                    ? qtyFormatter(line)
+                    : `${line.quantity} ${line.unit_type || 'unit'}`;
                 const unitPrice = line.unit_price != null ? formatMoney(line.unit_price, currency) : '—';
                 const lineTotal = line.line_total != null ? formatMoney(line.line_total, currency) : '—';
                 const supplier = line.supplier_name

@@ -194,6 +194,8 @@ try {
         $stmt = $db->query("
             SELECT r.request_id, r.created_at, r.status, r.message,
                    u.Email, d.`office_name` AS office_name, rfa.requisition_status, rfa.requisition_note, cva.canvas_status, cva.gsd_status,
+                   COALESCE(cva.comp_status, 'pending') AS comp_status,
+                   COALESCE(cva.pres_status, 'pending') AS pres_status,
                    COALESCE(pra.pr_inv_status, 'pending') AS pr_inv_status,
                    COALESCE(pra.pr_pres_status, 'pending') AS pr_pres_status,
                    {$agg}
@@ -224,6 +226,8 @@ try {
                 'requisition_note' => (string)($row['requisition_note'] ?? ''),
                 'canvas_status' => (string)($row['canvas_status'] ?? 'pending'),
                 'gsd_status' => (string)($row['gsd_status'] ?? 'pending'),
+                'comp_status' => (string)($row['comp_status'] ?? 'pending'),
+                'pres_status' => (string)($row['pres_status'] ?? 'pending'),
                 'pr_inv_status' => (string)($row['pr_inv_status'] ?? 'pending'),
                 'pr_pres_status' => (string)($row['pr_pres_status'] ?? 'pending'),
                 'requester' => $requester,
