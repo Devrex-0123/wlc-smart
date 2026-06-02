@@ -7,6 +7,7 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/../classes/db.php';
 require_once __DIR__ . '/requisition_detail_payload.php';
 require_once __DIR__ . '/item_supplier_helpers.php';
+require_once __DIR__ . '/approval_tables.php';
 
 function sendJson(array $payload): void
 {
@@ -150,18 +151,21 @@ function loadCanvassGetRequest(PDO $db, int $requestId, int $userId): array
         || userIsComptroller($db, $userId)
         || userIsPresidentVerifier($db, $userId)
     ) {
-        // For verifiers, check if canvas_submission_status is 'submitted'
+        // For verifiers, canvass is visible only after requester submits it.
         $statusCheckStmt = $db->prepare(
-            'SELECT LOWER(TRIM(COALESCE(canvas_submission_status, \'draft\'))) as status
-             FROM canvass_verification_approval
-             WHERE request_id = ?'
+            'SELECT EXISTS(
+                SELECT 1
+                FROM requisition_canvass_detail
+                WHERE request_id = ?
+                  AND LOWER(TRIM(COALESCE(canvass_submission_status, \'draft\'))) = \'submitted\'
+                LIMIT 1
+            )'
         );
         $statusCheckStmt->execute([$requestId]);
-        $statusRow = $statusCheckStmt->fetch(PDO::FETCH_ASSOC);
-        $canvasStatus = $statusRow ? $statusRow['status'] : 'draft';
+        $canvasVisible = ((int) $statusCheckStmt->fetchColumn()) === 1;
         
         // Only allow verifiers to see submitted canvass forms
-        if ($canvasStatus !== 'submitted') {
+        if (!$canvasVisible) {
             sendJson(['success' => false, 'message' => 'The canvass form is still in draft. Only the requester can view draft forms.']);
         }
         
@@ -195,16 +199,19 @@ function loadCanvassGetRequest(PDO $db, int $requestId, int $userId): array
         if ($ra && userMayActAsCanvasAssigneeForCanvassApi($db, $ra, $userId)) {
             // Check if canvas is submitted before allowing assignee to see it
             $statusCheckStmt = $db->prepare(
-                'SELECT LOWER(TRIM(COALESCE(canvas_submission_status, \'draft\'))) as status
-                 FROM canvass_verification_approval
-                 WHERE request_id = ?'
+                'SELECT EXISTS(
+                    SELECT 1
+                    FROM requisition_canvass_detail
+                    WHERE request_id = ?
+                      AND LOWER(TRIM(COALESCE(canvass_submission_status, \'draft\'))) = \'submitted\'
+                    LIMIT 1
+                )'
             );
             $statusCheckStmt->execute([$requestId]);
-            $statusRow = $statusCheckStmt->fetch(PDO::FETCH_ASSOC);
-            $canvasStatus = $statusRow ? $statusRow['status'] : 'draft';
+            $canvasVisible = ((int) $statusCheckStmt->fetchColumn()) === 1;
             
             // Canvass assignees can only see submitted forms
-            if ($canvasStatus !== 'submitted') {
+            if (!$canvasVisible) {
                 sendJson(['success' => false, 'message' => 'The canvass form is still in draft. Only the requester can view draft forms.']);
             }
             
@@ -366,6 +373,7 @@ function fetchItemCatalogForCanvass(PDO $db): array
 try {
     assertLoggedIn();
     $db = Database::connect();
+    ensureRequisitionCanvassSubmissionColumn($db);
     $uid = (int) $_SESSION['user_id'];
     $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
@@ -968,8 +976,8 @@ try {
 
             try {
                 $insDetail = $db->prepare(
-                    'INSERT INTO requisition_canvass_detail (request_id, requisition_line_id, user_id, component_label, brand, model, specification, sort_order)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO requisition_canvass_detail (request_id, requisition_line_id, user_id, component_label, brand, model, specification, sort_order, canvass_submission_status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $newIds = [];
                 foreach ($normalizedItems as $row) {
@@ -982,13 +990,14 @@ try {
                         $row['model'],
                         $row['specification'],
                         $row['sort_order'],
+                        $submissionMode,
                     ]);
                     $newIds[] = (int) $db->lastInsertId();
                 }
             } catch (Throwable $e) {
                 $insDetail = $db->prepare(
-                    'INSERT INTO requisition_canvass_detail (request_id, requisition_line_id, user_id, component_label, specification, sort_order)
-                     VALUES (?, ?, ?, ?, ?, ?)'
+                    'INSERT INTO requisition_canvass_detail (request_id, requisition_line_id, user_id, component_label, specification, sort_order, canvass_submission_status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)'
                 );
                 $newIds = [];
                 foreach ($normalizedItems as $row) {
@@ -999,6 +1008,7 @@ try {
                         $row['component_label'],
                         $row['specification'],
                         $row['sort_order'],
+                        $submissionMode,
                     ]);
                     $newIds[] = (int) $db->lastInsertId();
                 }
@@ -1035,28 +1045,6 @@ try {
                     $cid = $newIds[$idx];
                     $insCell->execute([$cid, $sid, $p]);
                 }
-            }
-
-            // Update canvas_submission_status based on submission_mode
-            // Check if canvass_verification_approval row exists for this request
-            $checkStmt = $db->prepare(
-                'SELECT request_id FROM canvass_verification_approval WHERE request_id = ?'
-            );
-            $checkStmt->execute([$requestId]);
-            $exists = $checkStmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($exists) {
-                // Update existing row
-                $statusUpdateStmt = $db->prepare(
-                    'UPDATE canvass_verification_approval SET canvas_submission_status = ? WHERE request_id = ?'
-                );
-                $statusUpdateStmt->execute([$submissionMode, $requestId]);
-            } else {
-                // Create new row with submission status (for requester editing before GSD assignment)
-                $insertStmt = $db->prepare(
-                    'INSERT INTO canvass_verification_approval (request_id, canvas_submission_status) VALUES (?, ?)'
-                );
-                $insertStmt->execute([$requestId, $submissionMode]);
             }
 
             $db->commit();

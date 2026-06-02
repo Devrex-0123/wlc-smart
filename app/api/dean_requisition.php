@@ -416,8 +416,13 @@ try {
         $urgentNote = trim($_POST['urgent_note'] ?? '');
         $itemsRaw = $_POST['items'] ?? '[]';
         $suppliersRaw = $_POST['suppliers'] ?? '[]';
+        $targetSubmissionStatus = strtolower(trim((string)($_POST['submission_status'] ?? 'draft')));
         $items = json_decode($itemsRaw, true);
         $suppliers = json_decode($suppliersRaw, true);
+
+        if (!in_array($targetSubmissionStatus, ['draft', 'submitted'], true)) {
+            $targetSubmissionStatus = 'draft';
+        }
 
         if (!$officeId || !$facilityId || !$requestDate) {
             sendJson(['success' => false, 'message' => 'Office, location, and date are required.']);
@@ -467,7 +472,7 @@ try {
                 $urgentNoteVal = $urgentNote !== '' ? $urgentNote : null;
 
                 $updateStmt = $db->prepare('UPDATE requisition_item SET office_id = ?, facility_id = ?, message = ?, purpose = ?, urgent_note = ?, submission_status = ? WHERE request_id = ? AND user_id = ?');
-                $updateStmt->execute([$officeId, $facilityId, $msgVal, $purposeVal, $urgentNoteVal, 'draft', $requestId, $_SESSION['user_id']]);
+                $updateStmt->execute([$officeId, $facilityId, $msgVal, $purposeVal, $urgentNoteVal, $targetSubmissionStatus, $requestId, $_SESSION['user_id']]);
 
                 // Delete old items and re-insert
                 $delItemsStmt = $db->prepare('DELETE FROM requisition_line WHERE request_id = ?');
@@ -476,7 +481,15 @@ try {
                 requisitionInsertLinesForRequest($db, $requestId, $items, is_array($suppliers) ? $suppliers : []);
 
                 $db->commit();
-                sendJson(['success' => true, 'message' => 'Draft saved successfully.', 'request_id' => $requestId]);
+                $responseMessage = $targetSubmissionStatus === 'submitted'
+                    ? 'Requisition submitted successfully.'
+                    : 'Draft saved successfully.';
+                sendJson([
+                    'success' => true,
+                    'message' => $responseMessage,
+                    'request_id' => $requestId,
+                    'new_status' => $targetSubmissionStatus,
+                ]);
             }
         } catch (Exception $e) {
             $db->rollBack();

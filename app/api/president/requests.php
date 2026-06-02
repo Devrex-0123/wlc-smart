@@ -62,6 +62,7 @@ function requestHasSuggestedSuppliersPerItem(PDO $db, int $requestId): bool
 
 try {
     $db = Database::connect();
+    ensureRequisitionCanvassSubmissionColumn($db);
     $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
     if ($action === 'list_requests') {
@@ -79,7 +80,13 @@ try {
             LEFT JOIN offices d ON d.office_id = r.office_id
             WHERE LOWER(TRIM(COALESCE(rfa.requisition_status, 'pending'))) = 'accept'
             AND r.submission_status = 'submitted'
-            AND (cva.request_id IS NULL OR LOWER(TRIM(COALESCE(cva.canvas_submission_status, 'draft'))) != 'draft')
+            AND EXISTS (
+                SELECT 1
+                FROM requisition_canvass_detail rcd
+                WHERE rcd.request_id = r.request_id
+                  AND LOWER(TRIM(COALESCE(rcd.canvass_submission_status, 'draft'))) = 'submitted'
+                LIMIT 1
+            )
             ORDER BY r.created_at DESC, r.request_id DESC
         ");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

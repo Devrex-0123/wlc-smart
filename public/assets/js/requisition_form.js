@@ -1872,7 +1872,7 @@ async function loadRequestForEdit(requestId) {
     if (formTitle) {
         formTitle.textContent = 'REQUISITION FORM';
     }
-    submitRequisitionBtn.textContent = 'Update →';
+    submitRequisitionBtn.textContent = 'Update & Submit →';
 
     state.requisitionStatus = String((data.approval && data.approval.requisition_status) || 'pending').trim().toLowerCase();
     applyApprovalFromPayload({
@@ -2208,9 +2208,10 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
 
     const payload = new URLSearchParams();
     if (isEdit) {
-        // For existing drafts: save changes first, then mark as submitted
+        // For existing drafts: save changes and mark as submitted in one request
         payload.append('action', 'save_draft');
         payload.append('request_id', String(state.editRequestId));
+        payload.append('submission_status', 'submitted');
     } else {
         // For new forms: submit directly (sets submission_status to submitted)
         payload.append('action', 'submit');
@@ -2235,26 +2236,6 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
         if (!result.success) {
             showToast(result.message || 'Failed to submit requisition.', 'error');
             return;
-        }
-
-        // If editing draft, now mark as submitted
-        if (isEdit && result.request_id) {
-            const submitPayload = new URLSearchParams();
-            submitPayload.append('action', 'change_submission_status');
-            submitPayload.append('request_id', String(result.request_id));
-            submitPayload.append('status', 'submitted');
-
-            const submitResponse = await fetch('../../app/api/dean_requisition.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: submitPayload.toString(),
-                credentials: 'include'
-            });
-            const submitResult = await submitResponse.json();
-            if (!submitResult.success) {
-                showToast(submitResult.message || 'Failed to mark as submitted.', 'error');
-                return;
-            }
         }
 
         showToast('Requisition submitted successfully.');
