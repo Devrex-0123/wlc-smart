@@ -15,6 +15,293 @@ function sendJson(array $payload): void
     exit;
 }
 
+function saveCanvassQuotePhoto(array $file): string
+{
+    $tmp = (string) ($file['tmp_name'] ?? '');
+    if ($tmp === '' || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Quote photo upload failed.');
+    }
+    $size = (int) ($file['size'] ?? 0);
+    if ($size <= 0 || $size > 8 * 1024 * 1024) {
+        throw new RuntimeException('Quote photo must be less than 8MB.');
+    }
+    $mime = (string) (mime_content_type($tmp) ?: '');
+    $extMap = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+    ];
+    if (!isset($extMap[$mime])) {
+        throw new RuntimeException('Quote photo must be JPG, PNG, WEBP, or GIF.');
+    }
+    $ext = $extMap[$mime];
+    $relDir = 'uploads/canvass_quotes';
+    $absDir = __DIR__ . '/../../public/' . $relDir;
+    if (!is_dir($absDir) && !mkdir($absDir, 0777, true) && !is_dir($absDir)) {
+        throw new RuntimeException('Could not create quote uploads directory.');
+    }
+    $fileName = 'quote_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $absPath = $absDir . '/' . $fileName;
+    if (!move_uploaded_file($tmp, $absPath)) {
+        throw new RuntimeException('Failed to save quote photo.');
+    }
+
+    return $relDir . '/' . $fileName;
+}
+
+/**
+ * Preferred-supplier quoted prices (requester) stored as JSON on requisition_preferred_suppliers.
+ *
+ * @return array<int, array<int, string>> supplier_id => [sort_order => price]
+ */
+function cwirmsPreferredSupplierPricesByRequest(PDO $db, int $requestId): array
+{
+    $out = [];
+    try {
+        ensureRequisitionPreferredQuoteColumns($db);
+        $stmt = $db->prepare(
+            'SELECT supplier_id, quoted_prices
+             FROM requisition_preferred_suppliers
+             WHERE request_id = ?'
+        );
+        $stmt->execute([$requestId]);
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $sid = (int) ($row['supplier_id'] ?? 0);
+            if ($sid <= 0 || !isset($row['quoted_prices']) || $row['quoted_prices'] === null || $row['quoted_prices'] === '') {
+                continue;
+            }
+            $decoded = json_decode((string) $row['quoted_prices'], true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            $prices = [];
+            foreach ($decoded as $idxStr => $priceRaw) {
+                $idx = (int) $idxStr;
+                if ($idx < 0 || $priceRaw === null || $priceRaw === '') {
+                    continue;
+                }
+                $prices[$idx] = (string) $priceRaw;
+            }
+            if ($prices !== []) {
+                $out[$sid] = $prices;
+            }
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    return $out;
+}
+
+/**
+ * @return array<int, true>
+ */
+function cwirmsPreferredSupplierIdSet(PDO $db, int $requestId): array
+{
+    $set = [];
+    try {
+        $stmt = $db->prepare('SELECT supplier_id FROM requisition_preferred_suppliers WHERE request_id = ?');
+        $stmt->execute([$requestId]);
+        while ($sid = $stmt->fetchColumn()) {
+            $id = (int) $sid;
+            if ($id > 0) {
+                $set[$id] = true;
+            }
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    return $set;
+}
+
+function cwirmsIsCanvassedMatrixSupplierRow(int $supplierId, ?string $quoteSource, array $preferredIdSet): bool
+{
+    $source = strtolower(trim((string) $quoteSource));
+    if ($source === 'preferred') {
+        return false;
+    }
+    if ($source === 'canvasser') {
+        return true;
+    }
+
+    return !isset($preferredIdSet[$supplierId]);
+}
+
+/**
+ * @return array<int, array<int, string>> supplier_id => [item_index => photo path]
+ */
+function cwirmsPreferredSupplierPhotosByRequest(PDO $db, int $requestId): array
+{
+    $out = [];
+    try {
+        ensureRequisitionPreferredQuoteColumns($db);
+        $stmt = $db->prepare(
+            'SELECT supplier_id, quote_photos
+             FROM requisition_preferred_suppliers
+             WHERE request_id = ?'
+        );
+        $stmt->execute([$requestId]);
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $sid = (int) ($row['supplier_id'] ?? 0);
+            if ($sid <= 0 || !isset($row['quote_photos']) || $row['quote_photos'] === null || $row['quote_photos'] === '') {
+                continue;
+            }
+            $decoded = json_decode((string) $row['quote_photos'], true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            $photos = [];
+            foreach ($decoded as $idxStr => $pathRaw) {
+                $idx = (int) $idxStr;
+                $path = trim((string) $pathRaw);
+                if ($idx >= 0 && $path !== '') {
+                    $photos[$idx] = substr($path, 0, 255);
+                }
+            }
+            if ($photos !== []) {
+                $out[$sid] = $photos;
+            }
+        }
+    } catch (Throwable $e) {
+        // ignore
+    }
+
+    return $out;
+}
+
+function cwirmsPreferredSupplierLinkExists(PDO $db, int $requestId, int $supplierId): bool
+{
+    $stmt = $db->prepare(
+        'SELECT 1 FROM requisition_preferred_suppliers WHERE request_id = ? AND supplier_id = ? LIMIT 1'
+    );
+    $stmt->execute([$requestId, $supplierId]);
+
+    return (bool) $stmt->fetchColumn();
+}
+
+function cwirmsUpdatePreferredSupplierQuotePhoto(
+    PDO $db,
+    int $requestId,
+    int $supplierId,
+    int $itemIndex,
+    ?string $photoPath
+): void {
+    ensureRequisitionPreferredQuoteColumns($db);
+    if (!cwirmsPreferredSupplierLinkExists($db, $requestId, $supplierId)) {
+        throw new RuntimeException('Preferred supplier not found for this request.');
+    }
+
+    $sel = $db->prepare(
+        'SELECT quote_photos FROM requisition_preferred_suppliers WHERE request_id = ? AND supplier_id = ? LIMIT 1'
+    );
+    $sel->execute([$requestId, $supplierId]);
+    $raw = $sel->fetchColumn();
+    $photos = [];
+    if ($raw !== false && $raw !== null && $raw !== '') {
+        $decoded = json_decode((string) $raw, true);
+        if (is_array($decoded)) {
+            foreach ($decoded as $idxStr => $pathVal) {
+                $idx = (int) $idxStr;
+                $path = trim((string) $pathVal);
+                if ($idx >= 0 && $path !== '') {
+                    $photos[(string) $idx] = substr($path, 0, 255);
+                }
+            }
+        }
+    }
+
+    $key = (string) $itemIndex;
+    if ($photoPath !== null && trim($photoPath) !== '') {
+        $photos[$key] = substr(trim($photoPath), 0, 255);
+    } else {
+        unset($photos[$key]);
+    }
+
+    $encoded = $photos === [] ? null : json_encode($photos);
+    $upd = $db->prepare(
+        'UPDATE requisition_preferred_suppliers SET quote_photos = ? WHERE request_id = ? AND supplier_id = ?'
+    );
+    $upd->execute([$encoded, $requestId, $supplierId]);
+}
+
+/**
+ * @param list<array{supplier_id: int, prices?: array<int|string, mixed>, photos?: array<int|string, mixed>}> $preferredQuotes
+ */
+function cwirmsPersistPreferredSupplierQuotes(PDO $db, int $requestId, array $preferredQuotes): void
+{
+    ensureRequisitionPreferredQuoteColumns($db);
+    $upd = $db->prepare(
+        'UPDATE requisition_preferred_suppliers
+         SET quoted_prices = ?, quote_photos = ?
+         WHERE request_id = ? AND supplier_id = ?'
+    );
+    foreach ($preferredQuotes as $pq) {
+        if (!is_array($pq)) {
+            continue;
+        }
+        $sid = (int) ($pq['supplier_id'] ?? 0);
+        if ($sid <= 0) {
+            continue;
+        }
+        $prices = $pq['prices'] ?? [];
+        if (!is_array($prices)) {
+            $prices = [];
+        }
+        $normalizedPrices = [];
+        foreach ($prices as $idxStr => $priceRaw) {
+            if ($priceRaw === null || $priceRaw === '') {
+                continue;
+            }
+            if (!is_numeric($priceRaw)) {
+                throw new RuntimeException('Preferred supplier prices must be numbers.');
+            }
+            $p = round((float) $priceRaw, 2);
+            if ($p < 0) {
+                throw new RuntimeException('Preferred supplier price cannot be negative.');
+            }
+            $normalizedPrices[(string) (int) $idxStr] = (string) $p;
+        }
+
+        $photosIn = $pq['photos'] ?? [];
+        if (!is_array($photosIn)) {
+            $photosIn = [];
+        }
+        $normalizedPhotos = [];
+        foreach ($photosIn as $idxStr => $pathRaw) {
+            $path = trim((string) $pathRaw);
+            if ($path === '' || str_starts_with($path, 'blob:')) {
+                continue;
+            }
+            $normalizedPhotos[(string) (int) $idxStr] = substr($path, 0, 255);
+        }
+
+        $encodedPrices = $normalizedPrices === [] ? null : json_encode($normalizedPrices);
+        $encodedPhotos = $normalizedPhotos === [] ? null : json_encode($normalizedPhotos);
+        $upd->execute([$encodedPrices, $encodedPhotos, $requestId, $sid]);
+    }
+}
+
+function cwirmsExistingCanvassSubmissionStatus(PDO $db, int $requestId): string
+{
+    try {
+        $stmt = $db->prepare(
+            'SELECT LOWER(TRIM(COALESCE(canvass_submission_status, \'draft\')))
+             FROM requisition_canvass_detail
+             WHERE request_id = ?
+             ORDER BY sort_order ASC, canvass_detail_id ASC
+             LIMIT 1'
+        );
+        $stmt->execute([$requestId]);
+        $status = strtolower(trim((string) ($stmt->fetchColumn() ?: 'draft')));
+
+        return $status === 'submitted' ? 'submitted' : 'draft';
+    } catch (Throwable $e) {
+        return 'draft';
+    }
+}
+
 function assertLoggedIn(): void
 {
     if (!isset($_SESSION['user_id'])) {
@@ -374,8 +661,66 @@ try {
     assertLoggedIn();
     $db = Database::connect();
     ensureRequisitionCanvassSubmissionColumn($db);
+    ensureRequisitionPreferredQuoteColumns($db);
+    dropRequisitionCanvassDetailPhotoColumns($db);
     $uid = (int) $_SESSION['user_id'];
     $action = $_POST['action'] ?? $_GET['action'] ?? '';
+
+    if ($action === 'upload_quote_photo') {
+        $requestId = (int) ($_POST['request_id'] ?? 0);
+        $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+        $itemIndex = (int) ($_POST['item_index'] ?? -1);
+        if ($requestId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request id.']);
+        }
+        if ($supplierId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid supplier.']);
+        }
+        if ($itemIndex < 0) {
+            sendJson(['success' => false, 'message' => 'Invalid item reference.']);
+        }
+        loadOwnedRequest($db, $requestId, $uid);
+        if (!isset($_FILES['quote_photo']) || !is_array($_FILES['quote_photo'])) {
+            sendJson(['success' => false, 'message' => 'Missing quote photo file.']);
+        }
+        try {
+            $path = saveCanvassQuotePhoto($_FILES['quote_photo']);
+            cwirmsUpdatePreferredSupplierQuotePhoto($db, $requestId, $supplierId, $itemIndex, $path);
+            sendJson(['success' => true, 'photo_url' => $path]);
+        } catch (Throwable $e) {
+            sendJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    if ($action === 'remove_quote_photo') {
+        $requestId = (int) ($_POST['request_id'] ?? 0);
+        $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+        $itemIndex = (int) ($_POST['item_index'] ?? -1);
+        if ($requestId <= 0 || $supplierId <= 0 || $itemIndex < 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request.']);
+        }
+        loadOwnedRequest($db, $requestId, $uid);
+        try {
+            cwirmsUpdatePreferredSupplierQuotePhoto($db, $requestId, $supplierId, $itemIndex, null);
+            sendJson(['success' => true]);
+        } catch (Throwable $e) {
+            sendJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    if ($action === 'pricing_overview') {
+        $requestId = (int) ($_GET['request_id'] ?? 0);
+        if ($requestId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request id.']);
+        }
+        if (!userIsGsdOfficer($db, $uid)) {
+            sendJson(['success' => false, 'message' => 'Pricing overview is available to G.S.D. officers only.']);
+        }
+        loadCanvassGetRequest($db, $requestId, $uid);
+        require_once __DIR__ . '/../helpers/canvass_pricing_overview.php';
+        $overview = cwirmsCanvassPricingOverviewForRequest($db, $requestId);
+        sendJson(['success' => true, 'pricing_overview' => $overview]);
+    }
 
     if ($action === 'get') {
         $requestId = (int) ($_GET['request_id'] ?? 0);
@@ -434,12 +779,14 @@ try {
                 'specification' => $r['specification'] !== null ? (string) $r['specification'] : '',
                 'suggested_supplier_ids' => $suggestedIds,
                 'selected_supplier_id' => null,
+                'selected_supplier_source' => null,
             ];
         }
 
         if ($idxByDetailId !== []) {
+            ensureSuggestedSupplierSelectionSourceColumn($db);
             $selStmt = $db->prepare(
-                'SELECT canvass_detail_id, supplier_id
+                'SELECT canvass_detail_id, supplier_id, selection_source
                  FROM request_approval_suggested_supplier_item
                  WHERE request_id = ?'
             );
@@ -455,20 +802,40 @@ try {
                     continue;
                 }
                 $items[$idx]['selected_supplier_id'] = $sidSel;
+                $srcRaw = strtolower(trim((string) ($sel['selection_source'] ?? '')));
+                $items[$idx]['selected_supplier_source'] = in_array($srcRaw, ['preferred', 'canvassed'], true)
+                    ? $srcRaw
+                    : null;
             }
         }
 
+        $preferredIdSet = cwirmsPreferredSupplierIdSet($db, $requestId);
         $supplierPricesBySid = [];
         if ($idxByDetailId !== []) {
             $ids = array_keys($idxByDetailId);
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            $cj = $db->prepare(
-                "SELECT canvass_detail_id, supplier_id, price FROM requisition_canvass_detail_supplier WHERE canvass_detail_id IN ($placeholders)"
-            );
+            try {
+                ensureCanvassSupplierQuoteSourceColumn($db);
+                $cj = $db->prepare(
+                    "SELECT canvass_detail_id, supplier_id, price, quote_source
+                     FROM requisition_canvass_detail_supplier
+                     WHERE canvass_detail_id IN ($placeholders)"
+                );
+            } catch (Throwable $e) {
+                $cj = $db->prepare(
+                    "SELECT canvass_detail_id, supplier_id, price
+                     FROM requisition_canvass_detail_supplier
+                     WHERE canvass_detail_id IN ($placeholders)"
+                );
+            }
             $cj->execute($ids);
             while ($row = $cj->fetch(PDO::FETCH_ASSOC)) {
                 $cid = (int) $row['canvass_detail_id'];
                 $sid = (int) $row['supplier_id'];
+                $quoteSource = isset($row['quote_source']) ? (string) $row['quote_source'] : null;
+                if (!cwirmsIsCanvassedMatrixSupplierRow($sid, $quoteSource, $preferredIdSet)) {
+                    continue;
+                }
                 $idx = $idxByDetailId[$cid] ?? null;
                 if ($idx === null) {
                     continue;
@@ -491,6 +858,7 @@ try {
                 'supplier_name' => (string) ($s['supplier_name'] ?? ''),
                 'supplier_image' => (string) ($s['supplier_image'] ?? ''),
                 'prices' => $prices,
+                'photos' => [],
             ];
         }
         usort(
@@ -588,7 +956,7 @@ try {
                 $hasShopUrl = false;
             }
 
-            $selectCols = 'rps.supplier_id, ' . ($hasShopUrl ? 's.shop_url, ' : '') . 's.supplier_name, s.contact_person, s.phone_number, s.email, s.supplier_image';
+            $selectCols = 'rps.supplier_id, rps.quoted_prices, rps.quote_photos, ' . ($hasShopUrl ? 's.shop_url, ' : '') . 's.supplier_name, s.contact_person, s.phone_number, s.email, s.address, s.city, s.country, s.postal_code, s.supplier_image, s.is_preferred, s.preferred_request_id';
             $orderClause = 'ORDER BY rps.request_id ASC, rps.supplier_id ASC';
             try {
                 $colChkId = $db->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requisition_preferred_suppliers' AND COLUMN_NAME = 'id'");
@@ -606,6 +974,21 @@ try {
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $out = [];
             foreach ($rows as $r) {
+                $sid = isset($r['supplier_id']) ? (int) $r['supplier_id'] : 0;
+                $quotedPrices = [];
+                if (isset($r['quoted_prices']) && $r['quoted_prices'] !== null && $r['quoted_prices'] !== '') {
+                    $decodedPrices = json_decode((string) $r['quoted_prices'], true);
+                    if (is_array($decodedPrices)) {
+                        $quotedPrices = $decodedPrices;
+                    }
+                }
+                $quotePhotos = [];
+                if (isset($r['quote_photos']) && $r['quote_photos'] !== null && $r['quote_photos'] !== '') {
+                    $decodedPhotos = json_decode((string) $r['quote_photos'], true);
+                    if (is_array($decodedPhotos)) {
+                        $quotePhotos = $decodedPhotos;
+                    }
+                }
                 $out[] = [
                     'supplier_id' => isset($r['supplier_id']) ? (int) $r['supplier_id'] : 0,
                     'supplier_name' => (string) ($r['supplier_name'] ?? ''),
@@ -613,7 +996,15 @@ try {
                     'phone_number' => (string) ($r['phone_number'] ?? ''),
                     'email' => (string) ($r['email'] ?? ''),
                     'shop_url' => (string) ($r['shop_url'] ?? ''),
+                    'address' => (string) ($r['address'] ?? ''),
+                    'city' => (string) ($r['city'] ?? ''),
+                    'country' => (string) ($r['country'] ?? ''),
+                    'postal_code' => (string) ($r['postal_code'] ?? ''),
                     'supplier_image' => (string) ($r['supplier_image'] ?? ''),
+                    'quoted_prices' => $quotedPrices,
+                    'quote_photos' => $quotePhotos,
+                    'is_preferred' => isset($r['is_preferred']) ? (int) $r['is_preferred'] : 0,
+                    'preferred_request_id' => isset($r['preferred_request_id']) ? (int) $r['preferred_request_id'] : null,
                 ];
             }
             sendJson(['success' => true, 'preferred_suppliers' => $out]);
@@ -633,6 +1024,10 @@ try {
             $phoneNumber = trim((string) ($_POST['phone_number'] ?? ''));
             $email = trim((string) ($_POST['email'] ?? ''));
             $shopUrl = trim((string) ($_POST['shop_url'] ?? ''));
+            $address = trim((string) ($_POST['address'] ?? ''));
+            $city = trim((string) ($_POST['city'] ?? ''));
+            $country = trim((string) ($_POST['country'] ?? ''));
+            $postalCode = trim((string) ($_POST['postal_code'] ?? ''));
 
             // avoid duplicate supplier names in suppliers table
             $stmtChk = $db->prepare('SELECT supplier_id FROM suppliers WHERE LOWER(supplier_name) = LOWER(?) LIMIT 1');
@@ -641,19 +1036,37 @@ try {
                 sendJson(['success' => false, 'message' => 'A supplier with this name already exists. Choose it from the list instead.']);
             }
 
-            $ins = $db->prepare('INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, status, supplier_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $ins->execute([
-                $supplierName,
-                $contactPerson !== '' ? $contactPerson : null,
-                $phoneNumber !== '' ? $phoneNumber : null,
-                $email !== '' ? $email : null,
-                null,
-                null,
-                null,
-                null,
-                'Active',
-                null,
-            ]);
+            try {
+                $ins = $db->prepare('INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, status, supplier_image, is_preferred, preferred_request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $ins->execute([
+                    $supplierName,
+                    $contactPerson !== '' ? $contactPerson : null,
+                    $phoneNumber !== '' ? $phoneNumber : null,
+                    $email !== '' ? $email : null,
+                    $address !== '' ? $address : null,
+                    $city !== '' ? $city : null,
+                    $country !== '' ? $country : null,
+                    $postalCode !== '' ? $postalCode : null,
+                    'Active',
+                    null,
+                    1,
+                    $requestId,
+                ]);
+            } catch (Throwable $e) {
+                $ins = $db->prepare('INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, status, supplier_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $ins->execute([
+                    $supplierName,
+                    $contactPerson !== '' ? $contactPerson : null,
+                    $phoneNumber !== '' ? $phoneNumber : null,
+                    $email !== '' ? $email : null,
+                    $address !== '' ? $address : null,
+                    $city !== '' ? $city : null,
+                    $country !== '' ? $country : null,
+                    $postalCode !== '' ? $postalCode : null,
+                    'Active',
+                    null,
+                ]);
+            }
             $newSid = (int) $db->lastInsertId();
 
             // Ensure junction exists (no shop_url stored on junction)
@@ -684,7 +1097,7 @@ try {
                 // ignore if column missing or update fails
             }
 
-            $sel = $db->prepare('SELECT supplier_id, supplier_name, supplier_image, contact_person, phone_number, email FROM suppliers WHERE supplier_id = ?');
+            $sel = $db->prepare('SELECT supplier_id, supplier_name, supplier_image, contact_person, phone_number, email, address, city, country, postal_code FROM suppliers WHERE supplier_id = ?');
             $sel->execute([$newSid]);
             $row = $sel->fetch(PDO::FETCH_ASSOC);
             sendJson(['success' => true, 'message' => 'Preferred supplier added.', 'supplier' => $row]);
@@ -704,13 +1117,21 @@ try {
             $phoneNumber = trim((string) ($_POST['phone_number'] ?? ''));
             $email = trim((string) ($_POST['email'] ?? ''));
             $shopUrl = trim((string) ($_POST['shop_url'] ?? ''));
+            $address = trim((string) ($_POST['address'] ?? ''));
+            $city = trim((string) ($_POST['city'] ?? ''));
+            $country = trim((string) ($_POST['country'] ?? ''));
+            $postalCode = trim((string) ($_POST['postal_code'] ?? ''));
 
-            $upd = $db->prepare('UPDATE suppliers SET supplier_name = ?, contact_person = ?, phone_number = ?, email = ? WHERE supplier_id = ?');
+            $upd = $db->prepare('UPDATE suppliers SET supplier_name = ?, contact_person = ?, phone_number = ?, email = ?, address = ?, city = ?, country = ?, postal_code = ? WHERE supplier_id = ?');
             $upd->execute([
                 $supplierName,
                 $contactPerson !== '' ? $contactPerson : null,
                 $phoneNumber !== '' ? $phoneNumber : null,
                 $email !== '' ? $email : null,
+                $address !== '' ? $address : null,
+                $city !== '' ? $city : null,
+                $country !== '' ? $country : null,
+                $postalCode !== '' ? $postalCode : null,
                 $supplierId,
             ]);
 
@@ -767,7 +1188,12 @@ try {
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
             );
-            $ins = $db->prepare('INSERT IGNORE INTO requisition_preferred_suppliers (request_id, supplier_id) VALUES (?, ?)');
+            $dupChk = $db->prepare('SELECT 1 FROM requisition_preferred_suppliers WHERE request_id = ? AND supplier_id = ? LIMIT 1');
+            $dupChk->execute([$requestId, $supplierId]);
+            if ($dupChk->fetchColumn()) {
+                sendJson(['success' => false, 'message' => 'This supplier is already added.', 'already_added' => true]);
+            }
+            $ins = $db->prepare('INSERT INTO requisition_preferred_suppliers (request_id, supplier_id) VALUES (?, ?)');
             $ins->execute([$requestId, $supplierId]);
             sendJson(['success' => true, 'message' => 'Preferred supplier added.']);
         }
@@ -792,6 +1218,7 @@ try {
         $requestId = (int) ($_POST['request_id'] ?? 0);
         $itemsRaw = $_POST['items'] ?? '[]';
         $suppliersRaw = $_POST['suppliers'] ?? '[]';
+        $preferredQuotesRaw = $_POST['preferred_quotes'] ?? null;
         $submissionMode = strtolower(trim((string) ($_POST['submission_mode'] ?? 'draft')));
         if ($submissionMode !== 'draft' && $submissionMode !== 'submitted') {
             $submissionMode = 'draft';
@@ -969,6 +1396,24 @@ try {
             }
         }
 
+        ensureRequisitionPreferredQuoteColumns($db);
+        ensureCanvassSupplierQuoteSourceColumn($db);
+
+        $preferredQuotes = [];
+        if ($isOwner && $preferredQuotesRaw !== null) {
+            $decodedPreferred = json_decode((string) $preferredQuotesRaw, true);
+            if (is_array($decodedPreferred)) {
+                $preferredQuotes = $decodedPreferred;
+            }
+        }
+
+        // Only the requester may change canvass submission status via POST.
+        if (!$isOwner) {
+            $submissionMode = cwirmsExistingCanvassSubmissionStatus($db, $requestId);
+        } elseif ($submissionMode !== 'submitted') {
+            $submissionMode = 'draft';
+        }
+
         $db->beginTransaction();
         try {
             $del = $db->prepare('DELETE FROM requisition_canvass_detail WHERE request_id = ?');
@@ -1015,8 +1460,9 @@ try {
             }
 
             $insCell = $db->prepare(
-                'INSERT INTO requisition_canvass_detail_supplier (canvass_detail_id, supplier_id, price) VALUES (?, ?, ?)'
+                'INSERT INTO requisition_canvass_detail_supplier (canvass_detail_id, supplier_id, price, quote_source) VALUES (?, ?, ?, ?)'
             );
+            $insertedCells = [];
 
             foreach ($suppliers as $sup) {
                 if (!is_array($sup)) {
@@ -1035,22 +1481,29 @@ try {
                     $p = null;
                     if ($priceRaw !== null && $priceRaw !== '') {
                         if (!is_numeric($priceRaw)) {
-                            sendJson(['success' => false, 'message' => 'Prices must be numbers.']);
+                            throw new RuntimeException('Prices must be numbers.');
                         }
                         $p = round((float) $priceRaw, 2);
                         if ($p < 0) {
-                            sendJson(['success' => false, 'message' => 'Price cannot be negative.']);
+                            throw new RuntimeException('Price cannot be negative.');
                         }
                     }
                     $cid = $newIds[$idx];
-                    $insCell->execute([$cid, $sid, $p]);
+                    $insCell->execute([$cid, $sid, $p, 'canvasser']);
+                    $insertedCells[$cid . ':' . $sid] = true;
                 }
             }
 
             $db->commit();
         } catch (Throwable $e) {
-            $db->rollBack();
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
             throw $e;
+        }
+
+        if ($isOwner && $preferredQuotesRaw !== null) {
+            cwirmsPersistPreferredSupplierQuotes($db, $requestId, $preferredQuotes);
         }
 
         sendJson(['success' => true, 'message' => 'Canvass form saved.']);

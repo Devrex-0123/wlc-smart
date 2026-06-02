@@ -83,3 +83,120 @@ function ensureRequisitionCanvassSubmissionColumn(PDO $db): void
         );
     }
 }
+
+function ensureRequisitionPreferredQuoteColumns(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $db->exec(
+        'CREATE TABLE IF NOT EXISTS requisition_preferred_suppliers (
+            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            request_id INT NOT NULL,
+            supplier_id INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
+    $quotedPricesCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_preferred_suppliers'
+           AND COLUMN_NAME = 'quoted_prices'"
+    );
+    $quotedPricesCheck->execute();
+    if (((int) $quotedPricesCheck->fetchColumn()) === 0) {
+        $db->exec('ALTER TABLE requisition_preferred_suppliers ADD COLUMN quoted_prices TEXT NULL AFTER supplier_id');
+    }
+
+    $quotePhotosCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_preferred_suppliers'
+           AND COLUMN_NAME = 'quote_photos'"
+    );
+    $quotePhotosCheck->execute();
+    if (((int) $quotePhotosCheck->fetchColumn()) === 0) {
+        $db->exec('ALTER TABLE requisition_preferred_suppliers ADD COLUMN quote_photos TEXT NULL AFTER quoted_prices');
+    }
+}
+
+function dropRequisitionCanvassDetailPhotoColumns(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $photoAtCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_canvass_detail'
+           AND COLUMN_NAME = 'photo_uploaded_at'"
+    );
+    $photoAtCheck->execute();
+    if (((int) $photoAtCheck->fetchColumn()) > 0) {
+        $db->exec('ALTER TABLE requisition_canvass_detail DROP COLUMN photo_uploaded_at');
+    }
+
+    $photoUrlCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_canvass_detail'
+           AND COLUMN_NAME = 'photo_url'"
+    );
+    $photoUrlCheck->execute();
+    if (((int) $photoUrlCheck->fetchColumn()) > 0) {
+        $db->exec('ALTER TABLE requisition_canvass_detail DROP COLUMN photo_url');
+    }
+}
+
+function ensureCanvassSupplierQuoteSourceColumn(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $colCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_canvass_detail_supplier'
+           AND COLUMN_NAME = 'quote_source'"
+    );
+    $colCheck->execute();
+    if (((int) $colCheck->fetchColumn()) === 0) {
+        $db->exec(
+            "ALTER TABLE requisition_canvass_detail_supplier
+             ADD COLUMN quote_source ENUM('preferred','canvasser') NOT NULL DEFAULT 'canvasser' AFTER price"
+        );
+    }
+}
+
+function ensureSuggestedSupplierSelectionSourceColumn(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $colCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'request_approval_suggested_supplier_item'
+           AND COLUMN_NAME = 'selection_source'"
+    );
+    $colCheck->execute();
+    if (((int) $colCheck->fetchColumn()) === 0) {
+        $db->exec(
+            "ALTER TABLE request_approval_suggested_supplier_item
+             ADD COLUMN selection_source ENUM('preferred','canvassed') NULL AFTER supplier_id"
+        );
+    }
+}

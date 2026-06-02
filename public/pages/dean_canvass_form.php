@@ -255,6 +255,7 @@ $isReviewerCanvassReadonly = $isGsdCanvassReview
     || $isPresidentCanvassReview
     || $isComptrollerCanvassHistory
     || $isPresidentCanvassHistory;
+$showCanvassPricingOverview = $isGsdCanvassReview;
 
 $verifierChainLocked = ($accessError === null && $requestId > 0)
     ? requisitionVerifierChainLockedForRequest($db, $requestId)
@@ -321,6 +322,9 @@ $pageTitle = $rfRequestId > 0
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/requisition_form.css">
+    <?php if ($showCanvassPricingOverview): ?>
+    <link rel="stylesheet" href="../assets/css/gsd_canvass_pricing_overview.css">
+    <?php endif; ?>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -359,7 +363,7 @@ $pageTitle = $rfRequestId > 0
         <div class="req-flow-context">
             <div class="req-flow-context-top">
                 <div class="req-flow-context-main">
-                    <span class="req-flow-step">Purchase requisition is now available for review.</span>
+                    <span class="req-flow-step">Purchase requisition is available after G.S.D., Comptroller, and President verify this canvass sheet.</span>
                 </div>
                 <a class="req-flow-context-link" href="purchase_requisition_form.php?request_id=<?php echo (int) $rfRequestId; ?>&from=<?php echo htmlspecialchars($from !== '' ? $from : 'requisition'); ?>">Open purchase requisition</a>
             </div>
@@ -481,39 +485,23 @@ $pageTitle = $rfRequestId > 0
             <?php endif; ?>
             <div id="cvItemChips" class="item-chips"><p class="item-chips-empty">No canvass items yet.</p></div>
 
-            <?php if ($isRequesterOwnedCanvass || $isReviewerCanvassReadonly): ?>
+            <?php if ($isRequesterOwnedCanvass || $isReviewerCanvassReadonly || $isCanvasserCanvassView): ?>
             <div class="cv-preferred-section" id="cvPreferredSection">
-                <div class="cv-preferred-section-head">
+                <div class="cv-preferred-section-head" id="cvPreferredSectionHead">
                     <span class="section-label">Preferred Suppliers</span>
-                    <?php if ($isRequesterOwnedCanvass && !$verifierChainLocked): ?>
-                    <button type="button" class="btnPrfSupp" id="cvOpenAddPreferredBtn">
-                        <i class="fas fa-plus"></i> Add preferred supplier
-                    </button>
-                    <?php endif; ?>
                 </div>
                 <p class="cv-preferred-hint" id="cvPreferredHint"></p>
                 <div class="cv-preferred-picker">
                     <label for="cvPrefSupplierSearch" class="sr-only">Search suppliers</label>
                     <div class="cv-pref-search-row">
-                        <input type="text" id="cvPrefSupplierSearch" class="cv-pref-search-input" placeholder="Search suppliers (name, contact)…" autocomplete="off" >
-                        <button type="button" id="cvPrefAddSelectedBtn" class="btn-submit">Add selected supplier</button>
+                        <span class="cv-pref-search-icon" aria-hidden="true"><i class="fas fa-magnifying-glass"></i></span>
+                        <input type="text" id="cvPrefSupplierSearch" class="cv-pref-search-input" placeholder="Search supplier name or contact…" autocomplete="off">
                     </div>
-                    <div id="cvPrefSelectedSupplierPreview" class="cv-pref-selected-supplier"></div>
                     <div id="cvPrefSupplierSearchList" class="cv-pref-search-list"></div>
                 </div>
                 <div class="supplier-table-group-label preferred-supplier-label">Preferred supplier matrix</div>
-                <div class="supplier-table-wrapper">
-                    <table id="cvPreferredTable" class="supplier-table" aria-label="Preferred supplier matrix">
-                        <thead>
-                            <tr>
-                                <th>SUPPLIER</th>
-                                <th>ACTION</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td colspan="2" class="empty-state">Loading…</td></tr>
-                        </tbody>
-                    </table>
+                <div id="cvPreferredCards" class="cv-preferred-cards" aria-live="polite">
+                    <div class="empty-state">Loading preferred suppliers…</div>
                 </div>
             </div>
             <?php endif; ?>
@@ -561,23 +549,17 @@ $pageTitle = $rfRequestId > 0
                 </div>
 
                 <div class="supplier-table-group-label canvassed-supplier-label">Canvassed supplier matrix</div>
-                <div class="supplier-table-wrapper">
-                    <table id="cvSupplierTable" class="supplier-table" aria-label="Canvassed supplier matrix">
-                        <thead>
-                            <tr>
-                                <th>SUPPLIER</th>
-                                <th>ITEM 1</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td colspan="2" class="empty-state">Add items and suppliers to build the matrix.</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div id="cvCanvassedSupplierWrap" class="cv-canvassed-wrap" hidden>
+                    <div id="cvCanvassedCards" class="cv-preferred-cards cv-canvassed-cards" aria-live="polite">
+                        <div class="empty-state">No canvassed supplier quotes yet. This section is filled in by the assigned canvasser.</div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <?php if ($showCanvassPricingOverview): ?>
+        <?php require __DIR__ . '/partials/canvass_pricing_overview.php'; ?>
+        <?php endif; ?>
 
         <div class="approval-section cv-approval-section" aria-label="Canvass verification status">
             <div class="approval-card approval-card-canvass-verifiers" id="cvApprovalStrip">
@@ -694,7 +676,7 @@ $pageTitle = $rfRequestId > 0
 <?php if ($isRequesterOwnedCanvass && !$verifierChainLocked): ?>
 <div id="cvPrefSupModal" class="confirm-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cvPrefSupModalTitle">
     <div class="confirm-modal-backdrop" id="cvPrefSupModalBackdrop"></div>
-    <div class="confirm-modal-card" style="max-width:420px;width:92%;">
+    <div class="confirm-modal-card" style="max-width:480px;width:92%;">
         <div class="confirm-modal-header">
             <h3 id="cvPrefSupModalTitle">Add preferred supplier</h3>
         </div>
@@ -720,6 +702,24 @@ $pageTitle = $rfRequestId > 0
                 <label for="cvPrefSupUrl">Shop / Website URL</label>
                 <input type="text" id="cvPrefSupUrl" maxlength="255" placeholder="https://...">
             </div>
+            <div class="field-group">
+                <label for="cvPrefSupAddress">Address / location</label>
+                <input type="text" id="cvPrefSupAddress" maxlength="255" placeholder="Street, building, mall branch, etc." autocomplete="street-address">
+            </div>
+            <div class="field-group" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
+                <div>
+                    <label for="cvPrefSupCity">City</label>
+                    <input type="text" id="cvPrefSupCity" maxlength="50" autocomplete="address-level2">
+                </div>
+                <div>
+                    <label for="cvPrefSupCountry">Country</label>
+                    <input type="text" id="cvPrefSupCountry" maxlength="50" autocomplete="country-name">
+                </div>
+            </div>
+            <div class="field-group">
+                <label for="cvPrefSupPostal">Postal code</label>
+                <input type="text" id="cvPrefSupPostal" maxlength="20" autocomplete="postal-code">
+            </div>
         </div>
         <div class="confirm-modal-actions">
             <button type="button" id="cvPrefSupModalCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
@@ -728,6 +728,11 @@ $pageTitle = $rfRequestId > 0
     </div>
 </div>
 <?php endif; ?>
+
+<div id="cvQuotePhotoLightbox" class="cv-quote-photo-lightbox hidden" role="dialog" aria-modal="true" aria-label="Quotation photo preview" aria-hidden="true">
+    <button type="button" class="cv-quote-photo-lightbox-close" id="cvQuotePhotoLightboxClose" aria-label="Close preview">&times;</button>
+    <img id="cvQuotePhotoLightboxImg" class="cv-quote-photo-lightbox-img" src="" alt="Quotation photo preview">
+</div>
 
 <div id="cvConfirmModal" class="confirm-modal" style="display:none;">
     <div class="confirm-modal-backdrop"></div>
@@ -753,6 +758,9 @@ window.CWIRMS_PREF_SUP = <?php echo json_encode([
 ]); ?>;
 </script>
 <script src="../assets/js/dean_canvass_form.js"></script>
+<?php if ($showCanvassPricingOverview): ?>
+<script src="../assets/js/gsd_canvass_pricing_overview.js"></script>
+<?php endif; ?>
 <?php if ($isGsdCanvassReview): ?>
 <script>
 window.IMRMS_GSD_CANVASS = <?php echo json_encode([

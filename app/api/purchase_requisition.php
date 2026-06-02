@@ -342,7 +342,7 @@ try {
                 sendJson(['success' => false, 'message' => 'No purchase requisition lines yet (suggested suppliers required).']);
             }
             if (!requestGsdCanvassAccepted($db, $requestId)) {
-                sendJson(['success' => false, 'message' => 'The canvass form must be accepted before purchase requisition verification.']);
+                sendJson(['success' => false, 'message' => 'G.S.D., Comptroller, and President must verify the canvass form before purchase requisition verification.']);
             }
         }
 
@@ -424,7 +424,7 @@ try {
     }
 
     if (!requisitionCanvassFormAcceptedForRequest($db, $requestId)) {
-        sendJson(['success' => false, 'message' => 'Purchase requisition is available only after the canvass form is accepted.']);
+        sendJson(['success' => false, 'message' => 'Purchase requisition is available only after G.S.D., Comptroller, and President verify the canvass form.']);
     }
 
     $snap = loadPurchaseRequisitionSnapshotData($db, $requestId);

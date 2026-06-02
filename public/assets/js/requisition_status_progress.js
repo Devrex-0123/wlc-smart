@@ -159,7 +159,20 @@ function gsdDecision(record) {
     return null;
 }
 
-/** Canvass sheet (abstract) formally accepted — purchase requisition unlocks on this, not on G.S.D. alone. */
+/** G.S.D., Comptroller, and President have all accepted the canvass verification chain. */
+function canvassFullyVerified(record) {
+    return (
+        gsdDecision(record) === 'accept' &&
+        String((record && record.comp_status) || '')
+            .trim()
+            .toLowerCase() === 'accept' &&
+        String((record && record.pres_status) || '')
+            .trim()
+            .toLowerCase() === 'accept'
+    );
+}
+
+/** Canvass sheet (abstract) formally accepted by the assigned canvasser. */
 function canvasCanvassAccepted(record) {
     return String((record && record.canvas_status) || '').trim().toLowerCase() === 'accept';
 }
@@ -202,10 +215,15 @@ function getStepState(record) {
         const pct = pctFromCurrentIndex(idx);
         return { currentIndex: idx, pct, fillPct: pct };
     }
-    if (canvasCanvassAccepted(record)) {
+    if (canvassFullyVerified(record)) {
         const prIdx = currentIndexAfterCanvasForPurchaseFlow(record);
         const pct = pctFromCurrentIndex(prIdx);
         return { currentIndex: prIdx, pct, fillPct: pct };
+    }
+    if (canvasCanvassAccepted(record)) {
+        const idx = 3;
+        const pct = pctFromCurrentIndex(idx);
+        return { currentIndex: idx, pct, fillPct: pct };
     }
     const gsd = gsdDecision(record);
     if (gsd === 'reject') {
@@ -453,7 +471,7 @@ function renderApp(root, record, config) {
             </li>`
         : '';
     const showPurchaseCta =
-        (config.viewer === 'inventory' || config.deanFlow) && canvasCanvassAccepted(record);
+        (config.viewer === 'inventory' || config.deanFlow) && canvassFullyVerified(record);
     const purchaseRow = showPurchaseCta
         ? `<li class="rsp-form-link-row">
                 <span class="rsp-form-link-text">Purchase requisition form${!isFormViewed(numericRequestId(record), 'purchase') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>

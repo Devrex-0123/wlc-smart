@@ -57,7 +57,7 @@ if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)
 <main class="requisition-main">
     <div class="requisition-card" style="max-width: 520px; margin: 2rem auto;">
         <h1 style="font-size: 1.1rem; color: #1e293b; margin: 0 0 0.75rem 0;">Purchase requisition not available yet</h1>
-        <p style="color: #64748b; margin: 0 0 1.25rem 0; line-height: 1.5;">This form opens only after the <strong>canvass form (abstract of quotation)</strong> is <strong>accepted</strong> in the workflow.</p>
+        <p style="color: #64748b; margin: 0 0 1.25rem 0; line-height: 1.5;">This form opens only after <strong>G.S.D., Comptroller, and President</strong> have verified the canvass form (abstract of quotation).</p>
         <p style="margin:0 0 0.5rem 0;"><a class="req-flow-context-link" href="<?php echo $safeBack; ?>">Back to previous page</a></p>
         <p style="margin:0;"><a class="req-flow-context-link" href="<?php echo $safeProgress; ?>">Request status / progress</a></p>
     </div>

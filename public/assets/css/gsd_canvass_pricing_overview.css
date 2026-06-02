@@ -1,0 +1,152 @@
+.cv-pricing-overview-section {
+    margin: 1.25rem 0 0;
+    padding: 1.1rem 1.15rem 1rem;
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.cv-pricing-overview-section[hidden] {
+    display: none !important;
+}
+
+.cv-pricing-overview-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
+}
+
+.cv-pricing-overview-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #14532d;
+}
+
+.cv-pricing-overview-hint {
+    margin: 0.25rem 0 0;
+    font-size: 0.86rem;
+    color: #475569;
+    line-height: 1.45;
+}
+
+.cv-pricing-overview-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+    min-width: 180px;
+}
+
+.cv-pricing-overview-summary-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.cv-pricing-overview-grand-total {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #166534;
+    line-height: 1.2;
+}
+
+.cv-pricing-overview-progress {
+    font-size: 0.82rem;
+    color: #475569;
+}
+
+.cv-pricing-overview-table-wrap {
+    overflow-x: auto;
+}
+
+.cv-pricing-overview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.cv-pricing-overview-table th,
+.cv-pricing-overview-table td {
+    padding: 0.55rem 0.65rem;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.cv-pricing-overview-table th {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #64748b;
+    background: #f8fafc;
+}
+
+.cv-pricing-overview-table td:nth-child(3),
+.cv-pricing-overview-table td:nth-child(6),
+.cv-pricing-overview-table td:nth-child(7),
+.cv-pricing-overview-table tfoot td:last-child {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.cv-pricing-overview-empty td {
+    color: #64748b;
+    font-style: italic;
+    text-align: center;
+}
+
+.cv-pricing-overview-row-pending td {
+    color: #64748b;
+}
+
+.cv-pricing-overview-pending {
+    color: #94a3b8;
+    font-style: italic;
+}
+
+.cv-pricing-overview-source {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.cv-pricing-overview-source-preferred {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.cv-pricing-overview-source-canvassed {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.cv-pricing-overview-foot-label {
+    font-weight: 700;
+    color: #0f172a;
+    text-align: right !important;
+}
+
+.cv-pricing-overview-foot-total {
+    font-weight: 800;
+    color: #166534;
+    font-size: 0.95rem;
+}
+
+@media (max-width: 720px) {
+    .cv-pricing-overview-summary {
+        align-items: flex-start;
+    }
+}
