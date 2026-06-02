@@ -15,22 +15,21 @@ WHERE `request_id` IS NOT NULL;
 -- Add index for requisition_item submission_status
 CREATE INDEX idx_requisition_submission_status ON `requisition_item` (`submission_status`);
 
+-- 2. CANVASS FORM: Add canvass_submission_status to requisition_canvass_detail
 -- ============================================================================
--- 2. CANVASS FORM: Add canvas_submission_status to canvass_verification_approval
--- ============================================================================
-ALTER TABLE `canvass_verification_approval` 
-ADD COLUMN `canvas_submission_status` ENUM('draft', 'submitted') DEFAULT 'draft' AFTER `pres_status`;
+ALTER TABLE `requisition_canvass_detail`
+ADD COLUMN `canvass_submission_status` ENUM('draft', 'submitted') DEFAULT 'draft' AFTER `sort_order`;
 
--- Update existing canvass records to 'submitted' if they have been reviewed or accepted
-UPDATE `canvass_verification_approval` 
-SET `canvas_submission_status` = 'submitted' 
-WHERE `canvas_status` = 'accept' 
-   OR `gsd_status` IS NOT NULL 
-   OR `comp_status` IS NOT NULL 
-   OR `pres_status` IS NOT NULL;
+-- Backfill from legacy canvass_verification_approval value, when present
+UPDATE `requisition_canvass_detail` rcd
+INNER JOIN `canvass_verification_approval` cva ON cva.request_id = rcd.request_id
+SET rcd.`canvass_submission_status` = CASE
+    WHEN LOWER(TRIM(COALESCE(cva.`canvas_submission_status`, 'draft'))) = 'submitted' THEN 'submitted'
+    ELSE COALESCE(rcd.`canvass_submission_status`, 'draft')
+END;
 
--- Add index for canvass_verification_approval submission_status
-CREATE INDEX idx_canvass_submission_status ON `canvass_verification_approval` (`canvas_submission_status`);
+-- Add index for requisition_canvass_detail canvass_submission_status
+CREATE INDEX idx_canvass_detail_submission_status ON `requisition_canvass_detail` (`canvass_submission_status`);
 
 -- ============================================================================
 -- 3. PURCHASE REQUISITION FORM: Add pr_submission_status to purchase_requisition_approval

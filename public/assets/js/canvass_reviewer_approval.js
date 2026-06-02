@@ -145,9 +145,15 @@
                 const msg =
                     cfg.role === 'president'
                         ? 'Approve this request as President? The line status will be set to Ongoing.'
-                        : 'Do you want to continue to approve this request? The line status will be set to Ongoing.';
+                        : 'Do you want to continue to approve this request? Review accepted quantities before confirming.';
                 const ok = await showConfirmModal(msg);
                 if (!ok) {
+                    return;
+                }
+                if (cfg.role === 'comptroller' && window.CWIRMSComptrollerPricing) {
+                    if (!window.CWIRMSComptrollerPricing.submitApprovalForm()) {
+                        showToast('Review accepted quantities and enter reasons for deferred units.', 'error');
+                    }
                     return;
                 }
                 await postApproval('accept');

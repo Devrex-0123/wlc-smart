@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 26, 2026 at 04:02 AM
+-- Generation Time: Jun 02, 2026 at 03:23 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -87,26 +87,28 @@ CREATE TABLE `canvass_verification_approval` (
   `gsd_status` enum('accept','reject','pending','') DEFAULT 'pending',
   `approved_by` varchar(100) DEFAULT NULL,
   `approved_at` datetime DEFAULT NULL,
-  `pres_status` enum('accept','reject','pending','') DEFAULT 'pending',
-  `canvas_submission_status` enum('draft','submitted') DEFAULT 'draft'
+  `pres_status` enum('accept','reject','pending','') DEFAULT 'pending'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `canvass_verification_approval`
 --
 
-INSERT INTO `canvass_verification_approval` (`request_id`, `canvas_status`, `canvassed_by`, `canvassed_at`, `canvas_assignee_user_id`, `suggested_supplier_id`, `suggested_supplier_name`, `checked_by`, `checked_at`, `comp_status`, `verified_by`, `verified_at`, `gsd_status`, `approved_by`, `approved_at`, `pres_status`, `canvas_submission_status`) VALUES
-(1, 'pending', NULL, NULL, NULL, NULL, NULL, 'comptroller', '2026-04-10 23:13:20', 'accept', NULL, NULL, NULL, 'president', '2026-04-13 20:24:44', 'accept', 'submitted'),
-(4, 'accept', 'canvasser', '2026-04-20 20:29:39', 26, NULL, NULL, NULL, NULL, NULL, 'gsd', '2026-04-20 20:30:29', 'accept', NULL, NULL, NULL, 'submitted'),
-(7, 'pending', 'rex', '2026-04-20 23:19:14', 27, NULL, NULL, NULL, NULL, 'pending', NULL, NULL, NULL, NULL, NULL, 'pending', 'submitted'),
-(9, 'pending', 'rex', NULL, 27, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'draft'),
-(11, 'accept', 'canvasser', '2026-04-27 01:17:10', 26, 3, 'SonJingWoo Shop', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'submitted'),
-(12, 'accept', 'canvasser', '2026-04-28 00:30:57', 26, NULL, NULL, 'comptroller', '2026-04-28 00:35:49', 'accept', 'gsd', '2026-04-28 00:35:17', 'accept', 'president', '2026-04-28 00:36:19', 'accept', 'submitted'),
-(13, 'accept', 'canvasser', '2026-04-27 00:57:53', NULL, NULL, NULL, 'comptroller', '2026-04-27 23:26:40', 'accept', 'gsd', '2026-04-28 00:32:07', 'accept', 'president', '2026-04-27 23:29:44', 'accept', 'submitted'),
-(14, 'accept', 'rex', '2026-04-28 05:32:38', 27, NULL, NULL, 'comptroller', '2026-04-28 05:34:22', 'accept', 'gsd', '2026-04-28 05:33:29', 'accept', 'president', '2026-04-28 05:35:02', 'accept', 'submitted'),
-(15, 'accept', 'canvasser', '2026-04-28 11:41:03', 26, NULL, NULL, 'comptroller', '2026-04-28 11:44:20', 'accept', 'gsd', '2026-04-28 11:43:31', 'accept', 'president', '2026-04-28 11:45:44', 'accept', 'submitted'),
-(16, 'accept', 'canvasser', '2026-04-28 15:44:58', 26, NULL, NULL, 'comptroller', '2026-04-28 15:46:58', 'accept', 'gsd', '2026-04-28 15:46:02', 'accept', 'president', '2026-04-28 15:50:14', 'accept', 'submitted'),
-(17, 'pending', 'canvasser', '2026-05-12 20:40:36', 26, NULL, NULL, NULL, NULL, 'pending', NULL, NULL, 'pending', NULL, NULL, NULL, 'draft');
+INSERT INTO `canvass_verification_approval` (`request_id`, `canvas_status`, `canvassed_by`, `canvassed_at`, `canvas_assignee_user_id`, `suggested_supplier_id`, `suggested_supplier_name`, `checked_by`, `checked_at`, `comp_status`, `verified_by`, `verified_at`, `gsd_status`, `approved_by`, `approved_at`, `pres_status`) VALUES
+(1, 'pending', NULL, NULL, NULL, NULL, NULL, 'comptroller', '2026-04-10 23:13:20', 'accept', NULL, NULL, NULL, 'president', '2026-04-13 20:24:44', 'accept'),
+(4, 'accept', 'canvasser', '2026-04-20 20:29:39', 26, NULL, NULL, NULL, NULL, NULL, 'gsd', '2026-04-20 20:30:29', 'accept', NULL, NULL, NULL),
+(7, 'pending', 'rex', '2026-04-20 23:19:14', 27, NULL, NULL, NULL, NULL, 'pending', NULL, NULL, NULL, NULL, NULL, 'pending'),
+(9, 'pending', 'rex', NULL, 27, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(11, 'accept', 'canvasser', '2026-04-27 01:17:10', 26, 3, 'SonJingWoo Shop', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(12, 'accept', 'canvasser', '2026-04-28 00:30:57', 26, NULL, NULL, 'comptroller', '2026-04-28 00:35:49', 'accept', 'gsd', '2026-04-28 00:35:17', 'accept', 'president', '2026-04-28 00:36:19', 'accept'),
+(13, 'accept', 'canvasser', '2026-04-27 00:57:53', NULL, NULL, NULL, 'comptroller', '2026-04-27 23:26:40', 'accept', 'gsd', '2026-04-28 00:32:07', 'accept', 'president', '2026-04-27 23:29:44', 'accept'),
+(14, 'accept', 'rex', '2026-04-28 05:32:38', 27, NULL, NULL, 'comptroller', '2026-04-28 05:34:22', 'accept', 'gsd', '2026-04-28 05:33:29', 'accept', 'president', '2026-04-28 05:35:02', 'accept'),
+(15, 'accept', 'canvasser', '2026-04-28 11:41:03', 26, NULL, NULL, 'comptroller', '2026-04-28 11:44:20', 'accept', 'gsd', '2026-04-28 11:43:31', 'accept', 'president', '2026-04-28 11:45:44', 'accept'),
+(16, 'accept', 'canvasser', '2026-04-28 15:44:58', 26, NULL, NULL, 'comptroller', '2026-04-28 15:46:58', 'accept', 'gsd', '2026-04-28 15:46:02', 'accept', 'president', '2026-04-28 15:50:14', 'accept'),
+(17, 'pending', 'canvasser', '2026-05-12 20:40:36', 26, NULL, NULL, NULL, NULL, 'pending', NULL, NULL, 'pending', NULL, NULL, NULL),
+(21, 'pending', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'pending', NULL, NULL, 'pending', NULL, NULL, 'pending'),
+(22, 'pending', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'pending', NULL, NULL, 'pending', NULL, NULL, 'pending'),
+(23, 'pending', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'pending', NULL, NULL, 'pending', NULL, NULL, 'pending');
 
 -- --------------------------------------------------------
 
@@ -693,7 +695,7 @@ INSERT INTO `log_history` (`log_id`, `user_id`, `time_in`, `time_out`) VALUES
 (437, 18, '2026-05-25 22:55:09', '2026-05-25 22:55:38'),
 (438, 22, '2026-05-25 22:55:50', '2026-05-25 22:56:03'),
 (439, 24, '2026-05-25 22:56:16', '2026-05-25 22:56:43'),
-(440, 24, '2026-05-25 22:56:54', '2026-05-25 22:56:54'),
+(440, 24, '2026-05-25 22:56:54', '2026-06-01 22:42:54'),
 (441, 18, '2026-05-25 23:05:52', '2026-05-25 23:06:34'),
 (442, 16, '2026-05-25 23:06:44', '2026-05-25 23:06:51'),
 (443, 16, '2026-05-25 23:07:04', '2026-05-25 23:07:11'),
@@ -711,7 +713,25 @@ INSERT INTO `log_history` (`log_id`, `user_id`, `time_in`, `time_out`) VALUES
 (455, 16, '2026-05-25 23:37:51', '2026-05-25 23:38:07'),
 (456, 18, '2026-05-25 23:38:20', '2026-05-25 23:39:09'),
 (457, 22, '2026-05-25 23:39:28', '2026-05-26 09:56:55'),
-(458, 18, '2026-05-26 09:42:53', '2026-05-26 09:47:07');
+(458, 18, '2026-05-26 09:42:53', '2026-05-26 09:47:07'),
+(459, 18, '2026-05-26 20:24:01', '2026-05-26 20:25:12'),
+(460, 22, '2026-05-26 20:25:24', '2026-05-28 10:02:39'),
+(461, 18, '2026-05-28 09:59:36', '2026-05-28 10:00:16'),
+(462, 16, '2026-05-28 10:00:28', '2026-05-28 10:00:38'),
+(463, 18, '2026-05-28 10:00:49', '2026-05-28 10:01:18'),
+(464, 16, '2026-05-28 10:01:29', '2026-05-28 10:01:55'),
+(465, 18, '2026-05-28 10:02:50', '2026-05-28 10:06:02'),
+(466, 22, '2026-05-28 10:06:20', '2026-05-28 10:33:01'),
+(467, 16, '2026-05-31 15:21:06', '2026-05-31 15:21:15'),
+(468, 21, '2026-05-31 15:21:30', '2026-05-31 15:22:28'),
+(469, 18, '2026-05-31 15:22:47', '2026-06-02 20:53:01'),
+(470, 16, '2026-06-01 22:43:03', '2026-06-02 20:53:25'),
+(471, 18, '2026-06-02 20:53:36', '2026-06-02 20:53:56'),
+(472, 16, '2026-06-02 20:54:05', '2026-06-02 20:54:23'),
+(473, 18, '2026-06-02 20:54:51', '2026-06-02 20:55:10'),
+(474, 16, '2026-06-02 20:55:20', '2026-06-02 21:12:06'),
+(475, 18, '2026-06-02 21:12:19', '2026-06-02 21:20:18'),
+(476, 16, '2026-06-02 21:20:27', '2026-06-02 21:20:27');
 
 -- --------------------------------------------------------
 
@@ -927,11 +947,12 @@ CREATE TABLE `requisition_canvass_detail` (
   `request_id` int(11) NOT NULL,
   `requisition_line_id` int(11) DEFAULT NULL,
   `user_id` int(11) NOT NULL,
-  `component_label` varchar(150) NOT NULL,
+  `component_label` varchar(150) DEFAULT NULL,
   `brand` varchar(100) DEFAULT NULL,
   `model` varchar(100) DEFAULT NULL,
   `specification` varchar(500) DEFAULT NULL,
   `sort_order` int(11) NOT NULL DEFAULT 0,
+  `canvass_submission_status` enum('draft','submitted') DEFAULT 'draft',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -940,21 +961,22 @@ CREATE TABLE `requisition_canvass_detail` (
 -- Dumping data for table `requisition_canvass_detail`
 --
 
-INSERT INTO `requisition_canvass_detail` (`canvass_detail_id`, `request_id`, `requisition_line_id`, `user_id`, `component_label`, `brand`, `model`, `specification`, `sort_order`, `created_at`, `updated_at`) VALUES
-(14, 11, NULL, 18, 'RAM', 'Atech', 'asas', NULL, 0, '2026-04-27 01:17:10', '2026-04-27 01:17:10'),
-(17, 13, NULL, 18, 'Desktop table', 'Uratex', 'DT-120 120x60cm', 'Wooden office desk, laminated finish, metal legs, brown color, suitable for office use', 0, '2026-04-27 22:47:54', '2026-04-27 22:47:54'),
-(20, 12, NULL, 18, 'CPU', 'AMD', 'Ryzen 5 5600G', '6-core, 12-thread desktop processor with 3.9GHz base clock and up to 4.4GHz boost. Includes integrated Radeon Graphics, suitable for office work, school use, and light multimedia tasks.', 0, '2026-04-28 00:30:57', '2026-04-28 00:30:57'),
-(22, 14, NULL, 18, 'RAM', 'Kingston', '8GB DDR4 3200MHz', '8GB DDR4 desktop memory, 3200MHz speed, suitable for office work and general multitasking', 0, '2026-04-28 05:32:38', '2026-04-28 05:32:38'),
-(27, 15, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, '2026-04-28 11:41:03', '2026-04-28 11:41:03'),
-(28, 15, NULL, 18, 'RAM', 'Atech', 'asas', NULL, 1, '2026-04-28 11:41:03', '2026-04-28 11:41:03'),
-(33, 16, NULL, 18, 'CPU', 'AMD', 'Ryzen 5 5600G', '6-core, 12-thread processor with integrated graphics, suitable for office work and general computing', 0, '2026-04-28 15:44:58', '2026-04-28 15:44:58'),
-(34, 16, NULL, 18, 'RAM', 'Kingston', '8GB DDR4 3200MHz', '8GB DDR4 desktop memory, 3200MHz speed, ideal for multitasking and office applications', 1, '2026-04-28 15:44:58', '2026-04-28 15:44:58'),
-(40, 17, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, '2026-05-22 19:24:40', '2026-05-22 19:24:40'),
-(41, 18, NULL, 18, 'Wooden Desk', 'Uratex', NULL, NULL, 0, '2026-05-22 20:52:00', '2026-05-22 20:52:00'),
-(42, 19, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, '2026-05-25 09:13:12', '2026-05-25 09:13:12'),
-(48, 20, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, '2026-05-25 22:55:21', '2026-05-25 22:55:21'),
-(53, 21, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, '2026-05-25 23:35:07', '2026-05-25 23:35:07'),
-(57, 22, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, '2026-05-26 09:46:54', '2026-05-26 09:46:54');
+INSERT INTO `requisition_canvass_detail` (`canvass_detail_id`, `request_id`, `requisition_line_id`, `user_id`, `component_label`, `brand`, `model`, `specification`, `sort_order`, `canvass_submission_status`, `created_at`, `updated_at`) VALUES
+(14, 11, NULL, 18, 'RAM', 'Atech', 'asas', NULL, 0, 'submitted', '2026-04-27 01:17:10', '2026-06-02 21:22:26'),
+(17, 13, NULL, 18, 'Desktop table', 'Uratex', 'DT-120 120x60cm', 'Wooden office desk, laminated finish, metal legs, brown color, suitable for office use', 0, 'draft', '2026-04-27 22:47:54', '2026-04-27 22:47:54'),
+(20, 12, NULL, 18, 'CPU', 'AMD', 'Ryzen 5 5600G', '6-core, 12-thread desktop processor with 3.9GHz base clock and up to 4.4GHz boost. Includes integrated Radeon Graphics, suitable for office work, school use, and light multimedia tasks.', 0, 'draft', '2026-04-28 00:30:57', '2026-04-28 00:30:57'),
+(22, 14, NULL, 18, 'RAM', 'Kingston', '8GB DDR4 3200MHz', '8GB DDR4 desktop memory, 3200MHz speed, suitable for office work and general multitasking', 0, 'draft', '2026-04-28 05:32:38', '2026-04-28 05:32:38'),
+(27, 15, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, 'draft', '2026-04-28 11:41:03', '2026-04-28 11:41:03'),
+(28, 15, NULL, 18, 'RAM', 'Atech', 'asas', NULL, 1, 'draft', '2026-04-28 11:41:03', '2026-04-28 11:41:03'),
+(33, 16, NULL, 18, 'CPU', 'AMD', 'Ryzen 5 5600G', '6-core, 12-thread processor with integrated graphics, suitable for office work and general computing', 0, 'draft', '2026-04-28 15:44:58', '2026-04-28 15:44:58'),
+(34, 16, NULL, 18, 'RAM', 'Kingston', '8GB DDR4 3200MHz', '8GB DDR4 desktop memory, 3200MHz speed, ideal for multitasking and office applications', 1, 'draft', '2026-04-28 15:44:58', '2026-04-28 15:44:58'),
+(40, 17, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, 'draft', '2026-05-22 19:24:40', '2026-05-22 19:24:40'),
+(41, 18, NULL, 18, 'Wooden Desk', 'Uratex', NULL, NULL, 0, 'draft', '2026-05-22 20:52:00', '2026-05-22 20:52:00'),
+(42, 19, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, 'draft', '2026-05-25 09:13:12', '2026-05-25 09:13:12'),
+(48, 20, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, 'draft', '2026-05-25 22:55:21', '2026-05-25 22:55:21'),
+(58, 22, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, 'draft', '2026-05-26 20:24:20', '2026-05-26 20:24:20'),
+(59, 21, NULL, 18, 'Motherboard', 'Lenovo', 'thinkpad x31', NULL, 0, 'draft', '2026-05-26 20:24:55', '2026-05-26 20:24:55'),
+(61, 23, NULL, 18, 'sample 1', 'sample', 'sample', NULL, 0, 'draft', '2026-05-28 10:05:49', '2026-05-28 10:05:49');
 
 -- --------------------------------------------------------
 
@@ -1029,7 +1051,8 @@ INSERT INTO `requisition_form_approval` (`request_id`, `requisition_status`, `re
 (19, 'accept', NULL, 'jhaye.rebojo', '2026-05-23 11:20:45'),
 (20, 'accept', NULL, 'jhaye.rebojo', '2026-05-25 03:26:22'),
 (21, 'accept', NULL, 'jhaye.rebojo', '2026-05-25 17:08:14'),
-(22, 'accept', NULL, 'jhaye.rebojo', '2026-05-25 17:38:02');
+(22, 'accept', NULL, 'jhaye.rebojo', '2026-05-25 17:38:02'),
+(23, 'accept', NULL, 'jhaye.rebojo', '2026-05-28 04:01:42');
 
 -- --------------------------------------------------------
 
@@ -1070,7 +1093,9 @@ INSERT INTO `requisition_item` (`request_id`, `user_id`, `office_id`, `facility_
 (19, 18, 1, 1, 'Ongoing', '2026-05-22 13:59:52', NULL, 'adsasd', NULL, 'submitted'),
 (20, 18, 1, 1, 'Ongoing', '2026-05-25 03:14:14', 'asdasdasd', 'asdasd', NULL, 'submitted'),
 (21, 18, 1, 1, 'Ongoing', '2026-05-25 17:06:18', 'asdasd', 'asdasd', NULL, 'submitted'),
-(22, 18, 1, 1, 'Ongoing', '2026-05-25 17:36:24', 'sample', 'another sample last nani matug nako', NULL, 'submitted');
+(22, 18, 1, 1, 'Ongoing', '2026-05-25 17:36:24', 'sample', 'another sample last nani matug nako', NULL, 'submitted'),
+(23, 18, 1, 1, 'Ongoing', '2026-05-28 04:00:07', 'sample', 'sample 1', NULL, 'submitted'),
+(24, 18, 1, 1, 'Pending', '2026-06-02 14:52:58', 'Sample rani', 'Sample11', NULL, 'submitted');
 
 -- --------------------------------------------------------
 
@@ -1113,7 +1138,9 @@ INSERT INTO `requisition_line` (`requisition_line_id`, `request_id`, `sort_order
 (25, 19, 0, 10, 'Motherboard', NULL, NULL, '', 1, 'unit'),
 (33, 20, 0, NULL, 'system unit', NULL, NULL, '', 1, 'unit'),
 (35, 21, 0, NULL, 'ambot practice gihapon hagoa', NULL, NULL, '', 1, 'unit'),
-(37, 22, 0, NULL, 'anothe sample', NULL, NULL, '', 1, 'unit');
+(37, 22, 0, NULL, 'anothe sample', NULL, NULL, '', 1, 'unit'),
+(39, 23, 0, NULL, 'last check', NULL, NULL, '', 1, 'unit'),
+(41, 24, 0, NULL, 'Sample11', NULL, NULL, '', 1, 'unit');
 
 -- --------------------------------------------------------
 
@@ -1210,12 +1237,12 @@ CREATE TABLE `user` (
 --
 
 INSERT INTO `user` (`user_id`, `Email`, `password`, `role`, `failed_attempts`, `lock_time`, `created_at`, `updated_at`, `deleted_at`, `office_id`, `photo_url`, `full_name`, `contact_number`, `has_consented`, `consent_version`, `consent_date`, `last_login`, `account_status`, `password_updated_at`, `remember_token`) VALUES
-(16, 'jhaye.rebojo@gmail.com', '$2y$10$6S2bbndd6VSX2I8..8tfPOdG.rXH87t86pZ33n.PlS.9xOuvfUEP.', 'Inventory Manager', 0, NULL, '2026-01-27 08:23:28', '2026-05-25 23:38:07', NULL, 3, 'uploads/users/user_1769646426_69ff5826.jpg', 'Jhaye Rebojo', '091321546', 1, 'v1.0', '2026-04-29 18:54:40', '2026-05-25 23:37:51', 'active', '2026-04-29 18:54:04', NULL),
-(18, 'Dean@gmail.com', '$2y$10$de9xTXdI4V9TjXs1zcaxU.dLyI1nhPDcZYvb.gO6bwvuK33sQqA2m', 'Dean', 0, NULL, '2026-03-12 13:00:28', '2026-05-26 09:47:07', NULL, 1, 'uploads/users/user_1773291737_2041b63c.webp', 'Cherryle Tarre', '0912345678', 1, 'v1.0', '2026-04-29 21:15:48', '2026-05-26 09:42:53', 'active', '2026-04-29 19:06:03', NULL),
+(16, 'jhaye.rebojo@gmail.com', '$2y$10$6S2bbndd6VSX2I8..8tfPOdG.rXH87t86pZ33n.PlS.9xOuvfUEP.', 'Inventory Manager', 0, NULL, '2026-01-27 08:23:28', '2026-06-02 21:20:27', NULL, 3, 'uploads/users/user_1769646426_69ff5826.jpg', 'Jhaye Rebojo', '091321546', 1, 'v1.0', '2026-04-29 18:54:40', '2026-06-02 21:20:27', 'active', '2026-04-29 18:54:04', 'e1c1facb9f8dbd51e5ea949fc16f0516a3e6133d8727adae0363882f0dd93f8b'),
+(18, 'Dean@gmail.com', '$2y$10$de9xTXdI4V9TjXs1zcaxU.dLyI1nhPDcZYvb.gO6bwvuK33sQqA2m', 'Dean', 0, NULL, '2026-03-12 13:00:28', '2026-06-02 21:20:18', NULL, 1, 'uploads/users/user_1773291737_2041b63c.webp', 'Cherryle Tarre', '0912345678', 1, 'v1.0', '2026-04-29 21:15:48', '2026-06-02 21:12:18', 'active', '2026-04-29 19:06:03', NULL),
 (19, 'LabManager@gmail.com', '$2y$10$Yoo3PFRNkhJHtC6cVOIeTesRhbrNz0D3/ow/p6dJAALnZN62542jy', 'Employee', 0, NULL, '2026-04-01 08:25:53', '2026-04-30 10:44:46', '2026-04-30 10:42:39', 1, 'uploads/users/user_1775003153_ed2ae0c8.jpg', NULL, NULL, 1, 'v1.0', '2026-04-30 10:40:56', '2026-04-30 10:40:56', 'disabled', '2026-04-30 10:40:56', NULL),
-(21, 'comptroller@gmail.com', '$2y$10$bADuUY9i75Aixo8e0pQHbu25SwQTWVMTJ.9fLXeYrwP/vsnlCfFVK', 'Comptroller', 0, NULL, '2026-04-10 18:49:51', '2026-05-24 18:30:03', NULL, 3, 'uploads/users/user_1775905526_09b52d68.webp', NULL, NULL, 1, 'v1.0', '2026-05-24 18:29:51', '2026-05-24 18:29:51', 'active', '2026-05-24 18:29:51', NULL),
-(22, 'gsd@gmail.com', '$2y$10$xk9JZ1BHhzZFVyXT6B9Lm.COpz/QniIWe/5seI.eKcZ6ICI/HV.6S', 'GSD officer', 0, NULL, '2026-04-11 19:02:37', '2026-05-26 09:56:55', NULL, 6, 'uploads/users/user_1775905479_73855861.jpg', NULL, NULL, 1, 'v1.0', '2026-05-12 20:40:22', '2026-05-26 09:47:22', 'active', '2026-05-12 20:40:22', NULL),
-(24, 'president@gmail.com', '$2y$10$kPwEUKoqoaEcuKRSPY/3K.EHb/yeADkWZIzKyjLK6O8q3yb0buN7i', 'President', 0, NULL, '2026-04-12 19:20:52', '2026-05-26 09:57:07', NULL, 0, 'uploads/users/user_1775992852_6dc238e8.jpg', NULL, NULL, 1, 'v1.0', '2026-05-24 18:30:25', '2026-05-26 09:57:07', 'active', '2026-05-24 18:31:05', '337971bb4ad440d4d94e9e3abf0d4021fbc18b72d3c7fcd3ae685ffeb6eea26a'),
+(21, 'comptroller@gmail.com', '$2y$10$bADuUY9i75Aixo8e0pQHbu25SwQTWVMTJ.9fLXeYrwP/vsnlCfFVK', 'Comptroller', 0, NULL, '2026-04-10 18:49:51', '2026-05-31 15:22:28', NULL, 3, 'uploads/users/user_1775905526_09b52d68.webp', NULL, NULL, 1, 'v1.0', '2026-05-24 18:29:51', '2026-05-31 15:21:30', 'active', '2026-05-24 18:29:51', NULL),
+(22, 'gsd@gmail.com', '$2y$10$xk9JZ1BHhzZFVyXT6B9Lm.COpz/QniIWe/5seI.eKcZ6ICI/HV.6S', 'GSD officer', 0, NULL, '2026-04-11 19:02:37', '2026-05-28 10:33:01', NULL, 6, 'uploads/users/user_1775905479_73855861.jpg', NULL, NULL, 1, 'v1.0', '2026-05-12 20:40:22', '2026-05-28 10:06:20', 'active', '2026-05-12 20:40:22', NULL),
+(24, 'president@gmail.com', '$2y$10$kPwEUKoqoaEcuKRSPY/3K.EHb/yeADkWZIzKyjLK6O8q3yb0buN7i', 'President', 0, NULL, '2026-04-12 19:20:52', '2026-06-01 22:44:15', NULL, 0, 'uploads/users/user_1775992852_6dc238e8.jpg', NULL, NULL, 1, 'v1.0', '2026-05-24 18:30:25', '2026-06-01 22:40:24', 'active', '2026-05-24 18:31:05', NULL),
 (26, 'canvasser@gmail.com', '$2y$10$66VNWUQLv3ECCWrWHTki6.Wy8II02NyrxiXJWv.atpi1ClkQGhYLW', 'Employee', 0, NULL, '2026-04-17 12:01:37', '2026-05-12 20:46:25', NULL, 6, NULL, NULL, NULL, 1, 'v1.0', '2026-04-29 19:26:01', '2026-05-12 20:41:06', 'active', '2026-04-29 19:26:01', NULL),
 (27, 'rex@gmail.com', '$2y$10$T3rnvyoMJcVnIAGOkMDwQe0QzrNGepC9zsChtwpHRz3NiaeD2.GIO', 'Employee', 0, NULL, '2026-04-20 23:18:17', '2026-04-30 10:47:36', '2026-04-30 10:47:36', 6, NULL, NULL, NULL, 1, 'v1.0', '2026-04-29 19:29:15', '2026-04-29 19:29:15', 'disabled', '2026-04-29 19:29:15', NULL),
 (28, 'new.dean@gmail.com', '$2y$10$fWsyI.BMNSb0SBzW8eLEd.SNacOgXd8Hxb5A/q570s8U5.ZH2FP1S', 'Dean', 0, NULL, '2026-04-30 11:02:06', '2026-04-30 11:09:19', NULL, 1, NULL, 'new dean', NULL, 1, 'v1.0', '2026-04-30 11:06:54', '2026-04-30 11:06:54', 'active', '2026-04-30 11:02:06', NULL),
@@ -1583,7 +1610,34 @@ INSERT INTO `user_activity` (`activity_id`, `user_id`, `activity_type`, `descrip
 (521, 22, 'Login', 'Successful login', '2026-05-25 23:39:28'),
 (522, 18, 'Login', 'Successful login', '2026-05-26 09:42:53'),
 (523, 22, 'Login', 'Successful login', '2026-05-26 09:47:22'),
-(524, 24, 'Login', 'Successful login', '2026-05-26 09:57:07');
+(524, 24, 'Login', 'Successful login', '2026-05-26 09:57:07'),
+(525, 18, 'Login', 'Successful login', '2026-05-26 20:24:00'),
+(526, 22, 'Login', 'Successful login', '2026-05-26 20:25:24'),
+(527, 18, 'Login', 'Successful login', '2026-05-28 09:59:36'),
+(528, 16, 'Login', 'Successful login', '2026-05-28 10:00:28'),
+(529, 18, 'Login', 'Successful login', '2026-05-28 10:00:49'),
+(530, 16, 'Login', 'Successful login', '2026-05-28 10:01:29'),
+(531, 22, 'Login', 'Successful login', '2026-05-28 10:02:14'),
+(532, 18, 'Login', 'Successful login', '2026-05-28 10:02:50'),
+(533, 22, 'Login', 'Successful login', '2026-05-28 10:06:20'),
+(534, 16, 'Login', 'Successful login', '2026-05-31 15:21:06'),
+(535, 21, 'Login', 'Successful login', '2026-05-31 15:21:30'),
+(536, 18, 'Login', 'Successful login', '2026-05-31 15:22:46'),
+(537, 24, 'Login', 'Successful login', '2026-06-01 22:40:24'),
+(538, 16, 'Login', 'Successful login', '2026-06-01 22:43:03'),
+(539, 16, 'Account Status', 'Set user #24 status to disabled', '2026-06-01 22:43:15'),
+(540, 16, 'Account Status', 'Set user #24 status to active', '2026-06-01 22:43:17'),
+(541, 16, 'Account Status', 'Set user #24 status to disabled', '2026-06-01 22:43:20'),
+(542, 16, 'Account Status', 'Set user #24 status to active', '2026-06-01 22:43:21'),
+(543, 16, 'Account Status', 'Set user #24 status to active', '2026-06-01 22:44:15'),
+(544, 18, 'Login', 'Successful login', '2026-06-02 20:37:50'),
+(545, 16, 'Login', 'Successful login', '2026-06-02 20:53:11'),
+(546, 18, 'Login', 'Successful login', '2026-06-02 20:53:36'),
+(547, 16, 'Login', 'Successful login', '2026-06-02 20:54:05'),
+(548, 18, 'Login', 'Successful login', '2026-06-02 20:54:51'),
+(549, 16, 'Login', 'Successful login', '2026-06-02 20:55:20'),
+(550, 18, 'Login', 'Successful login', '2026-06-02 21:12:18'),
+(551, 16, 'Login', 'Successful login', '2026-06-02 21:20:27');
 
 --
 -- Indexes for dumped tables
@@ -1603,8 +1657,7 @@ ALTER TABLE `canvasser_action_history`
 ALTER TABLE `canvass_verification_approval`
   ADD PRIMARY KEY (`request_id`),
   ADD KEY `idx_cva_canvas_assignee` (`canvas_assignee_user_id`),
-  ADD KEY `idx_cva_suggested_supplier` (`suggested_supplier_id`),
-  ADD KEY `idx_canvass_submission_status` (`canvas_submission_status`);
+  ADD KEY `idx_cva_suggested_supplier` (`suggested_supplier_id`);
 
 --
 -- Indexes for table `comptroller_action_history`
@@ -1733,7 +1786,8 @@ ALTER TABLE `requisition_canvass_detail`
   ADD PRIMARY KEY (`canvass_detail_id`),
   ADD KEY `idx_rcd_request` (`request_id`),
   ADD KEY `idx_rcd_line` (`requisition_line_id`),
-  ADD KEY `idx_rcd_user` (`user_id`);
+  ADD KEY `idx_rcd_user` (`user_id`),
+  ADD KEY `idx_canvass_detail_submission_status` (`canvass_submission_status`);
 
 --
 -- Indexes for table `requisition_canvass_detail_supplier`
@@ -1854,7 +1908,7 @@ ALTER TABLE `item_supplier`
 -- AUTO_INCREMENT for table `log_history`
 --
 ALTER TABLE `log_history`
-  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=459;
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=477;
 
 --
 -- AUTO_INCREMENT for table `notification_views`
@@ -1896,7 +1950,7 @@ ALTER TABLE `request_approval_suggested_supplier_item`
 -- AUTO_INCREMENT for table `requisition_canvass_detail`
 --
 ALTER TABLE `requisition_canvass_detail`
-  MODIFY `canvass_detail_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=58;
+  MODIFY `canvass_detail_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=62;
 
 --
 -- AUTO_INCREMENT for table `requisition_canvass_detail_supplier`
@@ -1908,13 +1962,13 @@ ALTER TABLE `requisition_canvass_detail_supplier`
 -- AUTO_INCREMENT for table `requisition_item`
 --
 ALTER TABLE `requisition_item`
-  MODIFY `request_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `request_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- AUTO_INCREMENT for table `requisition_line`
 --
 ALTER TABLE `requisition_line`
-  MODIFY `requisition_line_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
+  MODIFY `requisition_line_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
 
 --
 -- AUTO_INCREMENT for table `suppliers`
@@ -1932,7 +1986,7 @@ ALTER TABLE `user`
 -- AUTO_INCREMENT for table `user_activity`
 --
 ALTER TABLE `user_activity`
-  MODIFY `activity_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=525;
+  MODIFY `activity_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=552;
 
 --
 -- Constraints for dumped tables

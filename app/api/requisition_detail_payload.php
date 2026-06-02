@@ -24,11 +24,16 @@ function requisitionSqlSelectListAggregates(): string
 {
     return '(SELECT GROUP_CONCAT(rl.item_name ORDER BY rl.sort_order ASC, rl.requisition_line_id ASC SEPARATOR \'||\')
         FROM requisition_line rl WHERE rl.request_id = r.request_id) AS items_concat,
-        (SELECT GROUP_CONCAT(DISTINCT s.supplier_name ORDER BY s.supplier_name ASC SEPARATOR \'||\')
-        FROM requisition_canvass_detail cd
-        INNER JOIN requisition_canvass_detail_supplier cds ON cds.canvass_detail_id = cd.canvass_detail_id
-        INNER JOIN suppliers s ON s.supplier_id = cds.supplier_id
-        WHERE cd.request_id = r.request_id) AS suppliers_concat,
+        (SELECT GROUP_CONCAT(
+            COALESCE(NULLIF(TRIM(s.supplier_name), \'\'), \'—\')
+            ORDER BY cd.sort_order ASC, rassi.canvass_detail_id ASC
+            SEPARATOR \'||\')
+        FROM request_approval_suggested_supplier_item rassi
+        INNER JOIN requisition_canvass_detail cd
+            ON cd.canvass_detail_id = rassi.canvass_detail_id
+           AND cd.request_id = rassi.request_id
+        LEFT JOIN suppliers s ON s.supplier_id = rassi.supplier_id
+        WHERE rassi.request_id = r.request_id) AS suppliers_concat,
         (SELECT MIN(cds.price) FROM requisition_canvass_detail cd2
         INNER JOIN requisition_canvass_detail_supplier cds ON cds.canvass_detail_id = cd2.canvass_detail_id
         WHERE cd2.request_id = r.request_id AND cds.price IS NOT NULL) AS list_min_price';
@@ -76,8 +81,8 @@ function requisitionVerifierChainLocked(?array $approval): bool
 }
 
 /**
- * True when the canvass sheet (abstract of quotation) is accepted: `canvass_verification_approval.canvas_status = accept`.
- * Purchase requisition is shown only after this — not only after a later G.S.D. step.
+ * True when the canvass sheet has been verified by G.S.D., Comptroller, and President.
+ * Purchase requisition is available only after the full canvass verification chain completes.
  */
 function requisitionCanvassFormAcceptedForRequest(PDO $db, int $requestId): bool
 {
@@ -87,18 +92,27 @@ function requisitionCanvassFormAcceptedForRequest(PDO $db, int $requestId): bool
     try {
         require_once __DIR__ . '/approval_tables.php';
         if (!cwirmsApprovalTableExists($db, 'canvass_verification_approval')) {
-            return true;
+            return false;
         }
         $stmt = $db->prepare(
-            'SELECT LOWER(TRIM(COALESCE(canvas_status, \'\'))) FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+            'SELECT LOWER(TRIM(COALESCE(gsd_status, \'\'))),
+                    LOWER(TRIM(COALESCE(comp_status, \'\'))),
+                    LOWER(TRIM(COALESCE(pres_status, \'\')))
+             FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
         );
         $stmt->execute([$requestId]);
-        $v = strtolower(trim((string) ($stmt->fetchColumn() ?: '')));
+        $row = $stmt->fetch(PDO::FETCH_NUM);
+        if (!$row) {
+            return false;
+        }
+        $gsd = strtolower(trim((string) ($row[0] ?? '')));
+        $comp = strtolower(trim((string) ($row[1] ?? '')));
+        $pres = strtolower(trim((string) ($row[2] ?? '')));
     } catch (Throwable $e) {
         return false;
     }
 
-    return $v === 'accept';
+    return $gsd === 'accept' && $comp === 'accept' && $pres === 'accept';
 }
 
 /**

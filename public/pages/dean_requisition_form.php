@@ -46,7 +46,7 @@ $canShowPurchaseRequisitionLink = $viewingRequest
     && $viewRequestId > 0
     && $prAfterCanvassAccepted
     && (
-        $isInventoryManagerActiveReview
+        $isInventoryManager
         || $isPresidentActiveReview
         || ($isPresident && $from === 'history')
         || (

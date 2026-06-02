@@ -96,7 +96,7 @@
         };
     }
 
-    async function postSaveSuggestedSupplierItem(canvassDetailId, supplierId) {
+    async function postSaveSuggestedSupplierItem(canvassDetailId, supplierId, selectionSource) {
         if (!requestId || !canvassDetailId || !supplierId) {
             return;
         }
@@ -105,6 +105,7 @@
         body.set('request_id', String(requestId));
         body.set('canvass_detail_id', String(canvassDetailId));
         body.set('suggested_supplier_id', String(supplierId));
+        body.set('selection_source', selectionSource === 'preferred' ? 'preferred' : 'canvassed');
         try {
             const res = await fetch(gsdApi, {
                 method: 'POST',
@@ -119,6 +120,50 @@
         } catch {
             showToast('Network error saving suggested supplier for item.', 'error');
         }
+    }
+
+    async function postClearSuggestedSupplierItem(canvassDetailId) {
+        if (!requestId || !canvassDetailId) {
+            return;
+        }
+        const body = new URLSearchParams();
+        body.set('action', 'clear_suggested_supplier_item');
+        body.set('request_id', String(requestId));
+        body.set('canvass_detail_id', String(canvassDetailId));
+        try {
+            const res = await fetch(gsdApi, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+                credentials: 'include',
+            });
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.message || 'Could not clear suggested supplier for item.', 'error');
+            }
+        } catch {
+            showToast('Network error clearing suggested supplier for item.', 'error');
+        }
+    }
+
+    window.__imrmsClearSuggestedSupplierItem = postClearSuggestedSupplierItem;
+
+    function bindSuggestedSupplierMatrix(root) {
+        if (!root || root.dataset.imrmsGsdSuggestedBound) {
+            return;
+        }
+        root.dataset.imrmsGsdSuggestedBound = '1';
+        root.addEventListener('change', (e) => {
+            const radio = e.target.closest('.cv-suggested-item-radio');
+            if (!radio) {
+                return;
+            }
+            const sid = parseInt(radio.value || '0', 10);
+            const canvassDetailId = parseInt(radio.dataset.canvassDetailId || '0', 10);
+            if (sid > 0) {
+                postSaveSuggestedSupplierItem(canvassDetailId, sid, radio.dataset.selectionSource || 'canvassed');
+            }
+        });
     }
 
     function renderGsdCanvasAssigneeSuggestions(filterText, assignees) {
@@ -379,21 +424,9 @@
         const approveBtn = document.getElementById('comptrollerApproveBtn');
         const rejectBtn = document.getElementById('comptrollerRejectBtn');
         const undoBtn = document.getElementById('comptrollerUndoBtn');
-        const supplierTable = document.getElementById('cvSupplierTable');
-        if (supplierTable && !supplierTable.dataset.imrmsGsdSuggestedBound) {
-            supplierTable.dataset.imrmsGsdSuggestedBound = '1';
-            supplierTable.addEventListener('change', (e) => {
-                const radio = e.target.closest('.cv-suggested-item-radio');
-                if (!radio) {
-                    return;
-                }
-                const sid = parseInt(radio.value || '0', 10);
-                const canvassDetailId = parseInt(radio.dataset.canvassDetailId || '0', 10);
-                if (sid > 0) {
-                    postSaveSuggestedSupplierItem(canvassDetailId, sid);
-                }
-            });
-        }
+        const canvassedCards = document.getElementById('cvCanvassedCards');
+        bindSuggestedSupplierMatrix(canvassedCards);
+        bindSuggestedSupplierMatrix(document.getElementById('cvPreferredCards'));
 
         const postApproval = async (gsdStatus) => {
             if (gsdStatus === 'accept') {

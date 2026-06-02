@@ -174,6 +174,45 @@ function savePurchaseAuditSnapshot(
 }
 
 /**
+ * @return array<int, array<string, string>>
+ */
+function purchaseRequisitionDescriptionsByCanvassDetail(PDO $db, int $requestId): array
+{
+    $hasModelInCanvass = tableHasColumn($db, 'requisition_canvass_detail', 'model');
+    $hasNameInCanvass = tableHasColumn($db, 'requisition_canvass_detail', 'item_name');
+    $hasBrandInCanvass = tableHasColumn($db, 'requisition_canvass_detail', 'brand');
+
+    $nameExpr = $hasNameInCanvass ? 'NULLIF(TRIM(cd.item_name), \'\')' : 'NULL';
+    $brandExpr = $hasBrandInCanvass ? 'NULLIF(TRIM(cd.brand), \'\')' : 'NULL';
+    $modelExpr = $hasModelInCanvass ? 'NULLIF(TRIM(cd.model), \'\')' : 'NULL';
+
+    $stmt = $db->prepare(
+        "SELECT
+            cd.canvass_detail_id,
+            COALESCE($nameExpr, NULLIF(TRIM(rl.item_name), ''), NULLIF(TRIM(cd.component_label), ''), '—') AS item_name,
+            COALESCE($brandExpr, NULLIF(TRIM(rl.item_brand), ''), '') AS item_brand,
+            COALESCE($modelExpr, '') AS item_model,
+            COALESCE(NULLIF(TRIM(cd.specification), ''), NULLIF(TRIM(rl.item_category), ''), '') AS item_specification
+         FROM requisition_canvass_detail cd
+         LEFT JOIN requisition_line rl
+            ON rl.requisition_line_id = cd.requisition_line_id
+           AND rl.request_id = cd.request_id
+         WHERE cd.request_id = ?
+         ORDER BY cd.sort_order ASC, cd.canvass_detail_id ASC"
+    );
+    $stmt->execute([$requestId]);
+    $map = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $detailId = (int) ($row['canvass_detail_id'] ?? 0);
+        if ($detailId > 0) {
+            $map[$detailId] = $row;
+        }
+    }
+
+    return $map;
+}
+
+/**
  * Header, line items, and display fields for purchase requisition (snapshot / GET payload).
  *
  * @return array{
@@ -187,14 +226,7 @@ function savePurchaseAuditSnapshot(
  */
 function loadPurchaseRequisitionSnapshotData(PDO $db, int $requestId): ?array
 {
-    $hasModelInCanvass = tableHasColumn($db, 'requisition_canvass_detail', 'model');
-    $hasNameInCanvass = tableHasColumn($db, 'requisition_canvass_detail', 'item_name');
-    $hasBrandInCanvass = tableHasColumn($db, 'requisition_canvass_detail', 'brand');
-
-    $nameExpr = $hasNameInCanvass ? 'NULLIF(TRIM(cd.item_name), \'\')' : 'NULL';
-    $brandExpr = $hasBrandInCanvass ? 'NULLIF(TRIM(cd.brand), \'\')' : 'NULL';
-    $modelExpr = $hasModelInCanvass ? 'NULLIF(TRIM(cd.model), \'\')' : 'NULL';
-    $lineNameExpr = "LOWER(TRIM(COALESCE($nameExpr, NULLIF(TRIM(cd.component_label), ''))))";
+    require_once __DIR__ . '/../helpers/comptroller_qty_approval.php';
 
     $headerStmt = $db->prepare(
         'SELECT r.request_id, r.created_at, r.purpose, r.user_id, u.Email,
@@ -211,71 +243,35 @@ function loadPurchaseRequisitionSnapshotData(PDO $db, int $requestId): ?array
         return null;
     }
 
-    $stmt = $db->prepare(
-        "SELECT
-            rassi.canvass_detail_id,
-            COALESCE($nameExpr, NULLIF(TRIM(rl.item_name), ''), NULLIF(TRIM(cd.component_label), ''), '—') AS item_name,
-            COALESCE($brandExpr, NULLIF(TRIM(rl.item_brand), ''), '') AS item_brand,
-            COALESCE($modelExpr, '') AS item_model,
-            COALESCE(NULLIF(TRIM(cd.specification), ''), NULLIF(TRIM(rl.item_category), ''), '') AS item_specification,
-            COALESCE(
-                rl.quantity,
-                (
-                    SELECT rlq.quantity
-                    FROM requisition_line rlq
-                    WHERE rlq.request_id = rassi.request_id
-                      AND $lineNameExpr <> ''
-                      AND LOWER(TRIM(COALESCE(rlq.item_name, ''))) = $lineNameExpr
-                    ORDER BY rlq.sort_order ASC, rlq.requisition_line_id ASC
-                    LIMIT 1
-                ),
-                (
-                    SELECT
-                        CASE
-                            WHEN COUNT(*) = 1 THEN MAX(COALESCE(quantity, 1))
-                            ELSE NULL
-                        END
-                    FROM requisition_line rls
-                    WHERE rls.request_id = rassi.request_id
-                ),
-                1
-            ) AS quantity,
-            s.supplier_name,
-            cds.price AS unit_price
-         FROM request_approval_suggested_supplier_item rassi
-         INNER JOIN requisition_canvass_detail cd
-            ON cd.canvass_detail_id = rassi.canvass_detail_id
-         LEFT JOIN requisition_line rl
-            ON rl.requisition_line_id = cd.requisition_line_id
-           AND rl.request_id = rassi.request_id
-         INNER JOIN suppliers s
-            ON s.supplier_id = rassi.supplier_id
-         LEFT JOIN requisition_canvass_detail_supplier cds
-            ON cds.canvass_detail_id = cd.canvass_detail_id
-           AND cds.supplier_id = rassi.supplier_id
-         WHERE rassi.request_id = ?
-         ORDER BY cd.sort_order ASC, rassi.canvass_detail_id ASC"
-    );
-    $stmt->execute([$requestId]);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $overview = cwirmsComptrollerPricingOverviewForRequest($db, $requestId);
+    $pricingLines = $overview['lines'] ?? [];
+    $descByDetail = purchaseRequisitionDescriptionsByCanvassDetail($db, $requestId);
 
     $items = [];
     $grandTotal = 0.0;
-    foreach ($rows as $row) {
-        $qty = max(1, (int) ($row['quantity'] ?? 1));
-        $unitPrice = is_numeric($row['unit_price']) ? (float) $row['unit_price'] : 0.0;
-        $amount = $qty * $unitPrice;
+    foreach ($pricingLines as $line) {
+        $detailId = (int) ($line['canvass_detail_id'] ?? 0);
+        $desc = $descByDetail[$detailId] ?? [];
+
+        $qty = max(0, (int) ($line['accepted_qty'] ?? $line['requested_qty'] ?? $line['quantity'] ?? 0));
+        $unitPrice = isset($line['unit_price']) && is_numeric($line['unit_price'])
+            ? (float) $line['unit_price']
+            : 0.0;
+        $amount = round($qty * $unitPrice, 2);
         $grandTotal += $amount;
+
+        $supplierName = trim((string) ($line['supplier_name'] ?? ''));
+        $itemName = trim((string) ($desc['item_name'] ?? $line['item_name'] ?? ''));
 
         $items[] = [
             'description' => [
-                'name' => (string) ($row['item_name'] ?? ''),
-                'brand' => (string) ($row['item_brand'] ?? ''),
-                'model' => (string) ($row['item_model'] ?? ''),
-                'specification' => (string) ($row['item_specification'] ?? ''),
+                'name' => $itemName !== '' ? $itemName : '—',
+                'brand' => (string) ($desc['item_brand'] ?? ''),
+                'model' => (string) ($desc['item_model'] ?? ''),
+                'specification' => (string) ($desc['item_specification'] ?? ''),
             ],
             'qty' => $qty,
-            'supplier_name' => (string) ($row['supplier_name'] ?? '—'),
+            'supplier_name' => $supplierName !== '' ? $supplierName : '—',
             'unit_price' => $unitPrice,
             'amount' => $amount,
         ];
@@ -342,7 +338,7 @@ try {
                 sendJson(['success' => false, 'message' => 'No purchase requisition lines yet (suggested suppliers required).']);
             }
             if (!requestGsdCanvassAccepted($db, $requestId)) {
-                sendJson(['success' => false, 'message' => 'The canvass form must be accepted before purchase requisition verification.']);
+                sendJson(['success' => false, 'message' => 'G.S.D., Comptroller, and President must verify the canvass form before purchase requisition verification.']);
             }
         }
 
@@ -424,7 +420,7 @@ try {
     }
 
     if (!requisitionCanvassFormAcceptedForRequest($db, $requestId)) {
-        sendJson(['success' => false, 'message' => 'Purchase requisition is available only after the canvass form is accepted.']);
+        sendJson(['success' => false, 'message' => 'Purchase requisition is available only after G.S.D., Comptroller, and President verify the canvass form.']);
     }
 
     $snap = loadPurchaseRequisitionSnapshotData($db, $requestId);
