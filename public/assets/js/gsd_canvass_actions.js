@@ -12,6 +12,8 @@
 
     const gsdAssigneesLiveRef = { list: [] };
     let gsdCanvasAssigneesCache = null;
+    let gsdApprovalState = null;
+    let assigneePickForced = false;
 
     function escapeHtml(s) {
         const d = document.createElement('div');
@@ -90,10 +92,121 @@
 
     function getGsdCanvasAssigneeEls() {
         return {
+            root: document.getElementById('gsdAssigneeInApprovalWrap'),
             input: document.getElementById('gsdCanvasAssigneeInput'),
             hidden: document.getElementById('gsdCanvasAssigneeUserId'),
             list: document.getElementById('gsdCanvasAssigneeSuggestions'),
+            pickWrap: document.getElementById('gsdAssigneePickWrap'),
+            assignedWrap: document.getElementById('gsdAssigneeAssignedWrap'),
+            assignedName: document.getElementById('gsdAssigneeAssignedName'),
+            assignBtn: document.getElementById('gsdCanvasAssignBtn'),
+            changeBtn: document.getElementById('gsdCanvasAssigneeChangeBtn'),
+            pickHint: document.getElementById('gsdAssigneePickHint'),
         };
+    }
+
+    function isAssigneePickMode() {
+        const { root } = getGsdCanvasAssigneeEls();
+        return Boolean(root && root.classList.contains('gsd-assignee-mode-pick'));
+    }
+
+    function isCanvasDone(approval) {
+        const canvasSt = String((approval && approval.canvas_status) || 'pending').trim().toLowerCase();
+        return canvasSt === 'accept' || canvasSt === 'reject';
+    }
+
+    function hasSavedAssignee(approval) {
+        const label = approval && approval.canvassed_by ? String(approval.canvassed_by).trim() : '';
+        const uid =
+            approval && approval.canvas_assignee_user_id
+                ? parseInt(String(approval.canvas_assignee_user_id), 10)
+                : 0;
+        return label !== '' && uid > 0;
+    }
+
+    function resolveAssigneeUserId(approval, assignees) {
+        const aid = approval && approval.canvas_assignee_user_id
+            ? parseInt(String(approval.canvas_assignee_user_id), 10)
+            : 0;
+        if (aid > 0) {
+            return aid;
+        }
+        const cb = approval && approval.canvassed_by ? String(approval.canvassed_by).trim().toLowerCase() : '';
+        if (!cb) {
+            return 0;
+        }
+        const hit = assignees.find((a) => (a.label || '').trim().toLowerCase() === cb);
+        return hit ? Number(hit.user_id) : 0;
+    }
+
+    function updateAssignButtonState() {
+        const { assignBtn, hidden } = getGsdCanvasAssigneeEls();
+        if (!assignBtn) {
+            return;
+        }
+        const uid = hidden && hidden.value ? parseInt(hidden.value, 10) : 0;
+        assignBtn.disabled = !(uid > 0);
+    }
+
+    function showPickMode(clearPending) {
+        const els = getGsdCanvasAssigneeEls();
+        if (els.root) {
+            els.root.classList.add('gsd-assignee-mode-pick');
+            els.root.classList.remove('gsd-assignee-mode-assigned');
+        }
+        if (clearPending) {
+            if (els.hidden) {
+                els.hidden.value = '';
+            }
+            if (els.input) {
+                els.input.value = '';
+            }
+        }
+        if (els.input) {
+            els.input.disabled = false;
+            els.input.removeAttribute('aria-disabled');
+        }
+        if (els.assignBtn) {
+            els.assignBtn.hidden = false;
+        }
+        if (els.pickHint) {
+            els.pickHint.hidden = false;
+        }
+        if (els.changeBtn) {
+            els.changeBtn.hidden = true;
+        }
+        if (els.list) {
+            els.list.hidden = true;
+            els.list.innerHTML = '';
+        }
+        updateAssignButtonState();
+    }
+
+    function showAssignedMode(label, allowChange) {
+        const els = getGsdCanvasAssigneeEls();
+        if (els.root) {
+            els.root.classList.remove('gsd-assignee-mode-pick');
+            els.root.classList.add('gsd-assignee-mode-assigned');
+        }
+        if (els.assignedName) {
+            els.assignedName.textContent = label || '';
+        }
+        if (els.changeBtn) {
+            els.changeBtn.hidden = !allowChange;
+        }
+        if (els.list) {
+            els.list.hidden = true;
+            els.list.innerHTML = '';
+        }
+    }
+
+    function syncCanvasserApprovalDetail(label) {
+        const detail = document.getElementById('cvApprCanvasserDetail');
+        if (!detail || !label) {
+            return;
+        }
+        detail.textContent = label;
+        detail.setAttribute('title', label);
     }
 
     async function postSaveSuggestedSupplierItem(canvassDetailId, supplierId, selectionSource) {
@@ -211,11 +324,12 @@
             list.hidden = true;
             list.innerHTML = '';
         }
+        updateAssignButtonState();
     }
 
     async function postSaveGsdCanvasAssignee(uid) {
         if (!requestId || !uid) {
-            return;
+            return null;
         }
         const body = new URLSearchParams();
         body.set('action', 'save_canvas_assignee');
@@ -231,63 +345,44 @@
             const data = await res.json();
             if (!data.success) {
                 showToast(data.message || 'Could not save assignee.', 'error');
+                return null;
             }
+            showToast(data.message || 'Canvasser assigned.');
+            return data;
         } catch {
             showToast('Network error saving assignee.', 'error');
+            return null;
         }
     }
 
-    function syncGsdCanvasAssigneeFromApproval(approval, assignees) {
+    function renderAssigneeUi(approval, assignees) {
         const els = getGsdCanvasAssigneeEls();
         if (!els.input) {
             return;
         }
-        const cb = approval && approval.canvassed_by ? String(approval.canvassed_by) : '';
-        if (!cb) {
-            return;
-        }
-        if (els.input.value.trim() === '' || els.input.value.trim() === cb) {
-            els.input.value = cb;
-        }
-        const hit = assignees.find((a) => (a.label || '').toLowerCase() === cb.toLowerCase());
-        if (hit && els.hidden) {
-            els.hidden.value = String(hit.user_id);
-        }
-    }
 
-    function updateGsdCanvasAssigneeFieldState(approval, assignees) {
-        const els = getGsdCanvasAssigneeEls();
-        if (!els.input) {
-            return;
-        }
-        const canvasSt = String((approval && approval.canvas_status) || 'pending').trim().toLowerCase();
-        const canvasDone = canvasSt === 'accept' || canvasSt === 'reject';
+        const canvasDone = isCanvasDone(approval);
+        const saved = hasSavedAssignee(approval);
+        const label = saved ? String(approval.canvassed_by).trim() : '';
 
         if (canvasDone) {
-            els.input.disabled = true;
+            showAssignedMode(label, false);
             if (els.hidden) {
                 els.hidden.value = '';
-            }
-            const cb = (approval && approval.canvassed_by) || '';
-            if (cb) {
-                els.input.value = cb;
-            }
-            if (els.list) {
-                els.list.hidden = true;
-                els.list.innerHTML = '';
             }
             return;
         }
 
-        els.input.disabled = false;
-        if (!(approval && approval.canvassed_by)) {
-            els.input.value = '';
-            if (els.hidden) {
-                els.hidden.value = '';
+        if (saved && !assigneePickForced) {
+            const uid = resolveAssigneeUserId(approval, assignees);
+            if (els.hidden && uid > 0) {
+                els.hidden.value = String(uid);
             }
-        } else {
-            syncGsdCanvasAssigneeFromApproval(approval, assignees);
+            showAssignedMode(label, true);
+            return;
         }
+
+        showPickMode(assigneePickForced);
     }
 
     function bindGsdCanvasAssigneePickerEventsOnce(assigneesRef) {
@@ -300,35 +395,71 @@
         const getAssignees = () => (Array.isArray(assigneesRef.list) ? assigneesRef.list : []);
 
         const onFilter = () => {
-            if (els.input.disabled) {
+            if (!isAssigneePickMode() || els.input.disabled) {
                 return;
             }
             renderGsdCanvasAssigneeSuggestions(els.input.value, getAssignees());
         };
 
-        els.input.addEventListener('input', onFilter);
+        els.input.addEventListener('input', () => {
+            if (!isAssigneePickMode()) {
+                return;
+            }
+            if (els.hidden) {
+                els.hidden.value = '';
+            }
+            updateAssignButtonState();
+            onFilter();
+        });
         els.input.addEventListener('focus', onFilter);
+        els.input.addEventListener('click', onFilter);
 
         els.list?.addEventListener('mousedown', (e) => {
             const li = e.target.closest('li[data-user-id]');
-            if (!li || els.input.disabled) {
+            if (!li || !isAssigneePickMode() || els.input.disabled) {
                 return;
             }
             e.preventDefault();
             const uid = Number(li.dataset.userId);
             const row = getAssignees().find((a) => Number(a.user_id) === uid);
-            const label = row ? row.label : '';
-            selectGsdCanvasAssignee(uid, label);
-            if (uid > 0) {
-                postSaveGsdCanvasAssignee(uid);
-            }
+            const pickLabel = row ? row.label : '';
+            selectGsdCanvasAssignee(uid, pickLabel);
         });
 
-        document.addEventListener('click', (e) => {
-            if (!els.list || !els.input) {
+        els.assignBtn?.addEventListener('click', async () => {
+            const uid = els.hidden && els.hidden.value ? parseInt(els.hidden.value, 10) : 0;
+            if (uid <= 0) {
                 return;
             }
-            if (els.input.contains(e.target) || els.list.contains(e.target)) {
+            els.assignBtn.disabled = true;
+            const data = await postSaveGsdCanvasAssignee(uid);
+            els.assignBtn.disabled = false;
+            if (!data) {
+                updateAssignButtonState();
+                return;
+            }
+            assigneePickForced = false;
+            gsdApprovalState = {
+                ...(gsdApprovalState || {}),
+                canvassed_by: data.canvassed_by || (els.input && els.input.value) || '',
+                canvas_assignee_user_id: data.canvas_assignee_user_id || uid,
+                canvas_status: (gsdApprovalState && gsdApprovalState.canvas_status) || 'pending',
+            };
+            renderAssigneeUi(gsdApprovalState, getAssignees());
+            syncCanvasserApprovalDetail(String(gsdApprovalState.canvassed_by || '').trim());
+        });
+
+        els.changeBtn?.addEventListener('click', () => {
+            assigneePickForced = true;
+            showPickMode(true);
+            els.input?.focus();
+        });
+
+        document.addEventListener('pointerdown', (e) => {
+            if (!els.list || !els.root) {
+                return;
+            }
+            if (els.root.contains(e.target)) {
                 return;
             }
             els.list.hidden = true;
@@ -337,9 +468,18 @@
 
     function initGsdCanvasAssigneePicker(approval, assignees) {
         gsdAssigneesLiveRef.list = assignees;
-        updateGsdCanvasAssigneeFieldState(approval, assignees);
+        renderAssigneeUi(approval, assignees);
         bindGsdCanvasAssigneePickerEventsOnce(gsdAssigneesLiveRef);
     }
+
+    function syncGsdAssigneeUiFromApproval(approval) {
+        gsdApprovalState = approval && typeof approval === 'object' ? approval : null;
+        if (!assigneePickForced) {
+            renderAssigneeUi(gsdApprovalState, gsdAssigneesLiveRef.list || []);
+        }
+    }
+
+    window.__imrmsGsdAssigneeSyncApproval = syncGsdAssigneeUiFromApproval;
 
     function resolveGsdCanvasAssigneeUserId(assignees, approval) {
         const els = getGsdCanvasAssigneeEls();
@@ -347,25 +487,7 @@
         if (uid > 0) {
             return uid;
         }
-        const t = (els.input && els.input.value.trim().toLowerCase()) || '';
-        if (!t) {
-            return 0;
-        }
-        const hit = assignees.find(
-            (a) =>
-                (a.label || '').toLowerCase() === t ||
-                (a.email || '').toLowerCase() === t ||
-                (a.email || '').toLowerCase().startsWith(`${t}@`)
-        );
-        if (hit) {
-            return Number(hit.user_id);
-        }
-        const cb = approval && approval.canvassed_by ? String(approval.canvassed_by).toLowerCase() : '';
-        if (cb && cb === t) {
-            const h2 = assignees.find((a) => (a.label || '').toLowerCase() === cb);
-            return h2 ? Number(h2.user_id) : 0;
-        }
-        return 0;
+        return resolveAssigneeUserId(approval, assignees);
     }
 
     async function fetchGsdApproval() {
@@ -416,6 +538,8 @@
 
     async function init() {
         const approval = await fetchGsdApproval();
+        gsdApprovalState = approval;
+        assigneePickForced = false;
         setGsdApprovalButtonsState(approval);
 
         const assignees = await fetchGsdCanvasAssigneesList();
@@ -443,8 +567,7 @@
             body.set('action', 'set_gsd_approval');
             body.set('request_id', String(requestId));
             body.set('gsd_status', gsdStatus);
-            const hid = document.getElementById('gsdCanvasAssigneeUserId');
-            const uid = hid && hid.value ? parseInt(hid.value, 10) : 0;
+            const uid = resolveGsdCanvasAssigneeUserId(assignees, gsdApprovalState || approval);
             if (uid > 0) {
                 body.set('canvas_assignee_user_id', String(uid));
             }

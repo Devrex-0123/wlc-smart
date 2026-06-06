@@ -175,9 +175,18 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                         <input type="tel" name="phone_number" id="phone_number" placeholder="e.g. +1 (555) 123-4567">
                     </div>
                     <div class="form-group">
+                        <label>TIN <span class="optional-label">(optional)</span></label>
+                        <input type="text" name="tin" id="supplier_tin" maxlength="20" placeholder="e.g. 123-456-789-000" autocomplete="off">
+                        <p class="field-hint">Leave blank for online shops without a BIR TIN.</p>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
                         <label>Postal Code</label>
                         <input type="text" name="postal_code" id="postal_code" placeholder="e.g. 12345">
                     </div>
+                    <div class="form-group"></div>
                 </div>
 
                 <div class="form-row">

@@ -2,6 +2,7 @@
 session_start();
 header("Content-Type: application/json");
 require_once __DIR__ . '/../classes/db.php';
+require_once __DIR__ . '/../helpers/supplier.php';
 
 try {
     if (!isset($_SESSION['user_id'])) {
@@ -10,6 +11,7 @@ try {
     }
 
     $db = Database::connect();
+    ensureSupplierTinColumn($db);
     $action = $_POST['action'] ?? '';
 
     // Activity Logging Function
@@ -49,6 +51,7 @@ try {
         $country = trim($_POST['country'] ?? '');
         $postal_code = trim($_POST['postal_code'] ?? '');
         $status = $_POST['status'] ?? 'Active';
+        $tin = cwirmsNormalizeSupplierTin($_POST['tin'] ?? null);
 
         if (!$supplier_name) {
             echo json_encode(['success' => false, 'message' => 'Supplier name is required']);
@@ -80,8 +83,23 @@ try {
             }
         }
 
-        $stmt = $db->prepare("INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, status, supplier_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$supplier_name, $contact_person, $phone_number, $email, $address, $city, $country, $postal_code, $status, $supplier_image]);
+        $stmt = $db->prepare(
+            'INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, tin, status, supplier_image)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $supplier_name,
+            $contact_person,
+            $phone_number,
+            $email,
+            $address,
+            $city,
+            $country,
+            $postal_code,
+            $tin,
+            $status,
+            $supplier_image,
+        ]);
 
         logActivity($_SESSION['user_id'], 'Add Supplier', "Added supplier: $supplier_name");
 
@@ -101,6 +119,7 @@ try {
         $country = trim($_POST['country'] ?? '');
         $postal_code = trim($_POST['postal_code'] ?? '');
         $status = $_POST['status'] ?? 'Active';
+        $tin = cwirmsNormalizeSupplierTin($_POST['tin'] ?? null);
 
         if (!$supplier_id || !$supplier_name) {
             echo json_encode(['success' => false, 'message' => 'Invalid data']);
@@ -145,8 +164,25 @@ try {
             }
         }
 
-        $stmt = $db->prepare("UPDATE suppliers SET supplier_name = ?, contact_person = ?, phone_number = ?, email = ?, address = ?, city = ?, country = ?, postal_code = ?, status = ?, supplier_image = ? WHERE supplier_id = ?");
-        $stmt->execute([$supplier_name, $contact_person, $phone_number, $email, $address, $city, $country, $postal_code, $status, $supplier_image, $supplier_id]);
+        $stmt = $db->prepare(
+            'UPDATE suppliers
+             SET supplier_name = ?, contact_person = ?, phone_number = ?, email = ?, address = ?, city = ?, country = ?, postal_code = ?, tin = ?, status = ?, supplier_image = ?
+             WHERE supplier_id = ?'
+        );
+        $stmt->execute([
+            $supplier_name,
+            $contact_person,
+            $phone_number,
+            $email,
+            $address,
+            $city,
+            $country,
+            $postal_code,
+            $tin,
+            $status,
+            $supplier_image,
+            $supplier_id,
+        ]);
 
         logActivity($_SESSION['user_id'], 'Edit Supplier', "Updated supplier: {$oldSupplier['supplier_name']} → $supplier_name");
 

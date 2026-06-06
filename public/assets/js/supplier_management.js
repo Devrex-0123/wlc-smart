@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cityInput = document.getElementById('supplier_city');
     const countryInput = document.getElementById('supplier_country');
     const postalCodeInput = document.getElementById('postal_code');
+    const tinInput = document.getElementById('supplier_tin');
     const statusInput = document.getElementById('supplier_status');
     const supplierImageInput = document.getElementById('supplier_image');
     const imagePreview = document.getElementById('imagePreview');
@@ -44,6 +45,15 @@ document.addEventListener('DOMContentLoaded', () => {
         div.textContent = msg;
         container.appendChild(div);
         setTimeout(() => div.remove(), 4000);
+    }
+
+    function formatTinInputValue(raw) {
+        const digits = String(raw || '').replace(/\D/g, '').slice(0, 12);
+        const parts = [];
+        for (let i = 0; i < digits.length; i += 3) {
+            parts.push(digits.slice(i, i + 3));
+        }
+        return parts.join('-');
     }
 
     // ==================== ESCAPE HTML ====================
@@ -223,6 +233,13 @@ document.addEventListener('DOMContentLoaded', () => {
         imagePreview.innerHTML = '<i class="fas fa-image"></i><p>No image selected</p>';
     }
 
+    tinInput?.addEventListener('input', () => {
+        const formatted = formatTinInputValue(tinInput.value);
+        if (tinInput.value !== formatted) {
+            tinInput.value = formatted;
+        }
+    });
+
     // ==================== IMAGE PREVIEW ====================
     supplierImageInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -303,6 +320,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 cityInput.value = supplier.city || '';
                 countryInput.value = supplier.country || '';
                 postalCodeInput.value = supplier.postal_code || '';
+                if (tinInput) {
+                    tinInput.value = supplier.tin || '';
+                }
                 statusInput.value = supplier.status || 'Active';
 
                 // Handle image preview

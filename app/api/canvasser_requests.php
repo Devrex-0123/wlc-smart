@@ -10,6 +10,8 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/../classes/db.php';
 require_once __DIR__ . '/requisition_detail_payload.php';
 require_once __DIR__ . '/approval_tables.php';
+require_once __DIR__ . '/../helpers/canvass_pricing_overview.php';
+require_once __DIR__ . '/../helpers/supplier.php';
 
 function sendJson(array $payload): void
 {
@@ -317,6 +319,16 @@ try {
             sendJson(['success' => false, 'message' => $quoteErr]);
         }
 
+        foreach ($suppliers as $s) {
+            if (!is_array($s)) {
+                continue;
+            }
+            $discountErr = cwirmsValidateCanvassSupplierDiscountPayload($s['discounts'] ?? null);
+            if ($discountErr !== null) {
+                sendJson(['success' => false, 'message' => $discountErr]);
+            }
+        }
+
         $verifySup = $db->prepare('SELECT supplier_id FROM suppliers WHERE supplier_id = ?');
         foreach ($payloadSupplierIds as $sid) {
             $verifySup->execute([$sid]);
@@ -380,9 +392,11 @@ try {
                 $cdByLineIndex[$li] = $cdId;
             }
 
+            ensureCanvassSupplierNotesColumns($db);
+            ensureCanvassSupplierDiscountsTable($db);
             $upsertCell = $db->prepare(
-                'INSERT INTO requisition_canvass_detail_supplier (canvass_detail_id, supplier_id, price) VALUES (?, ?, ?)
-                 ON DUPLICATE KEY UPDATE price = VALUES(price)'
+                'INSERT INTO requisition_canvass_detail_supplier (canvass_detail_id, supplier_id, price, benefits) VALUES (?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE price = VALUES(price), benefits = VALUES(benefits)'
             );
             $delCell = $db->prepare(
                 'DELETE FROM requisition_canvass_detail_supplier WHERE canvass_detail_id = ? AND supplier_id = ?'
@@ -408,6 +422,8 @@ try {
                     } elseif (array_key_exists((string) $li, $prices)) {
                         $raw = $prices[(string) $li];
                     }
+                    $benefitsRaw = trim((string) ($s['benefits'] ?? ''));
+                    $benefitsVal = $benefitsRaw !== '' ? $benefitsRaw : null;
                     if ($raw === null || $raw === '' || !is_numeric($raw)) {
                         $delCell->execute([$cdId, $sid]);
                         continue;
@@ -416,9 +432,11 @@ try {
                     if ($priceVal < 0) {
                         throw new RuntimeException('Prices cannot be negative.');
                     }
-                    $upsertCell->execute([$cdId, $sid, $priceVal]);
+                    $upsertCell->execute([$cdId, $sid, $priceVal, $benefitsVal]);
                 }
             }
+
+            cwirmsPersistCanvassSupplierDiscountsForRequest($db, $requestId, $suppliers);
 
             $placeholders = implode(',', array_fill(0, count($payloadSupplierIds), '?'));
             $delOrphan = $db->prepare(
@@ -484,10 +502,14 @@ try {
         $city = trim((string) ($_POST['city'] ?? ''));
         $country = trim((string) ($_POST['country'] ?? ''));
         $postalCode = trim((string) ($_POST['postal_code'] ?? ''));
+        $tinRaw = trim((string) ($_POST['tin'] ?? ''));
 
         if ($supplierName === '') {
             sendJson(['success' => false, 'message' => 'Supplier name is required.']);
         }
+
+        ensureSupplierTinColumn($db);
+        $tin = cwirmsNormalizeSupplierTin($tinRaw !== '' ? $tinRaw : null);
 
         $stmtChk = $db->prepare('SELECT supplier_id FROM suppliers WHERE LOWER(supplier_name) = LOWER(?) LIMIT 1');
         $stmtChk->execute([$supplierName]);
@@ -495,7 +517,7 @@ try {
             sendJson(['success' => false, 'message' => 'A supplier with this name already exists. Choose it from the list instead.']);
         }
 
-        $ins = $db->prepare('INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, status, supplier_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $ins = $db->prepare('INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, tin, status, supplier_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         $ins->execute([
             $supplierName,
             $contactPerson !== '' ? $contactPerson : null,
@@ -505,12 +527,13 @@ try {
             $city !== '' ? $city : null,
             $country !== '' ? $country : null,
             $postalCode !== '' ? $postalCode : null,
+            $tin,
             'Active',
             null,
         ]);
         $newId = (int) $db->lastInsertId();
 
-        $sel = $db->prepare('SELECT supplier_id, supplier_name, supplier_image, contact_person, phone_number, email, address, city, country, postal_code FROM suppliers WHERE supplier_id = ?');
+        $sel = $db->prepare('SELECT supplier_id, supplier_name, supplier_image, contact_person, phone_number, email, address, city, country, postal_code, tin FROM suppliers WHERE supplier_id = ?');
         $sel->execute([$newId]);
         $row = $sel->fetch(PDO::FETCH_ASSOC);
 

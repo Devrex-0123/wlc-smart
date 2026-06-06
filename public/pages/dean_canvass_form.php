@@ -255,6 +255,7 @@ $isReviewerCanvassReadonly = $isGsdCanvassReview
     || $isPresidentCanvassReview
     || $isComptrollerCanvassHistory
     || $isPresidentCanvassHistory;
+$gsdVerificationStatus = 'pending';
 $showCanvassPricingOverview = $isGsdCanvassReview;
 
 $canViewQtyPricingOverview = $isComptrollerCanvassReview
@@ -272,14 +273,26 @@ $comptrollerCompStatus = 'pending';
 $comptrollerPricingOverview = null;
 $comptrollerPricingReadonly = $isComptrollerCanvassHistory;
 $comptrollerApprovalFlash = null;
-if ($accessError === null && $requestId > 0 && $canViewQtyPricingOverview) {
+if ($accessError === null && $requestId > 0 && ($canViewQtyPricingOverview || $isGsdCanvassReview)) {
     require_once __DIR__ . '/../../app/api/approval_tables.php';
     require_once __DIR__ . '/../../app/helpers/comptroller_qty_approval.php';
     ensureComptrollerPartialQtyColumns($db);
     ensureRequisitionPreferredQuoteColumns($db);
     ensureSuggestedSupplierSelectionSourceColumn($db);
 
-    if (cwirmsComptrollerRequestHasSuggestedSuppliersPerItem($db, $requestId)) {
+    if ($isGsdCanvassReview) {
+        $gsdStatusStmt = $db->prepare(
+            'SELECT LOWER(TRIM(COALESCE(gsd_status, \'pending\'))) FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+        );
+        $gsdStatusStmt->execute([$requestId]);
+        $gsdVerificationStatus = strtolower(trim((string) ($gsdStatusStmt->fetchColumn() ?: 'pending')));
+        if ($gsdVerificationStatus === '') {
+            $gsdVerificationStatus = 'pending';
+        }
+        $showCanvassPricingOverview = !in_array($gsdVerificationStatus, ['accept', 'reject'], true);
+    }
+
+    if ($canViewQtyPricingOverview && cwirmsComptrollerRequestHasSuggestedSuppliersPerItem($db, $requestId)) {
         $showComptrollerPricingOverview = true;
 
         if ($isComptrollerCanvassReview || $isComptrollerCanvassHistory) {
@@ -564,6 +577,9 @@ $pageTitle = $rfRequestId > 0
                         <input type="text" id="cvPrefSupplierSearch" class="cv-pref-search-input" placeholder="Search supplier name or contact…" autocomplete="off">
                     </div>
                     <div id="cvPrefSupplierSearchList" class="cv-pref-search-list"></div>
+                    <div id="cvPrefSupplierInfoPanel" class="cv-pref-supplier-info-panel" hidden>
+                        <div id="cvPrefSupplierInfoPanelBody" class="cv-pref-supplier-info-panel-body"></div>
+                    </div>
                 </div>
                 <div class="supplier-table-group-label preferred-supplier-label">Preferred supplier matrix</div>
                 <div id="cvPreferredCards" class="cv-preferred-cards" aria-live="polite">
@@ -639,12 +655,20 @@ $pageTitle = $rfRequestId > 0
                         <div class="approval-sub cv-appr-kind"><?php echo $isGsdCanvassReview ? 'Assign &amp; status' : 'Canvassed by'; ?></div>
                         <div class="cv-appr-detail" id="cvApprCanvasserDetail"></div>
                         <?php if ($isGsdCanvassReview): ?>
-                        <div class="gsd-canvas-assignee-field gsd-assignee-in-approval" id="gsdAssigneeInApprovalWrap">
+                        <div class="gsd-canvas-assignee-field gsd-assignee-in-approval gsd-assignee-mode-pick" id="gsdAssigneeInApprovalWrap">
                             <input type="hidden" id="gsdCanvasAssigneeUserId" value="">
                             <input type="hidden" id="gsdSuggestedSupplierId" value="">
-                            <label class="sr-only" for="gsdCanvasAssigneeInput">Assign staff to canvass</label>
-                            <input type="text" id="gsdCanvasAssigneeInput" class="gsd-canvas-assignee-input" autocomplete="off" placeholder="Search name or email to assign…">
-                            <ul id="gsdCanvasAssigneeSuggestions" class="gsd-canvas-assignee-suggestions" role="listbox" hidden></ul>
+                            <div id="gsdAssigneePickWrap" class="gsd-assignee-pick-wrap">
+                                <label class="sr-only" for="gsdCanvasAssigneeInput">Assign staff to canvass</label>
+                                <input type="text" id="gsdCanvasAssigneeInput" class="gsd-canvas-assignee-input" autocomplete="off" placeholder="Search name or email to assign…">
+                                <ul id="gsdCanvasAssigneeSuggestions" class="gsd-canvas-assignee-suggestions" role="listbox" hidden></ul>
+                                <button type="button" id="gsdCanvasAssignBtn" class="gsd-canvas-assign-btn" disabled>Assign</button>
+                                <p id="gsdAssigneePickHint" class="gsd-canvas-assignee-hint gsd-assignee-pick-hint">Selecting a name does not save automatically. Click Assign to confirm.</p>
+                            </div>
+                            <div id="gsdAssigneeAssignedWrap" class="gsd-assignee-assigned-wrap" hidden>
+                                <div id="gsdAssigneeAssignedName" class="gsd-assignee-assigned-name" aria-live="polite"></div>
+                                <button type="button" id="gsdCanvasAssigneeChangeBtn" class="gsd-canvas-assignee-change-btn">Change</button>
+                            </div>
                             <p class="gsd-canvas-assignee-hint gsd-assignee-in-approval-hint">Office staff only. Required before <strong>Verify</strong> while canvassing is open.</p>
                         </div>
                         <?php endif; ?>
@@ -736,6 +760,7 @@ $pageTitle = $rfRequestId > 0
                 <label class="canvasser-supplier-field"><span>Country</span><input type="text" id="canvasserNewSupplierCountry" name="country" maxlength="50"></label>
                 <label class="canvasser-supplier-field"><span>Postal code</span><input type="text" id="canvasserNewSupplierPostal" name="postal_code" maxlength="20"></label>
             </div>
+            <label class="canvasser-supplier-field"><span>TIN <span class="cv-field-optional">(optional)</span></span><input type="text" id="canvasserNewSupplierTin" name="tin" maxlength="20" placeholder="e.g. 123-456-789-000" autocomplete="off"></label>
         </form>
         <div class="canvasser-supplier-modal-actions">
             <button type="button" class="btn-secondary" data-close-canvasser-supplier-modal>Cancel</button>
@@ -761,6 +786,10 @@ $pageTitle = $rfRequestId > 0
             <div class="field-group">
                 <label for="cvPrefSupContact">Contact person</label>
                 <input type="text" id="cvPrefSupContact" maxlength="100" autocomplete="name">
+            </div>
+            <div class="field-group">
+                <label for="cvPrefSupTin">TIN <span class="cv-field-optional">(optional)</span></label>
+                <input type="text" id="cvPrefSupTin" maxlength="20" placeholder="e.g. 123-456-789-000" autocomplete="off">
             </div>
             <div class="field-group">
                 <label for="cvPrefSupPhone">Phone</label>
@@ -843,6 +872,7 @@ window.CWIRMS_COMPTROLLER_PRICING = <?php echo json_encode([
     'comptrollerCompStatus' => $comptrollerCompStatus,
     'currency' => $comptrollerPricingOverview['currency'] ?? 'PHP',
     'lines' => $comptrollerPricingOverview['lines'] ?? [],
+    'show_discount_column' => !empty($comptrollerPricingOverview['show_discount_column']),
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS); ?>;
 </script>
 <script src="../assets/js/comptroller_pricing_overview.js"></script>

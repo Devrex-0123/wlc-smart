@@ -90,10 +90,20 @@
 }
 
 .cv-pricing-overview-table td:nth-child(3),
-.cv-pricing-overview-table td:nth-child(6),
-.cv-pricing-overview-table td:nth-child(7),
+.cv-pricing-overview-unit-price-cell,
+.cv-pricing-overview-discount-cell,
+.cv-pricing-overview-line-total-cell,
 .cv-pricing-overview-table tfoot td:last-child {
     text-align: left;
+    white-space: nowrap;
+}
+
+.cv-pricing-overview-discount-cell {
+    font-weight: 600;
+    color: #9a3412;
+}
+
+.cv-pricing-overview-has-discount .cv-pricing-overview-discount-col {
     white-space: nowrap;
 }
 

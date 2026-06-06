@@ -114,6 +114,9 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
     require_once __DIR__ . '/../api/approval_tables.php';
     ensureRequisitionPreferredQuoteColumns($db);
     ensureSuggestedSupplierSelectionSourceColumn($db);
+    ensureCanvassSupplierNotesColumns($db);
+    ensureCanvassSupplierDiscountsTable($db);
+    $canvassDiscountBySupplier = cwirmsCanvassSupplierDiscountPercentsMapForRequest($db, $requestId);
 
     $itemStmt = $db->prepare(
         'SELECT canvass_detail_id, requisition_line_id, component_label, sort_order
@@ -202,6 +205,7 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
 
         $unitPrice = null;
         $lineTotal = null;
+        $discountLabel = null;
         $supplierName = $sel ? (string) ($sel['supplier_name'] ?? '') : null;
 
         if ($supplierId > 0) {
@@ -215,6 +219,14 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
                 }
             }
             if ($unitPrice !== null) {
+                $discountLabel = null;
+                if ($source === 'canvassed' && $supplierId > 0) {
+                    $discountPercents = $canvassDiscountBySupplier[$supplierId] ?? [];
+                    if ($discountPercents !== []) {
+                        $unitPrice = cwirmsApplyCompoundedCanvassDiscounts($unitPrice, $discountPercents);
+                        $discountLabel = cwirmsFormatCompoundedDiscountLabel($discountPercents);
+                    }
+                }
                 $lineTotal = round($unitPrice * $qty, 2);
                 $grandTotal += $lineTotal;
             }
@@ -235,6 +247,7 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
             'selection_source' => $source,
             'unit_price' => $unitPrice,
             'line_total' => $lineTotal,
+            'discount_label' => $discountLabel ?? null,
         ];
     }
 
@@ -244,6 +257,7 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
         'selected_count' => $selectedCount,
         'grand_total' => round($grandTotal, 2),
         'currency' => $currency,
+        'show_discount_column' => $canvassDiscountBySupplier !== [],
     ];
 }
 
@@ -276,4 +290,246 @@ function cwirmsPricingOverviewCanvassedUnitPrice(PDO $db, int $canvassDetailId, 
     $price = round((float) $raw, 2);
 
     return $price >= 0 ? $price : null;
+}
+
+function cwirmsNormalizeCanvassSupplierDiscountPercent(mixed $raw): ?float
+{
+    if ($raw === null || $raw === '') {
+        return null;
+    }
+    if (!is_numeric($raw)) {
+        return null;
+    }
+    $value = round((float) $raw, 2);
+    if ($value <= 0) {
+        return null;
+    }
+    if ($value > 100) {
+        return 100.0;
+    }
+
+    return $value;
+}
+
+function cwirmsApplyCompoundedCanvassDiscounts(float $total, array $discountPercents): float
+{
+    $result = $total;
+    foreach ($discountPercents as $percent) {
+        $normalized = cwirmsNormalizeCanvassSupplierDiscountPercent($percent);
+        if ($normalized !== null) {
+            $result *= (1 - $normalized / 100);
+        }
+    }
+
+    return round($result, 2);
+}
+
+function cwirmsEffectiveCompoundedDiscountPercent(array $discountPercents): ?float
+{
+    if ($discountPercents === []) {
+        return null;
+    }
+    $factor = 1.0;
+    foreach ($discountPercents as $percent) {
+        $normalized = cwirmsNormalizeCanvassSupplierDiscountPercent($percent);
+        if ($normalized !== null) {
+            $factor *= (1 - $normalized / 100);
+        }
+    }
+    $effective = round((1 - $factor) * 10000) / 100;
+
+    return $effective > 0 ? $effective : null;
+}
+
+function cwirmsFormatCompoundedDiscountLabel(array $discountPercents): ?string
+{
+    $effective = cwirmsEffectiveCompoundedDiscountPercent($discountPercents);
+    if ($effective === null) {
+        return null;
+    }
+    $label = fmod($effective, 1.0) === 0.0
+        ? (string) (int) $effective
+        : rtrim(rtrim(number_format($effective, 2, '.', ''), '0'), '.');
+
+    return $label . '%';
+}
+
+/**
+ * @return array<int, list<float>> supplier_id => discount percents (ordered)
+ */
+function cwirmsCanvassSupplierDiscountPercentsMapForRequest(PDO $db, int $requestId): array
+{
+    $bySupplier = cwirmsCanvassSupplierDiscountsBySupplierForRequest($db, $requestId);
+    $map = [];
+    foreach ($bySupplier as $sid => $rows) {
+        $percents = [];
+        foreach ($rows as $row) {
+            $pct = cwirmsNormalizeCanvassSupplierDiscountPercent($row['discount_percent'] ?? null);
+            if ($pct !== null) {
+                $percents[] = $pct;
+            }
+        }
+        if ($percents !== []) {
+            $map[$sid] = $percents;
+        }
+    }
+
+    return $map;
+}
+
+/**
+ * @return array<int, list<array{id: int, label: ?string, discount_percent: float}>>
+ */
+function cwirmsCanvassSupplierDiscountsBySupplierForRequest(PDO $db, int $requestId): array
+{
+    require_once __DIR__ . '/../api/approval_tables.php';
+    ensureCanvassSupplierDiscountsTable($db);
+
+    $stmt = $db->prepare(
+        'SELECT cds.supplier_id, csd.id, csd.label, csd.discount_percent
+         FROM canvass_supplier_discounts csd
+         INNER JOIN requisition_canvass_detail_supplier cds
+            ON cds.canvass_detail_supplier_id = csd.canvass_supplier_id
+         INNER JOIN requisition_canvass_detail cd ON cd.canvass_detail_id = cds.canvass_detail_id
+         WHERE cd.request_id = ?
+         ORDER BY cds.supplier_id ASC, csd.id ASC'
+    );
+    $stmt->execute([$requestId]);
+    $map = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $sid = (int) ($row['supplier_id'] ?? 0);
+        if ($sid <= 0) {
+            continue;
+        }
+        $pct = cwirmsNormalizeCanvassSupplierDiscountPercent($row['discount_percent'] ?? null);
+        if ($pct === null) {
+            continue;
+        }
+        $label = trim((string) ($row['label'] ?? ''));
+        if (!isset($map[$sid])) {
+            $map[$sid] = [];
+        }
+        $map[$sid][] = [
+            'id' => (int) ($row['id'] ?? 0),
+            'label' => $label !== '' ? $label : null,
+            'discount_percent' => $pct,
+        ];
+    }
+
+    return $map;
+}
+
+/**
+ * @return list<array{label: ?string, discount_percent: float}>
+ */
+function cwirmsNormalizeCanvassSupplierDiscountRows(mixed $raw): array
+{
+    if (!is_array($raw)) {
+        return [];
+    }
+    $rows = [];
+    foreach ($raw as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $pct = cwirmsNormalizeCanvassSupplierDiscountPercent($entry['discount_percent'] ?? null);
+        if ($pct === null) {
+            continue;
+        }
+        $label = trim((string) ($entry['label'] ?? ''));
+        $rows[] = [
+            'label' => $label !== '' ? substr($label, 0, 100) : null,
+            'discount_percent' => $pct,
+        ];
+    }
+
+    return $rows;
+}
+
+function cwirmsValidateCanvassSupplierDiscountPayload(mixed $discounts): ?string
+{
+    if ($discounts === null) {
+        return null;
+    }
+    if (!is_array($discounts)) {
+        return 'Supplier discounts must be a list.';
+    }
+    foreach ($discounts as $entry) {
+        if (!is_array($entry)) {
+            return 'Invalid supplier discount row.';
+        }
+        $pctRaw = $entry['discount_percent'] ?? null;
+        if ($pctRaw === null || $pctRaw === '') {
+            continue;
+        }
+        if (!is_numeric($pctRaw)) {
+            return 'Each supplier discount must be a number between 0 and 100.';
+        }
+        $pct = (float) $pctRaw;
+        if ($pct < 0 || $pct > 100) {
+            return 'Each supplier discount must be between 0 and 100.';
+        }
+    }
+
+    return null;
+}
+
+/**
+ * @param list<array<string, mixed>> $suppliers
+ */
+function cwirmsPersistCanvassSupplierDiscountsForRequest(PDO $db, int $requestId, array $suppliers): void
+{
+    require_once __DIR__ . '/../api/approval_tables.php';
+    ensureCanvassSupplierDiscountsTable($db);
+
+    $del = $db->prepare(
+        'DELETE csd FROM canvass_supplier_discounts csd
+         INNER JOIN requisition_canvass_detail_supplier cds
+            ON cds.canvass_detail_supplier_id = csd.canvass_supplier_id
+         INNER JOIN requisition_canvass_detail cd ON cd.canvass_detail_id = cds.canvass_detail_id
+         WHERE cd.request_id = ?'
+    );
+    $del->execute([$requestId]);
+
+    $anchorStmt = $db->prepare(
+        'SELECT cds.supplier_id, MIN(cds.canvass_detail_supplier_id) AS anchor_id
+         FROM requisition_canvass_detail_supplier cds
+         INNER JOIN requisition_canvass_detail cd ON cd.canvass_detail_id = cds.canvass_detail_id
+         WHERE cd.request_id = ?
+         GROUP BY cds.supplier_id'
+    );
+    $anchorStmt->execute([$requestId]);
+    $anchors = [];
+    while ($row = $anchorStmt->fetch(PDO::FETCH_ASSOC)) {
+        $sid = (int) ($row['supplier_id'] ?? 0);
+        $anchorId = (int) ($row['anchor_id'] ?? 0);
+        if ($sid > 0 && $anchorId > 0) {
+            $anchors[$sid] = $anchorId;
+        }
+    }
+
+    if ($anchors === []) {
+        return;
+    }
+
+    $ins = $db->prepare(
+        'INSERT INTO canvass_supplier_discounts (canvass_supplier_id, label, discount_percent) VALUES (?, ?, ?)'
+    );
+
+    foreach ($suppliers as $supplier) {
+        if (!is_array($supplier)) {
+            continue;
+        }
+        $sid = (int) ($supplier['supplier_id'] ?? 0);
+        if ($sid <= 0 || !isset($anchors[$sid])) {
+            continue;
+        }
+        $rows = cwirmsNormalizeCanvassSupplierDiscountRows($supplier['discounts'] ?? []);
+        if ($rows === []) {
+            continue;
+        }
+        foreach ($rows as $row) {
+            $ins->execute([$anchors[$sid], $row['label'], $row['discount_percent']]);
+        }
+    }
 }
