@@ -22,6 +22,8 @@
     const viewerRole = String(cfg.viewerRole || 'comptroller');
     const comptrollerCompStatus = String(cfg.comptrollerCompStatus || 'pending').trim().toLowerCase();
     const currency = cfg.currency || 'PHP';
+    const tableEl = document.getElementById('cvComptrollerPricingTable');
+    const footLabelEl = tableEl ? tableEl.querySelector('.cv-pricing-overview-foot-label') : null;
     const pendingNoticeEl = document.getElementById('cvComptrollerPricingPendingNotice');
     const POPOVER_WIDTH = 320;
     const DEFERRED_REASON_SUGGESTIONS = [
@@ -179,7 +181,7 @@
             </td>`;
         }
 
-        const inputAttrs = `min="0" max="${metrics.requestedQty}" step="1" required`;
+        const inputAttrs = `min="0" max="${metrics.requestedQty}" step="1"`;
 
         return `<td class="cv-comptroller-qty-cell">
             <div class="cv-comptroller-accepted-wrap">
@@ -213,6 +215,43 @@
         return '—';
     }
 
+    function showDiscountColumn() {
+        if (Boolean(cfg.show_discount_column)) {
+            return true;
+        }
+        return lines.some((line) => String(line.discount_label || '').trim() !== '');
+    }
+
+    function syncDiscountColumn(showDiscount) {
+        const theadRow = tableEl ? tableEl.querySelector('thead tr') : null;
+        if (!theadRow) {
+            return;
+        }
+
+        let discountTh = theadRow.querySelector('.cv-pricing-overview-discount-col');
+        if (showDiscount && !discountTh) {
+            discountTh = document.createElement('th');
+            discountTh.scope = 'col';
+            discountTh.className = 'cv-pricing-overview-discount-col';
+            discountTh.textContent = 'Discount';
+            const unitTh = theadRow.querySelector('th:nth-child(8)');
+            if (unitTh) {
+                unitTh.insertAdjacentElement('afterend', discountTh);
+            } else {
+                theadRow.appendChild(discountTh);
+            }
+        } else if (!showDiscount && discountTh) {
+            discountTh.remove();
+        }
+
+        if (tableEl) {
+            tableEl.classList.toggle('cv-pricing-overview-has-discount', Boolean(showDiscount));
+        }
+        if (footLabelEl) {
+            footLabelEl.colSpan = showDiscount ? 9 : 8;
+        }
+    }
+
     function clampAcceptedQty(line, raw) {
         const requested = Math.max(0, Number(line.requested_qty) || 0);
         if (raw === null || raw === undefined || String(raw).trim() === '') {
@@ -221,6 +260,19 @@
         let val = parseInt(String(raw), 10);
         if (Number.isNaN(val)) {
             val = requested;
+        }
+        return Math.min(requested, Math.max(0, val));
+    }
+
+    function parseAcceptedQtyOnBlur(line, raw) {
+        const requested = Math.max(0, Number(line.requested_qty) || 0);
+        const trimmed = String(raw ?? '').trim();
+        if (trimmed === '') {
+            return 0;
+        }
+        let val = parseInt(trimmed, 10);
+        if (Number.isNaN(val)) {
+            return 0;
         }
         return Math.min(requested, Math.max(0, val));
     }
@@ -635,6 +687,9 @@
         closePopover(true);
         section.hidden = false;
 
+        const showDiscount = showDiscountColumn();
+        syncDiscountColumn(showDiscount);
+
         bodyEl.innerHTML = lines
             .map((line, index) => {
                 const metrics = lineMetrics(line);
@@ -649,6 +704,11 @@
                     ? escapeHtml(line.supplier_name)
                     : '<span class="cv-pricing-overview-pending">Not selected</span>';
                 const detailId = Number(line.canvass_detail_id || 0);
+                const discountCell = showDiscount
+                    ? `<td class="cv-pricing-overview-discount-cell">${
+                          line.discount_label ? escapeHtml(line.discount_label) : '—'
+                      }</td>`
+                    : '';
 
                 return `<tr data-line-index="${index}" data-canvass-detail-id="${detailId}">
                     <td>${index + 1}</td>
@@ -658,8 +718,9 @@
                     <td class="cv-comptroller-deferred-qty-cell">${escapeHtml(deferredLabel)}</td>
                     <td>${supplier}</td>
                     <td>${sourceLabel(line.selection_source)}</td>
-                    <td>${unitPriceLabel}</td>
-                    <td>
+                    <td class="cv-pricing-overview-unit-price-cell">${unitPriceLabel}</td>
+                    ${discountCell}
+                    <td class="cv-pricing-overview-line-total-cell">
                         <div class="cv-comptroller-line-total-wrap">
                             <span class="cv-comptroller-approved-total">${lineTotalLabel}</span>
                             <span class="cv-comptroller-deferred-amount"${metrics.deferredQty > 0 ? '' : ' hidden'}>${escapeHtml(deferredAmountLabel)} deferred</span>
@@ -671,8 +732,8 @@
 
         if (isInteractive) {
             bodyEl.querySelectorAll('.cv-comptroller-accepted-input').forEach((input) => {
-                input.addEventListener('input', onAcceptedQtyInput);
-                input.addEventListener('change', onAcceptedQtyInput);
+                input.addEventListener('blur', onAcceptedQtyBlur);
+                input.addEventListener('keydown', onAcceptedQtyKeydown);
             });
         }
 
@@ -685,11 +746,60 @@
         return reopenIndex;
     }
 
-    function onAcceptedQtyInput(e) {
-        if (e && e.isTrusted === false) {
+    function updateQtyRowInPlace(index) {
+        const line = lines[index];
+        if (!line) {
             return;
         }
-        const input = e.target.closest('.cv-comptroller-accepted-input');
+        const row = bodyEl.querySelector(`tr[data-line-index="${index}"]`);
+        if (!row) {
+            renderTable();
+            return;
+        }
+
+        const metrics = lineMetrics(line);
+        line.accepted_qty = metrics.acceptedQty;
+        line.deferred_qty = metrics.deferredQty;
+
+        const unitType = String(line.unit_type || 'unit');
+        const deferredCell = row.querySelector('.cv-comptroller-deferred-qty-cell');
+        if (deferredCell) {
+            deferredCell.textContent = `${metrics.deferredQty} ${pluralizeUnitForQty(unitType, metrics.deferredQty)}`;
+        }
+
+        const lineTotalWrap = row.querySelector('.cv-comptroller-line-total-wrap');
+        if (lineTotalWrap) {
+            const approvedEl = lineTotalWrap.querySelector('.cv-comptroller-approved-total');
+            const deferredEl = lineTotalWrap.querySelector('.cv-comptroller-deferred-amount');
+            if (approvedEl) {
+                approvedEl.textContent = metrics.approvedLineTotal != null
+                    ? formatMoney(metrics.approvedLineTotal)
+                    : '—';
+            }
+            if (deferredEl) {
+                if (metrics.deferredQty > 0) {
+                    deferredEl.hidden = false;
+                    deferredEl.textContent = metrics.deferredAmount != null
+                        ? `${formatMoney(metrics.deferredAmount)} deferred`
+                        : '';
+                } else {
+                    deferredEl.hidden = true;
+                    deferredEl.textContent = '';
+                }
+            }
+        }
+
+        const input = row.querySelector('.cv-comptroller-accepted-input');
+        if (input && document.activeElement !== input) {
+            input.value = String(metrics.acceptedQty);
+        }
+
+        updateHiddenInput(index);
+        updateRowIndicatorElements(index);
+        refreshSummary();
+    }
+
+    function commitAcceptedQtyInput(input, { suppressPopover = false } = {}) {
         if (!input) {
             return;
         }
@@ -697,8 +807,11 @@
         if (Number.isNaN(index) || !lines[index]) {
             return;
         }
+
         const prevMetrics = lineMetrics(lines[index]);
-        lines[index].accepted_qty = clampAcceptedQty(lines[index], input.value);
+        const committed = parseAcceptedQtyOnBlur(lines[index], input.value);
+        lines[index].accepted_qty = committed;
+        input.value = String(committed);
         const nextMetrics = lineMetrics(lines[index]);
 
         if (nextMetrics.deferredQty === 0) {
@@ -708,12 +821,9 @@
             lines[index].deferred_message = '';
         }
 
-        renderTable();
+        updateQtyRowInPlace(index);
 
-        if (!isInteractive && nextMetrics.deferredQty > 0) {
-            return;
-        }
-        if (isInteractive && nextMetrics.deferredQty > 0) {
+        if (!suppressPopover && isInteractive && nextMetrics.deferredQty > 0) {
             const anchor = bodyEl.querySelector(
                 `.cv-comptroller-accepted-input[data-line-index="${index}"]`
             );
@@ -721,6 +831,37 @@
                 openPopover(index, anchor);
             }
         }
+    }
+
+    function onAcceptedQtyBlur(e) {
+        if (e && e.isTrusted === false) {
+            return;
+        }
+        const input = e.target.closest('.cv-comptroller-accepted-input');
+        if (!input) {
+            return;
+        }
+        commitAcceptedQtyInput(input);
+    }
+
+    function onAcceptedQtyKeydown(e) {
+        if (e.key !== 'Enter') {
+            return;
+        }
+        const input = e.target.closest('.cv-comptroller-accepted-input');
+        if (!input) {
+            return;
+        }
+        e.preventDefault();
+        input.blur();
+    }
+
+    function commitActiveAcceptedQtyInput() {
+        const active = document.activeElement;
+        if (!active || !active.classList.contains('cv-comptroller-accepted-input')) {
+            return;
+        }
+        commitAcceptedQtyInput(active, { suppressPopover: true });
     }
 
     function refreshSummary() {
@@ -842,6 +983,7 @@
         if (!isInteractive || !form) {
             return false;
         }
+        commitActiveAcceptedQtyInput();
         for (const line of lines) {
             const metrics = lineMetrics(line);
             if (metrics.acceptedQty > metrics.requestedQty) {

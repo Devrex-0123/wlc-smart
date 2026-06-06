@@ -178,6 +178,90 @@ function ensureCanvassSupplierQuoteSourceColumn(PDO $db): void
     }
 }
 
+function ensureCanvassSupplierNotesColumns(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    ensureCanvassSupplierQuoteSourceColumn($db);
+
+    $columns = [
+        'benefits' => 'TEXT NULL DEFAULT NULL',
+    ];
+
+    foreach ($columns as $name => $definition) {
+        $colCheck = $db->prepare(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'requisition_canvass_detail_supplier'
+               AND COLUMN_NAME = ?"
+        );
+        $colCheck->execute([$name]);
+        if (((int) $colCheck->fetchColumn()) === 0) {
+            $db->exec(
+                "ALTER TABLE requisition_canvass_detail_supplier ADD COLUMN {$name} {$definition}"
+            );
+        }
+    }
+}
+
+function ensureCanvassSupplierDiscountsTable(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $tableCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'canvass_supplier_discounts'"
+    );
+    $tableCheck->execute();
+    if (((int) $tableCheck->fetchColumn()) === 0) {
+        $db->exec(
+            'CREATE TABLE canvass_supplier_discounts (
+                id INT(11) NOT NULL AUTO_INCREMENT,
+                canvass_supplier_id INT(11) NOT NULL,
+                label VARCHAR(100) NULL DEFAULT NULL,
+                discount_percent DECIMAL(5,2) NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_csd_canvass_supplier (canvass_supplier_id),
+                CONSTRAINT fk_csd_canvass_supplier FOREIGN KEY (canvass_supplier_id)
+                    REFERENCES requisition_canvass_detail_supplier (canvass_detail_supplier_id)
+                    ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci'
+        );
+    }
+
+    $legacyCol = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_canvass_detail_supplier'
+           AND COLUMN_NAME = 'discount_percent'"
+    );
+    $legacyCol->execute();
+    if (((int) $legacyCol->fetchColumn()) > 0) {
+        $db->exec(
+            'INSERT INTO canvass_supplier_discounts (canvass_supplier_id, label, discount_percent)
+             SELECT agg.anchor_id, NULL, agg.discount_percent
+             FROM (
+                 SELECT MIN(cds.canvass_detail_supplier_id) AS anchor_id, MAX(cds.discount_percent) AS discount_percent
+                 FROM requisition_canvass_detail_supplier cds
+                 WHERE cds.discount_percent IS NOT NULL AND cds.discount_percent > 0
+                 GROUP BY cds.supplier_id
+             ) AS agg'
+        );
+        $db->exec('ALTER TABLE requisition_canvass_detail_supplier DROP COLUMN discount_percent');
+    }
+}
+
 function ensureSuggestedSupplierSelectionSourceColumn(PDO $db): void
 {
     static $checked = false;

@@ -8,9 +8,11 @@
         return;
     }
 
+    const tableEl = document.getElementById('cvPricingOverviewTable');
     const bodyEl = document.getElementById('cvPricingOverviewBody');
     const grandTotalEl = document.getElementById('cvPricingOverviewGrandTotal');
     const footTotalEl = document.getElementById('cvPricingOverviewFootTotal');
+    const footLabelEl = document.querySelector('.cv-pricing-overview-foot-label');
     const progressEl = document.getElementById('cvPricingOverviewProgress');
     const hintEl = document.getElementById('cvPricingOverviewHint');
 
@@ -39,6 +41,36 @@
         return '—';
     }
 
+    function syncPricingOverviewDiscountColumn(showDiscount) {
+        const theadRow = tableEl ? tableEl.querySelector('thead tr') : null;
+        if (!theadRow) {
+            return;
+        }
+
+        let discountTh = theadRow.querySelector('.cv-pricing-overview-discount-col');
+        if (showDiscount && !discountTh) {
+            discountTh = document.createElement('th');
+            discountTh.scope = 'col';
+            discountTh.className = 'cv-pricing-overview-discount-col';
+            discountTh.textContent = 'Discount';
+            const unitTh = theadRow.children[5];
+            if (unitTh) {
+                unitTh.insertAdjacentElement('afterend', discountTh);
+            } else {
+                theadRow.appendChild(discountTh);
+            }
+        } else if (!showDiscount && discountTh) {
+            discountTh.remove();
+        }
+
+        if (tableEl) {
+            tableEl.classList.toggle('cv-pricing-overview-has-discount', Boolean(showDiscount));
+        }
+        if (footLabelEl) {
+            footLabelEl.colSpan = showDiscount ? 7 : 6;
+        }
+    }
+
     function renderSnapshot(snapshot) {
         if (!snapshot || !Array.isArray(snapshot.lines)) {
             section.hidden = true;
@@ -51,6 +83,9 @@
         }
 
         section.hidden = false;
+
+        const showDiscount = Boolean(snapshot.show_discount_column);
+        syncPricingOverviewDiscountColumn(showDiscount);
 
         const currency = snapshot.currency || 'PHP';
         const grandTotal = formatMoney(snapshot.grand_total, currency);
@@ -74,9 +109,10 @@
             return;
         }
 
+        const colSpan = showDiscount ? 8 : 7;
+
         if (snapshot.lines.length === 0) {
-            bodyEl.innerHTML =
-                '<tr class="cv-pricing-overview-empty"><td colspan="7">No canvass items yet.</td></tr>';
+            bodyEl.innerHTML = `<tr class="cv-pricing-overview-empty"><td colspan="${colSpan}">No canvass items yet.</td></tr>`;
             return;
         }
 
@@ -92,6 +128,11 @@
                 const supplier = line.supplier_name
                     ? escapeHtml(line.supplier_name)
                     : '<span class="cv-pricing-overview-pending">Not selected</span>';
+                const discountCell = showDiscount
+                    ? `<td class="cv-pricing-overview-discount-cell">${
+                          line.discount_label ? escapeHtml(line.discount_label) : '—'
+                      }</td>`
+                    : '';
 
                 return `<tr class="${pending ? 'cv-pricing-overview-row-pending' : ''}">
                     <td>${index + 1}</td>
@@ -99,8 +140,9 @@
                     <td>${escapeHtml(qtyLabel)}</td>
                     <td>${supplier}</td>
                     <td>${sourceLabel(line.selection_source)}</td>
-                    <td>${unitPrice}</td>
-                    <td>${lineTotal}</td>
+                    <td class="cv-pricing-overview-unit-price-cell">${unitPrice}</td>
+                    ${discountCell}
+                    <td class="cv-pricing-overview-line-total-cell">${lineTotal}</td>
                 </tr>`;
             })
             .join('');
