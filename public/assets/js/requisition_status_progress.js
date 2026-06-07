@@ -205,9 +205,6 @@ async function ensurePurchaseOrderForProgress(requestId, record) {
     if (requestId == null || !record || !purchaseRequisitionFullyAccepted(record)) {
         return record;
     }
-    if (Number(record.purchase_order_id) > 0) {
-        return record;
-    }
     try {
         const body = new URLSearchParams({
             action: 'ensure_for_request',
@@ -226,6 +223,7 @@ async function ensurePurchaseOrderForProgress(requestId, record) {
             ...record,
             purchase_order_id: Number(data.data.id || 0) || null,
             purchase_order_number: String(data.data.po_number || ''),
+            purchase_order_status: String(data.data.status || record.purchase_order_status || 'pending'),
         };
         try {
             sessionStorage.setItem(STORAGE_PREFIX + String(requestId), JSON.stringify(merged));
@@ -238,15 +236,32 @@ async function ensurePurchaseOrderForProgress(requestId, record) {
     }
 }
 
+function purchaseOrderExists(record) {
+    return Number(record?.purchase_order_id || 0) > 0;
+}
+
+function poStatusLower(record) {
+    return String((record && record.purchase_order_status) || '').trim().toLowerCase();
+}
+
 /**
- * Purchase requisition verifiers: `pr_inv_status`, `pr_pres_status` (list_requests APIs + DB).
- * Step 4 = PR form, 5 = validate PR, 6 = purchase order. Any `accept` moves past “validate PR”.
+ * Purchase flow after canvass is fully verified (0-based STEP_DEFS indices):
+ * 4 PR form · 5 validate PR · 6 generate PO · 7 president validates PO · 8 delivery.
  */
 function currentIndexAfterCanvasForPurchaseFlow(record) {
+    if (purchaseRequisitionFullyAccepted(record)) {
+        if (purchaseOrderExists(record)) {
+            if (poStatusLower(record) === 'approved') {
+                return 8;
+            }
+            return 7;
+        }
+        return 6;
+    }
     const inv = prStatusLower(record, 'pr_inv_status');
     const pres = prStatusLower(record, 'pr_pres_status');
     if (inv === 'accept' || pres === 'accept') {
-        return 6;
+        return 5;
     }
     return 5;
 }

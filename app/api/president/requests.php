@@ -81,6 +81,7 @@ try {
                    COALESCE(pra.pr_pres_status, 'pending') AS pr_pres_status,
                    po.id AS purchase_order_id,
                    po.po_number AS purchase_order_number,
+                   po.status AS purchase_order_status,
                    {$agg}
             FROM requisition_item r
             LEFT JOIN requisition_form_approval rfa ON rfa.request_id = r.request_id
@@ -129,6 +130,7 @@ try {
                 'pr_pres_status' => (string) ($row['pr_pres_status'] ?? 'pending'),
                 'purchase_order_id' => !empty($row['purchase_order_id']) ? (int) $row['purchase_order_id'] : null,
                 'purchase_order_number' => (string) ($row['purchase_order_number'] ?? ''),
+                'purchase_order_status' => (string) ($row['purchase_order_status'] ?? ''),
                 'requester' => $requester,
                 'office' => $row['office_name'] ?? '—',
                 'amount_label' => $amountLabel,
