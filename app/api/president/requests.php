@@ -72,10 +72,21 @@ try {
         $stmt = $db->query("
             SELECT r.request_id, r.created_at, r.status, r.message,
                    u.Email, d.`office_name` AS office_name,
+                   COALESCE(rfa.requisition_status, 'pending') AS requisition_status,
+                   COALESCE(cva.canvas_status, 'pending') AS canvas_status,
+                   COALESCE(cva.gsd_status, 'pending') AS gsd_status,
+                   COALESCE(cva.comp_status, 'pending') AS comp_status,
+                   COALESCE(cva.pres_status, 'pending') AS pres_status,
+                   COALESCE(pra.pr_inv_status, 'pending') AS pr_inv_status,
+                   COALESCE(pra.pr_pres_status, 'pending') AS pr_pres_status,
+                   po.id AS purchase_order_id,
+                   po.po_number AS purchase_order_number,
                    {$agg}
             FROM requisition_item r
             LEFT JOIN requisition_form_approval rfa ON rfa.request_id = r.request_id
             LEFT JOIN canvass_verification_approval cva ON cva.request_id = r.request_id
+            LEFT JOIN purchase_requisition_approval pra ON pra.request_id = r.request_id
+            LEFT JOIN purchase_orders po ON po.requisition_id = r.request_id AND po.deleted_at IS NULL
             LEFT JOIN user u ON u.user_id = r.user_id
             LEFT JOIN offices d ON d.office_id = r.office_id
             WHERE LOWER(TRIM(COALESCE(rfa.requisition_status, 'pending'))) = 'accept'
@@ -104,10 +115,20 @@ try {
                 'id' => 'REQ-' . str_pad((string) $row['request_id'], 6, '0', STR_PAD_LEFT),
                 'request_id' => (int) $row['request_id'],
                 'date' => $row['created_at'],
+                'updated_at' => $row['created_at'],
                 'items' => requisitionExplodePipeOrDefault($row['items_concat'] ?? null, '—'),
                 'suppliers' => requisitionExplodePipeOrDefault($row['suppliers_concat'] ?? null, 'N/A'),
                 'status' => $row['status'] ?? 'Pending',
                 'message' => $row['message'] ?? '',
+                'requisition_status' => (string) ($row['requisition_status'] ?? 'pending'),
+                'canvas_status' => (string) ($row['canvas_status'] ?? 'pending'),
+                'gsd_status' => (string) ($row['gsd_status'] ?? 'pending'),
+                'comp_status' => (string) ($row['comp_status'] ?? 'pending'),
+                'pres_status' => (string) ($row['pres_status'] ?? 'pending'),
+                'pr_inv_status' => (string) ($row['pr_inv_status'] ?? 'pending'),
+                'pr_pres_status' => (string) ($row['pr_pres_status'] ?? 'pending'),
+                'purchase_order_id' => !empty($row['purchase_order_id']) ? (int) $row['purchase_order_id'] : null,
+                'purchase_order_number' => (string) ($row['purchase_order_number'] ?? ''),
                 'requester' => $requester,
                 'office' => $row['office_name'] ?? '—',
                 'amount_label' => $amountLabel,

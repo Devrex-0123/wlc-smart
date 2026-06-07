@@ -73,8 +73,15 @@
 }
 
 /* Rejection note block below verifier actions */
+.purchase-approval-actions {
+    margin-top: 1.15rem;
+}
+
 .pr-rejection-panel {
-    margin-top: 0.5rem;
+    margin-top: 0.65rem;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 560px;
     padding: 0.85rem 1rem;
     background: #f8fafc;
     border: 1px solid #e2e8f0;

@@ -104,7 +104,7 @@ $pvActive = 'dashboard';
     <div class="page-header">
         <h2 style="font-size:1.35rem;font-weight:700;color:#1e293b;margin:0 0 0.5rem 0;">Quick links</h2>
         <p style="margin-bottom: 0;">
-            Open <a href="president_request.php" style="color: #16a34a; font-weight: 600;">Request</a> for queues,
+            Open <a href="president_request.php" style="color: #16a34a; font-weight: 600;">Requisition Management</a> for queues,
             <a href="president_account_management.php" style="color: #16a34a; font-weight: 600;">Account Management</a> for users, or
             <a href="audit_trail.php" style="color: #16a34a; font-weight: 600;">Audit Trail</a> for login and activity logs.
         </p>

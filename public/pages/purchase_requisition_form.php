@@ -21,15 +21,18 @@ $isPresidentVerifier = in_array($roleLc, ['president', 'president verifier', 've
 $requestId = (int) ($_GET['request_id'] ?? 0);
 $from = trim((string) ($_GET['from'] ?? ''));
 
+$progressQs = $requestId > 0 ? ('?rid=' . $requestId) : '';
 $backHref = 'dean_requisition_management.php';
 if ($from === 'gsd') {
     $backHref = 'gsd_request.php';
 } elseif ($from === 'comptroller') {
-    $backHref = 'comptroller_requests.php';
+    $backHref = 'requisition_status_progress.php' . $progressQs;
 } elseif ($from === 'president') {
-    $backHref = 'president_request.php';
+    $backHref = 'president_requisition_status_progress.php' . $progressQs;
 } elseif ($from === 'inventory') {
-    $backHref = 'requisition_management.php';
+    $backHref = 'requisition_status_progress.php' . $progressQs;
+} elseif ($from === 'progress' || $from === 'requisition') {
+    $backHref = 'dean_requisition_status_progress.php' . $progressQs;
 } elseif ($from === 'history') {
     $backHref = 'audit_trail.php';
 }
@@ -37,9 +40,13 @@ if ($from === 'gsd') {
 if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)) {
     header('Content-Type: text/html; charset=UTF-8');
     http_response_code(403);
-    $progressFallback = (in_array($roleLc, ['inventory manager', 'inventory_manager', 'comptroller'], true))
-        ? ('requisition_status_progress.php?rid=' . (int) $requestId)
-        : ('dean_requisition_status_progress.php?rid=' . (int) $requestId);
+    if (in_array($roleLc, ['inventory manager', 'inventory_manager', 'comptroller'], true)) {
+        $progressFallback = 'requisition_status_progress.php?rid=' . (int) $requestId;
+    } elseif ($isPresidentVerifier) {
+        $progressFallback = 'president_requisition_status_progress.php?rid=' . (int) $requestId;
+    } else {
+        $progressFallback = 'dean_requisition_status_progress.php?rid=' . (int) $requestId;
+    }
     $safeBack = htmlspecialchars($backHref, ENT_QUOTES, 'UTF-8');
     $safeProgress = htmlspecialchars($progressFallback, ENT_QUOTES, 'UTF-8');
     ?>
@@ -178,10 +185,10 @@ if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)
             </div>
         </div>
         <?php if ($isInventoryVerifier || $isPresidentVerifier): ?>
-        <div class="comptroller-approve-wrapper purchase-approval-actions">
-            <button type="button" id="prApproveBtn" class="btn-submit">Accept</button>
-            <button type="button" id="prRejectBtn" class="btn-secondary comptroller-reject-btn">Reject</button>
-            <button type="button" id="prUndoBtn" class="btn-secondary comptroller-undo-btn" style="display:none;">Undo decision</button>
+        <div class="comptroller-approve-wrapper purchase-approval-actions verifier-decision-bar">
+            <button type="button" id="prApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> Accept</button>
+            <button type="button" id="prRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
+            <button type="button" id="prUndoBtn" class="btn-secondary comptroller-undo-btn" style="display:none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <?php if ($isInventoryVerifier): ?>
         <div class="pr-rejection-panel pr-rejection-panel--hidden note-group" aria-hidden="true">

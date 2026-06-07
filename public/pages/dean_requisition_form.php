@@ -77,7 +77,7 @@ if ($from === 'progress' && $viewRequestId > 0) {
 } elseif ($from === 'gsd' && $viewRequestId > 0) {
     $backUrl = 'gsd_request.php';
 } elseif ($from === 'president' && $viewRequestId > 0) {
-    $backUrl = 'president_request.php';
+    $backUrl = 'president_requisition_status_progress.php?rid=' . $viewRequestId;
 } elseif ($from === 'canvasser' && $viewRequestId > 0) {
     $backUrl = 'canvasser_request.php';
 }

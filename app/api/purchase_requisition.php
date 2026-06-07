@@ -398,6 +398,11 @@ try {
             }
         }
 
+        if ($verifier === 'president' && $prStatus === 'accept') {
+            require_once __DIR__ . '/../helpers/purchase_order.php';
+            cwirmsEnsurePurchaseOrderFromRequisition($db, $requestId, $userId);
+        }
+
         sendJson(['success' => true, 'message' => 'Purchase requisition verification saved.']);
     }
 

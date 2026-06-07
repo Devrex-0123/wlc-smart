@@ -193,7 +193,8 @@ if ($requestId <= 0) {
         }
     }
 } elseif ($from === 'president' || ($from === 'history' && $isPresidentRole)) {
-    $backHref = $from === 'history' ? 'audit_trail.php' : 'president_request.php';
+    $presidentProgressHref = 'president_requisition_status_progress.php' . ($requestId > 0 ? ('?rid=' . $requestId) : '');
+    $backHref = $from === 'history' ? 'audit_trail.php' : $presidentProgressHref;
     $accessErrorReturnHref = $backHref;
     if (!$isPresidentRole) {
         $accessError = 'Only the president verifier can open this canvass view.';
