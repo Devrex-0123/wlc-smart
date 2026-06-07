@@ -9,6 +9,7 @@ const ADMIN_API = '../../app/api/admin_requisition.php';
 const ADMIN_LIST_API = '../../app/api/admin_requisition.php?action=list_requests';
 const DEAN_LIST_API = '../../app/api/dean_requisition.php?action=list_requests';
 const PRESIDENT_LIST_API = '../../app/api/president/requests.php?action=list_requests';
+const COMPTROLLER_LIST_API = '../../app/api/comptroller.php?action=list_requests';
 const PURCHASE_ORDER_API = '../../app/api/purchase_order.php';
 
 let progressRecord = null;
@@ -350,6 +351,28 @@ async function refreshAdminProgressRecordFromApi(requestId) {
 async function refreshPresidentProgressRecordFromApi(requestId) {
     try {
         const res = await fetch(PRESIDENT_LIST_API, { credentials: 'include' });
+        const data = await res.json();
+        if (!data.success || !Array.isArray(data.requests)) {
+            return null;
+        }
+        const fresh = data.requests.find((r) => Number(r.request_id) === Number(requestId));
+        if (!fresh) {
+            return null;
+        }
+        try {
+            sessionStorage.setItem(STORAGE_PREFIX + String(requestId), JSON.stringify(fresh));
+        } catch {
+            /* ignore */
+        }
+        return fresh;
+    } catch {
+        return null;
+    }
+}
+
+async function refreshComptrollerProgressRecordFromApi(requestId) {
+    try {
+        const res = await fetch(COMPTROLLER_LIST_API, { credentials: 'include' });
         const data = await res.json();
         if (!data.success || !Array.isArray(data.requests)) {
             return null;
@@ -751,10 +774,15 @@ async function initProgressView() {
         if (fresh) {
             record = fresh;
         }
-    } else if (config.viewer === 'inventory' || config.viewer === 'comptroller') {
+    } else if (config.viewer === 'inventory') {
         const adminFresh = await refreshAdminProgressRecordFromApi(rid);
         if (adminFresh) {
             record = adminFresh;
+        }
+    } else if (config.viewer === 'comptroller') {
+        const compFresh = await refreshComptrollerProgressRecordFromApi(rid);
+        if (compFresh) {
+            record = compFresh;
         }
     } else if (config.viewer === 'president') {
         const presidentFresh = await refreshPresidentProgressRecordFromApi(rid);

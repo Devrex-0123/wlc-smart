@@ -19,6 +19,7 @@ if ($displayName === '') {
 }
 
 $roleLc = strtolower(trim((string) ($user['role'] ?? '')));
+$isComptroller = ($roleLc === 'comptroller');
 $isPresidentVerifier = in_array($roleLc, ['president', 'president verifier', 'verifier president', 'president_verifier'], true);
 $poId = (int) ($_GET['id'] ?? 0);
 $requestId = (int) ($_GET['request_id'] ?? 0);
@@ -167,6 +168,68 @@ $todayLabel = date('F j, Y');
                 </div>
             </div>
 
+            <?php if ($isComptroller): ?>
+            <p id="poTaxPendingNotice" class="comptroller-tax-pending-notice po-no-print" hidden>
+                <i class="fas fa-hourglass-half" aria-hidden="true"></i>
+                Tax &amp; deduction computation unlocks after the President approves this purchase order.
+            </p>
+
+            <div class="comptroller-divider po-no-print" id="comptroller-divider" role="separator" aria-label="Comptroller section" hidden>
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                <span>Comptroller section — visible to comptroller only</span>
+            </div>
+
+            <div class="comptroller-section po-no-print" id="comptroller-section" aria-label="Tax and deduction computation" hidden>
+                <div class="comptroller-section-header">
+                    <div>
+                        <h2 class="comptroller-section-title">Tax &amp; deduction computation</h2>
+                        <p class="comptroller-section-subtitle">Saved for audit record · Not printed on official copy</p>
+                    </div>
+                    <span class="comptroller-tax-badge comptroller-tax-badge--pending" id="poTaxStatusBadge">Pending computation</span>
+                </div>
+
+                <div class="comptroller-tax-table-wrap">
+                    <table class="comptroller-tax-table" id="poTaxTable" aria-label="Tax deductions">
+                        <thead>
+                            <tr>
+                                <th class="tax-table-header">Tax type</th>
+                                <th class="tax-table-header">Rate</th>
+                                <th class="tax-table-header">Amount deducted</th>
+                                <th class="tax-table-header tax-table-header--action">Remove</th>
+                            </tr>
+                        </thead>
+                        <tbody id="poTaxRowsBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="comptroller-tax-quick-add">
+                    <button type="button" class="btn-tax-ewt" id="poTaxAddEwtBtn"><i class="fas fa-plus" aria-hidden="true"></i> EWT</button>
+                    <button type="button" class="btn-tax-vat" id="poTaxAddVatBtn"><i class="fas fa-plus" aria-hidden="true"></i> VAT Withholding</button>
+                    <button type="button" class="btn-tax-other" id="poTaxAddOtherBtn"><i class="fas fa-plus" aria-hidden="true"></i> Other</button>
+                    <button type="button" class="btn-tax-add" id="poTaxAddDeductionBtn"><i class="fas fa-plus" aria-hidden="true"></i> Add deduction</button>
+                </div>
+
+                <div class="comptroller-tax-breakdown" id="poTaxBreakdown" aria-live="polite">
+                    <div class="breakdown-row">
+                        <span>Gross amount</span>
+                        <strong id="poTaxGrossAmount">PHP 0.00</strong>
+                    </div>
+                    <div id="poTaxBreakdownDeductions"></div>
+                    <div class="breakdown-total">
+                        <span>Net payable</span>
+                        <strong id="poTaxNetPayable">PHP 0.00</strong>
+                    </div>
+                </div>
+
+                <label class="comptroller-tax-notes-label" for="poTaxNotes">Comptroller notes</label>
+                <textarea id="poTaxNotes" class="comptroller-tax-notes" rows="3" placeholder="e.g. EWT certificate (BIR Form 2307) to be issued to supplier. Reference: …"></textarea>
+
+                <div class="comptroller-tax-save-row">
+                    <button type="button" class="btn-submit" id="poTaxSaveBtn"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save tax record</button>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <div class="comptroller-approve-wrapper po-action-bar verifier-decision-bar po-no-print">
                 <?php if ($isPresidentVerifier): ?>
                 <button type="button" id="poApproveBtn" class="btn-submit" style="display:none;"><i class="fas fa-check" aria-hidden="true"></i> Approve</button>
@@ -185,6 +248,7 @@ window.IMRMS_PURCHASE_ORDER_CONFIG = <?php echo json_encode([
     'poId' => $poId,
     'requestId' => $requestId,
     'api' => '../../app/api/purchase_order.php',
+    'isComptroller' => $isComptroller,
     'isPresidentVerifier' => $isPresidentVerifier,
     'defaultRequestedBy' => $displayName,
     'todayLabel' => $todayLabel,

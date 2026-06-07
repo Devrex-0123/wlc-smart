@@ -389,4 +389,68 @@ function ensurePurchaseOrderTables(PDO $db): void
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
     }
+
+    $poTaxColumns = [
+        'net_payable' => 'ADD COLUMN net_payable DECIMAL(12, 2) NULL AFTER total_amount',
+        'tax_computed' => 'ADD COLUMN tax_computed TINYINT(1) NOT NULL DEFAULT 0 AFTER net_payable',
+    ];
+    foreach ($poTaxColumns as $column => $ddl) {
+        $colCheck = $db->prepare(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'purchase_orders'
+               AND COLUMN_NAME = ?"
+        );
+        $colCheck->execute([$column]);
+        if (((int) $colCheck->fetchColumn()) === 0) {
+            $db->exec("ALTER TABLE purchase_orders {$ddl}");
+        }
+    }
+
+    if (!cwirmsApprovalTableExists($db, 'purchase_order_taxes')) {
+        $db->exec(
+            "CREATE TABLE purchase_order_taxes (
+                id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                purchase_order_id INT UNSIGNED NOT NULL,
+                tax_type VARCHAR(50) NOT NULL,
+                transaction_type VARCHAR(100) NULL,
+                rate DECIMAL(5, 4) NOT NULL DEFAULT 0.0000,
+                rate_override TINYINT(1) NOT NULL DEFAULT 0,
+                amount_deducted DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+                label VARCHAR(100) NULL,
+                supplier_vat_registered TINYINT(1) NULL,
+                transaction_vat_exempt TINYINT(1) NULL,
+                notes TEXT NULL,
+                computed_by INT NULL,
+                computed_at DATETIME NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY idx_po_taxes_po (purchase_order_id),
+                CONSTRAINT fk_po_taxes_header
+                    FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders (id) ON DELETE CASCADE,
+                CONSTRAINT fk_po_taxes_computed_by
+                    FOREIGN KEY (computed_by) REFERENCES user (user_id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+    }
+
+    $poTaxExtraColumns = [
+        'transaction_type' => 'ADD COLUMN transaction_type VARCHAR(100) NULL AFTER tax_type',
+        'rate_override' => 'ADD COLUMN rate_override TINYINT(1) NOT NULL DEFAULT 0 AFTER rate',
+        'supplier_vat_registered' => 'ADD COLUMN supplier_vat_registered TINYINT(1) NULL AFTER label',
+        'transaction_vat_exempt' => 'ADD COLUMN transaction_vat_exempt TINYINT(1) NULL AFTER supplier_vat_registered',
+    ];
+    foreach ($poTaxExtraColumns as $column => $ddl) {
+        $colCheck = $db->prepare(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'purchase_order_taxes'
+               AND COLUMN_NAME = ?"
+        );
+        $colCheck->execute([$column]);
+        if (((int) $colCheck->fetchColumn()) === 0) {
+            $db->exec("ALTER TABLE purchase_order_taxes {$ddl}");
+        }
+    }
 }

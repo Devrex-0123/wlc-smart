@@ -159,7 +159,8 @@ if ($requestId <= 0) {
         }
     }
 } elseif ($from === 'comptroller' || ($from === 'history' && $isComptrollerRole)) {
-    $backHref = $from === 'history' ? 'audit_trail.php' : 'comptroller_requests.php';
+    $comptrollerProgressHref = 'requisition_status_progress.php' . ($requestId > 0 ? ('?rid=' . $requestId) : '');
+    $backHref = $from === 'history' ? 'audit_trail.php' : $comptrollerProgressHref;
     $accessErrorReturnHref = $backHref;
     if (!$isComptrollerRole) {
         $accessError = 'Only the comptroller can open this canvass view.';
@@ -461,7 +462,7 @@ $pageTitle = $rfRequestId > 0
                 } elseif ($from === 'inventory') {
                     echo $progressFrom === 'status' ? 'Return to requisition progress' : 'Return to requisition management';
                 } elseif ($from === 'comptroller' || ($from === 'history' && $isComptrollerRole)) {
-                    echo $from === 'history' ? 'Return to audit trail' : 'Return to comptroller requests';
+                    echo $from === 'history' ? 'Return to audit trail' : 'Return to requisition progress';
                 } elseif ($from === 'president' || ($from === 'history' && $isPresidentRole)) {
                     echo $from === 'history' ? 'Return to audit trail' : 'Return to president requests';
                 } else {
@@ -705,17 +706,17 @@ $pageTitle = $rfRequestId > 0
         <div id="cvComptrollerDeferredBanners" class="cv-comptroller-deferred-banners" hidden aria-live="polite"></div>
         <?php endif; ?>
         <?php if ($isGsdCanvassReview): ?>
-        <div class="comptroller-approve-wrapper gsd-on-cv-actions">
-            <button type="button" id="comptrollerApproveBtn" class="btn-submit">Verify</button>
-            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn">Reject</button>
-            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;">Undo decision</button>
+        <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar">
+            <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> Verify</button>
+            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
+            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <p id="gsdVerifyHint" class="gsd-verify-hint" aria-live="polite"></p>
         <?php elseif ($isComptrollerCanvassReview || $isPresidentCanvassReview): ?>
-        <div class="comptroller-approve-wrapper gsd-on-cv-actions">
-            <button type="button" id="comptrollerApproveBtn" class="btn-submit">Approve</button>
-            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn">Reject</button>
-            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;">Undo decision</button>
+        <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar">
+            <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> Approve</button>
+            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
+            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <?php endif; ?>
 

@@ -73,7 +73,7 @@ if ($from === 'progress' && $viewRequestId > 0) {
 } elseif ($from === 'history') {
     $backUrl = $isInventoryManager ? 'audit_trail.php' : ($roleLc === 'dean' ? 'dean_requisition_status.php' : 'audit_trail.php');
 } elseif ($from === 'comptroller' && $viewRequestId > 0) {
-    $backUrl = 'comptroller_requests.php';
+    $backUrl = 'requisition_status_progress.php?rid=' . $viewRequestId;
 } elseif ($from === 'gsd' && $viewRequestId > 0) {
     $backUrl = 'gsd_request.php';
 } elseif ($from === 'president' && $viewRequestId > 0) {
@@ -280,10 +280,10 @@ if ($viewingRequest && $viewRequestId > 0) {
         </div>
         <?php endif; ?>
         <?php if ($isInventoryManagerActiveReview || $isComptrollerActiveReview || $isGsdActiveReview || $isPresidentActiveReview): ?>
-        <div class="comptroller-approve-wrapper">
-            <button type="button" id="comptrollerApproveBtn" class="btn-submit"><?php echo $isInventoryManagerActiveReview ? 'Accept requisition' : 'Approve'; ?></button>
-            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn">Reject</button>
-            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;">Undo decision</button>
+        <div class="comptroller-approve-wrapper verifier-decision-bar">
+            <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> <?php echo $isInventoryManagerActiveReview ? 'Accept requisition' : 'Approve'; ?></button>
+            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
+            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <?php if ($isInventoryManagerActiveReview): ?>
         <div class="note-group">

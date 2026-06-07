@@ -38,6 +38,222 @@ function poIsPresidentRole(string $roleLc): bool
     return in_array($roleLc, ['president', 'president verifier', 'verifier president', 'president_verifier'], true);
 }
 
+function poIsComptrollerRole(string $roleLc): bool
+{
+    return $roleLc === 'comptroller';
+}
+
+function poIsPresidentApproved(array $header): bool
+{
+    $status = strtolower(trim((string) ($header['status'] ?? '')));
+
+    return $status === 'approved' || (int) ($header['approved_by_president'] ?? 0) === 1;
+}
+
+function poAssertPresidentApprovedPo(array $header): void
+{
+    if (!poIsPresidentApproved($header)) {
+        poSendJson([
+            'success' => false,
+            'message' => 'Tax computation is available only after the President approves this purchase order.',
+        ]);
+    }
+}
+
+function poAssertComptroller(PDO $db, int $userId): void
+{
+    if (!poIsComptrollerRole(poViewerRoleLc($db, $userId))) {
+        poSendJson(['success' => false, 'message' => 'Forbidden']);
+    }
+}
+
+/** @return array<string, float> */
+function poEwtTransactionRateMap(): array
+{
+    return [
+        'purchase of goods' => 0.01,
+        'purchase of services' => 0.02,
+        'professional fees' => 0.05,
+        'professional fees (high income)' => 0.1,
+    ];
+}
+
+function poNormalizeEwtTransactionType(string $value): string
+{
+    $map = [
+        'purchase_of_goods' => 'Purchase of goods',
+        'purchase_of_services' => 'Purchase of services',
+        'professional_fees' => 'Professional fees',
+        'professional_fees_high' => 'Professional fees (high income)',
+    ];
+    $trim = trim($value);
+    if (isset($map[$trim])) {
+        return $map[$trim];
+    }
+
+    return poSanitizeString($trim, 100);
+}
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function poNormalizeTaxRows(mixed $taxesRaw, float $grossAmount): array
+{
+    if (is_string($taxesRaw)) {
+        $decoded = json_decode($taxesRaw, true);
+        $taxesRaw = is_array($decoded) ? $decoded : [];
+    }
+    if (!is_array($taxesRaw)) {
+        poSendJson(['success' => false, 'message' => 'Invalid tax payload.']);
+    }
+
+    $allowedEwtRates = [0.01, 0.02, 0.05, 0.1];
+    $normalized = [];
+    foreach ($taxesRaw as $idx => $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $taxType = strtolower(trim((string) ($row['tax_type'] ?? '')));
+        if ($taxType === 'vat') {
+            $taxType = 'vat withholding';
+        }
+        if (!in_array($taxType, ['ewt', 'vat withholding', 'other'], true)) {
+            poSendJson(['success' => false, 'message' => 'Invalid tax type at row ' . ($idx + 1) . '.']);
+        }
+
+        $label = poSanitizeString($row['label'] ?? '', 100);
+        $rate = round((float) ($row['rate'] ?? 0), 4);
+        $amountDeducted = round((float) ($row['amount_deducted'] ?? 0), 2);
+        $rateOverride = !empty($row['rate_override']) || (int) ($row['rate_override'] ?? 0) === 1;
+        $transactionType = poNormalizeEwtTransactionType((string) ($row['transaction_type'] ?? ''));
+        $supplierVatRegistered = (int) ($row['supplier_vat_registered'] ?? 0) === 1 ? 1 : 0;
+        $transactionVatExempt = (int) ($row['transaction_vat_exempt'] ?? 0) === 1 ? 1 : 0;
+
+        if ($taxType === 'ewt') {
+            if ($transactionType === '') {
+                poSendJson(['success' => false, 'message' => 'EWT requires a transaction type.']);
+            }
+            if (!$rateOverride && !in_array($rate, $allowedEwtRates, true)) {
+                poSendJson(['success' => false, 'message' => 'EWT rate must be 1%, 2%, 5%, or 10% unless manually overridden.']);
+            }
+            if ($rateOverride && ($rate <= 0 || $rate > 1)) {
+                poSendJson(['success' => false, 'message' => 'EWT override rate must be between 0 and 100%.']);
+            }
+            $amountDeducted = round($grossAmount * $rate, 2);
+            $normalized[] = [
+                'tax_type' => 'EWT',
+                'transaction_type' => $transactionType,
+                'rate' => $rate,
+                'rate_override' => $rateOverride ? 1 : 0,
+                'amount_deducted' => $amountDeducted,
+                'label' => null,
+                'supplier_vat_registered' => null,
+                'transaction_vat_exempt' => null,
+            ];
+            continue;
+        }
+
+        if ($taxType === 'vat withholding') {
+            if ($supplierVatRegistered === 0) {
+                poSendJson(['success' => false, 'message' => 'VAT withholding cannot be applied to non-VAT registered supplier']);
+            }
+            if ($transactionVatExempt === 1) {
+                poSendJson(['success' => false, 'message' => 'VAT withholding cannot be applied to VAT-exempt transaction']);
+            }
+            $rate = 0.05;
+            $amountDeducted = round($grossAmount * $rate, 2);
+            $normalized[] = [
+                'tax_type' => 'VAT Withholding',
+                'transaction_type' => null,
+                'rate' => $rate,
+                'rate_override' => 0,
+                'amount_deducted' => $amountDeducted,
+                'label' => null,
+                'supplier_vat_registered' => 1,
+                'transaction_vat_exempt' => 0,
+            ];
+            continue;
+        }
+
+        if ($label === '') {
+            poSendJson(['success' => false, 'message' => 'Other deductions require a label.']);
+        }
+        if ($amountDeducted <= 0) {
+            poSendJson(['success' => false, 'message' => 'Other deductions require a positive amount.']);
+        }
+        $normalized[] = [
+            'tax_type' => 'Other',
+            'transaction_type' => null,
+            'rate' => $grossAmount > 0 ? round($amountDeducted / $grossAmount, 4) : 0.0,
+            'rate_override' => 0,
+            'amount_deducted' => $amountDeducted,
+            'label' => $label,
+            'supplier_vat_registered' => null,
+            'transaction_vat_exempt' => null,
+        ];
+    }
+
+    return $normalized;
+}
+
+/**
+ * @return array{taxes: array<int, array<string, mixed>>, notes: string, net_payable: ?float, tax_computed: bool, computed_by: ?int, computed_at: ?string}
+ */
+function poFetchTaxRecord(PDO $db, int $poId): array
+{
+    $headerStmt = $db->prepare(
+        'SELECT net_payable, tax_computed FROM purchase_orders WHERE id = ? AND deleted_at IS NULL LIMIT 1'
+    );
+    $headerStmt->execute([$poId]);
+    $header = $headerStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $taxStmt = $db->prepare(
+        'SELECT tax_type, transaction_type, rate, rate_override, amount_deducted, label,
+                supplier_vat_registered, transaction_vat_exempt, notes, computed_by, computed_at
+         FROM purchase_order_taxes
+         WHERE purchase_order_id = ?
+         ORDER BY id ASC'
+    );
+    $taxStmt->execute([$poId]);
+    $rows = $taxStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $notes = '';
+    $computedBy = null;
+    $computedAt = null;
+    if ($rows !== []) {
+        $first = $rows[0];
+        $notes = (string) ($first['notes'] ?? '');
+        $computedBy = !empty($first['computed_by']) ? (int) $first['computed_by'] : null;
+        $computedAt = $first['computed_at'] ?? null;
+    }
+
+    return [
+        'taxes' => array_map(static function (array $row): array {
+            return [
+                'tax_type' => (string) ($row['tax_type'] ?? ''),
+                'transaction_type' => $row['transaction_type'] ?? null,
+                'rate' => round((float) ($row['rate'] ?? 0), 4),
+                'rate_override' => (int) ($row['rate_override'] ?? 0) === 1,
+                'amount_deducted' => round((float) ($row['amount_deducted'] ?? 0), 2),
+                'label' => $row['label'] ?? null,
+                'supplier_vat_registered' => $row['supplier_vat_registered'] !== null
+                    ? (int) $row['supplier_vat_registered']
+                    : null,
+                'transaction_vat_exempt' => $row['transaction_vat_exempt'] !== null
+                    ? (int) $row['transaction_vat_exempt']
+                    : null,
+            ];
+        }, $rows),
+        'notes' => $notes,
+        'net_payable' => isset($header['net_payable']) && $header['net_payable'] !== null
+            ? round((float) $header['net_payable'], 2)
+            : null,
+        'tax_computed' => (int) ($header['tax_computed'] ?? 0) === 1,
+        'computed_by' => $computedBy,
+        'computed_at' => $computedAt,
+    ];
+}
+
 function poSanitizeString(mixed $value, int $maxLen): string
 {
     $text = trim((string) ($value ?? ''));
@@ -243,6 +459,10 @@ function poFormatRecord(PDO $db, array $header, array $lines): array
         'mode_of_payment_label' => cwirmsFormatPoModeOfPaymentLabel($modeOfPayment),
         'purpose_of_request' => (string) ($header['purpose_of_request'] ?? ''),
         'total_amount' => $totalAmount,
+        'net_payable' => isset($header['net_payable']) && $header['net_payable'] !== null
+            ? round((float) $header['net_payable'], 2)
+            : null,
+        'tax_computed' => (int) ($header['tax_computed'] ?? 0) === 1,
         'status' => (string) ($header['status'] ?? 'pending'),
         'approved_by_president' => (int) ($header['approved_by_president'] ?? 0) === 1,
         'approved_at' => $header['approved_at'] ?? null,
@@ -591,6 +811,121 @@ if ($action === 'ensure_for_request') {
         'success' => true,
         'message' => 'Purchase order is ready.',
         'data' => poFormatRecord($db, $header, $record['lines']),
+    ]);
+}
+
+if ($action === 'save_tax') {
+    poAssertComptroller($db, $userId);
+
+    $poId = (int) ($_POST['purchase_order_id'] ?? 0);
+    if ($poId <= 0) {
+        poSendJson(['success' => false, 'message' => 'Purchase order id is required.']);
+    }
+
+    $record = poFetchById($db, $poId);
+    if (!$record) {
+        poSendJson(['success' => false, 'message' => 'Purchase order not found.']);
+    }
+
+    poAssertPresidentApprovedPo($record['header']);
+
+    $grossAmount = round((float) ($record['header']['total_amount'] ?? 0), 2);
+    $taxRows = poNormalizeTaxRows($_POST['taxes'] ?? null, $grossAmount);
+    $notes = poSanitizeString($_POST['notes'] ?? '', 65535);
+    $netPayable = round((float) ($_POST['net_payable'] ?? 0), 2);
+
+    $deductionSum = 0.0;
+    foreach ($taxRows as $taxRow) {
+        $deductionSum += (float) $taxRow['amount_deducted'];
+    }
+    $deductionSum = round($deductionSum, 2);
+    $expectedNet = round($grossAmount - $deductionSum, 2);
+    if (abs($expectedNet - $netPayable) > 0.02) {
+        $netPayable = $expectedNet;
+    }
+
+    if ($taxRows === []) {
+        poSendJson(['success' => false, 'message' => 'Add at least one deduction before saving.']);
+    }
+
+    $db->beginTransaction();
+    try {
+        $del = $db->prepare('DELETE FROM purchase_order_taxes WHERE purchase_order_id = ?');
+        $del->execute([$poId]);
+
+        $insert = $db->prepare(
+            'INSERT INTO purchase_order_taxes
+             (purchase_order_id, tax_type, transaction_type, rate, rate_override, amount_deducted, label,
+              supplier_vat_registered, transaction_vat_exempt, notes, computed_by, computed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+        );
+        foreach ($taxRows as $taxRow) {
+            $insert->execute([
+                $poId,
+                $taxRow['tax_type'],
+                $taxRow['transaction_type'],
+                $taxRow['rate'],
+                (int) ($taxRow['rate_override'] ?? 0),
+                $taxRow['amount_deducted'],
+                $taxRow['label'],
+                $taxRow['supplier_vat_registered'],
+                $taxRow['transaction_vat_exempt'],
+                $notes !== '' ? $notes : null,
+                $userId,
+            ]);
+        }
+
+        $upd = $db->prepare(
+            'UPDATE purchase_orders
+             SET net_payable = ?, tax_computed = 1, updated_at = NOW()
+             WHERE id = ? AND deleted_at IS NULL'
+        );
+        $upd->execute([$netPayable, $poId]);
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        poSendJson(['success' => false, 'message' => 'Failed to save tax record.']);
+    }
+
+    $saved = poFetchTaxRecord($db, $poId);
+    poSendJson([
+        'success' => true,
+        'message' => 'Tax record saved.',
+        'net_payable' => $netPayable,
+        'taxes' => $saved['taxes'],
+        'notes' => $saved['notes'],
+        'tax_computed' => true,
+    ]);
+}
+
+if ($action === 'fetch_tax') {
+    poAssertComptroller($db, $userId);
+
+    $poId = (int) ($_GET['purchase_order_id'] ?? $_POST['purchase_order_id'] ?? 0);
+    if ($poId <= 0) {
+        poSendJson(['success' => false, 'message' => 'Purchase order id is required.']);
+    }
+
+    $record = poFetchById($db, $poId);
+    if (!$record) {
+        poSendJson(['success' => false, 'message' => 'Purchase order not found.']);
+    }
+
+    poAssertPresidentApprovedPo($record['header']);
+
+    $saved = poFetchTaxRecord($db, $poId);
+    poSendJson([
+        'success' => true,
+        'taxes' => $saved['taxes'],
+        'notes' => $saved['notes'],
+        'net_payable' => $saved['net_payable'],
+        'tax_computed' => $saved['tax_computed'],
+        'gross_amount' => round((float) ($record['header']['total_amount'] ?? 0), 2),
+        'computed_by' => $saved['computed_by'],
+        'computed_at' => $saved['computed_at'],
     ]);
 }
 

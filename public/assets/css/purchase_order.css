@@ -178,10 +178,418 @@
     gap: 0.85rem;
 }
 
+.comptroller-tax-pending-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 1rem 0 0.5rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 10px;
+    border: 1px solid #fde68a;
+    background: #fffbeb;
+    color: #92400e;
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+.comptroller-tax-pending-notice i {
+    margin-top: 0.1rem;
+    color: #d97706;
+}
+
+.comptroller-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 18px 0 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #854f0b;
+}
+
+.comptroller-divider::before,
+.comptroller-divider::after {
+    content: '';
+    flex: 1;
+    height: 0.5px;
+    background: #ef9f27;
+}
+
+.comptroller-section {
+    border: 1.5px solid #ef9f27;
+    border-radius: 10px;
+    padding: 16px;
+    background: #fffdf7;
+    margin-bottom: 16px;
+}
+
+.comptroller-section-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+.comptroller-section-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #412402;
+}
+
+.comptroller-section-subtitle {
+    margin: 0.2rem 0 0;
+    font-size: 0.78rem;
+    color: #854f0b;
+}
+
+.comptroller-tax-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.comptroller-tax-badge--pending {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
+
+.comptroller-tax-badge--computed {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #86efac;
+}
+
+.comptroller-tax-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #ef9f27;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+}
+
+.comptroller-tax-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.comptroller-tax-table th,
+.comptroller-tax-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #fde68a;
+    vertical-align: middle;
+}
+
+.comptroller-tax-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.tax-table-header {
+    background: #fac775;
+    color: #412402;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 7px 10px;
+    text-align: left;
+}
+
+.tax-table-header--action {
+    width: 72px;
+    text-align: center;
+}
+
+.po-tax-type-select,
+.po-tax-rate-select,
+.po-tax-label-input,
+.po-tax-amount-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.82rem;
+    font-family: inherit;
+    background: #fff;
+}
+
+.po-tax-amount-readonly {
+    display: block;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: #7c2d12;
+}
+
+.po-tax-remove-btn {
+    border: none;
+    background: #fee2e2;
+    color: #b91c1c;
+    border-radius: 6px;
+    padding: 0.35rem 0.55rem;
+    cursor: pointer;
+    font-size: 0.78rem;
+}
+
+.po-tax-remove-btn:hover {
+    background: #fecaca;
+}
+
+.comptroller-tax-quick-add {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+}
+
+.btn-tax-ewt,
+.btn-tax-vat,
+.btn-tax-other,
+.btn-tax-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    font-family: inherit;
+}
+
+.btn-tax-ewt {
+    background: #e6f1fb;
+    color: #0c447c;
+    border: 1.5px solid #378add;
+}
+
+.btn-tax-ewt:hover {
+    background: #b5d4f4;
+}
+
+.btn-tax-ewt.active {
+    background: #378add;
+    color: #fff;
+    border-color: #185fa5;
+}
+
+.btn-tax-vat {
+    background: #e1f5ee;
+    color: #085041;
+    border: 1.5px solid #1d9e75;
+}
+
+.btn-tax-vat:hover {
+    background: #9fe1cb;
+}
+
+.btn-tax-vat.active {
+    background: #1d9e75;
+    color: #fff;
+    border-color: #0f6e56;
+}
+
+.btn-tax-other {
+    background: #faeeda;
+    color: #633806;
+    border: 1.5px solid #ef9f27;
+}
+
+.btn-tax-other:hover {
+    background: #fac775;
+}
+
+.btn-tax-other.active {
+    background: #ef9f27;
+    color: #fff;
+    border-color: #ba7517;
+}
+
+.btn-tax-add {
+    background: transparent;
+    color: #5f5e5a;
+    border: 1.5px dashed #cbd5e1;
+}
+
+.btn-tax-add:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+
+.btn-tax-ewt:disabled,
+.btn-tax-vat:disabled,
+.btn-tax-other:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.po-tax-ewt-fields,
+.po-tax-vat-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 200px;
+}
+
+.po-tax-mini-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.1rem;
+}
+
+.po-tax-transaction-select,
+.po-tax-rate-pct-input,
+.po-tax-label-input,
+.po-tax-amount-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.82rem;
+    font-family: inherit;
+    background: #fff;
+}
+
+.po-tax-rate-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.po-tax-rate-suffix {
+    font-size: 0.82rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.po-tax-rate-fixed {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #412402;
+}
+
+.po-vat-condition {
+    margin-top: 0.15rem;
+}
+
+.po-vat-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    font-size: 0.8rem;
+    color: #334155;
+}
+
+.po-vat-radio-group label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+}
+
+.vat-warning,
+.po-vat-warning {
+    font-size: 11px;
+    color: #993c1d;
+    background: #faece7;
+    border: 0.5px solid #f0997b;
+    border-radius: 6px;
+    padding: 4px 10px;
+    display: inline-block;
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
+.comptroller-tax-breakdown {
+    background: #fff;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 0.75rem 0.85rem;
+    margin-bottom: 0.85rem;
+}
+
+.breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 4px 0;
+    color: #64748b;
+}
+
+.breakdown-row--deduction {
+    color: #7c2d12;
+}
+
+.breakdown-row--deduction strong {
+    color: #b45309;
+    font-weight: 600;
+}
+
+.breakdown-total {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 500;
+    color: #2e7d32;
+    border-top: 0.5px solid #e2e8f0;
+    padding-top: 8px;
+    margin-top: 4px;
+}
+
+.comptroller-tax-notes-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #412402;
+    margin-bottom: 0.35rem;
+}
+
+.comptroller-tax-notes {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.85rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 72px;
+    margin-bottom: 0.85rem;
+}
+
+.comptroller-tax-save-row {
+    display: flex;
+    justify-content: center;
+}
+
+.comptroller-tax-save-row .btn-submit {
+    min-width: 200px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+}
+
 @media print {
     .po-no-print,
     .requisition-close-btn,
-    .po-action-bar {
+    .po-action-bar,
+    .comptroller-tax-pending-notice,
+    .comptroller-divider,
+    .comptroller-section {
         display: none !important;
     }
 

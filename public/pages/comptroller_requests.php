@@ -41,7 +41,7 @@ $comptrollerActive = 'requests';
     <div class="page-header management-header">
         <div>
             <h1>Requisition Management</h1>
-            <p>View requisition lines across all offices (read-only). Use <strong>View</strong> to open the requester&rsquo;s requisition form.</p>
+            <p>Browse requisitions across all offices. Use <strong>Status</strong> to open workflow progress and review forms (canvass, purchase requisition, purchase order).</p>
         </div>
     </div>
 

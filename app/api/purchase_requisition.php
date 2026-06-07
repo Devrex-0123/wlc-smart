@@ -69,6 +69,8 @@ function canViewPurchaseRequisition(PDO $db, int $userId, int $requestId): bool
     $allowedRoles = [
         'inventory manager',
         'inventory_manager',
+        'comptroller',
+        'gsd officer',
         'president',
         'president verifier',
         'verifier president',
