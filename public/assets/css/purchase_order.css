@@ -1,5 +1,374 @@
+/* ── Purchase order form page (purchase_order_form.php only) ── */
+body.page-purchase-order-form {
+    background: #ffffff;
+    color: #1f2937;
+}
+
+.page-purchase-order-form {
+    --po-primary: #1D6B3A;
+    --po-verified-bg: #EAF3DE;
+    --po-verified-text: #3B6D11;
+    --po-reject: #A32D2D;
+    --po-border: #d1d5db;
+}
+
+.page-purchase-order-form .requisition-main {
+    min-height: 100vh;
+    padding: 1rem 2.5%;
+    display: block;
+}
+
+.page-purchase-order-form .requisition-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    background: #ffffff;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 1.25rem 1.5rem 1.75rem;
+    gap: 1.15rem;
+}
+
+.page-purchase-order-form .requisition-close-btn {
+    border: 0.5px solid var(--po-border);
+    background: #ffffff;
+    color: #1D6B3A;
+    box-shadow: none;
+    transform: none;
+}
+
+.page-purchase-order-form .requisition-close-btn:hover {
+    background: #f9fafb;
+    color: #1D6B3A;
+    transform: none;
+}
+
+.page-purchase-order-form .requisition-logo-wlc-wrap,
+.page-purchase-order-form .requisition-logo {
+    box-shadow: none;
+    border-color: #1D6B3A;
+}
+
+.page-purchase-order-form .requisition-logo-wlc-wrap {
+    background: #ffffff;
+}
+
+.page-purchase-order-form .requisition-title h1,
+.page-purchase-order-form .po-form-title {
+    color: #1D6B3A !important;
+}
+
+.page-purchase-order-form .requisition-section {
+    margin-top: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* Metadata grid */
+.page-purchase-order-form .po-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem 1.25rem;
+    margin-bottom: 0.5rem;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.page-purchase-order-form .po-meta-grid .field-group label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.page-purchase-order-form .po-meta-grid .po-readonly-field {
+    width: 100%;
+    box-sizing: border-box;
+    background: #f3f4f6;
+    border: 0.5px solid var(--po-border);
+    border-radius: 6px;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.9rem;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-purpose-field {
+    grid-column: 1 / -1;
+}
+
+/* Section labels */
+.page-purchase-order-form .rf-section {
+    margin-bottom: 0.75rem;
+}
+
+.page-purchase-order-form .rf-section-heading {
+    margin: 0 0 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 0.5px solid #1D6B3A;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #1D6B3A;
+    line-height: 1.3;
+}
+
+.page-purchase-order-form .table-section {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-lines-table-wrap {
+    border: 0.5px solid var(--po-border);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-lines-table thead tr.po-thead-main th {
+    background: #1D6B3A !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.55rem 0.65rem;
+}
+
+.page-purchase-order-form .po-lines-table thead tr {
+    background: #1D6B3A !important;
+}
+
+.page-purchase-order-form .po-lines-table tbody td {
+    border-bottom: 0.5px solid #e5e7eb;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.88rem;
+}
+
+.page-purchase-order-form .po-lines-table tbody tr:nth-child(even) td {
+    background: #f9fafb !important;
+}
+
+.page-purchase-order-form .po-lines-table tbody tr:nth-child(odd) td {
+    background: #ffffff !important;
+}
+
+.page-purchase-order-form .po-lines-table tfoot .po-total-row td {
+    border-top: 0.5px solid var(--po-border);
+    background: #ffffff !important;
+    padding: 0.65rem 0.65rem;
+    font-weight: 700;
+}
+
+.page-purchase-order-form .po-total-label {
+    text-align: right !important;
+    color: #111827;
+    font-size: 0.88rem;
+}
+
+.page-purchase-order-form .po-total-value {
+    text-align: right !important;
+    color: #1D6B3A;
+}
+
+.page-purchase-order-form .po-total-value strong {
+    font-size: 0.95rem;
+    font-weight: 800;
+}
+
+/* Verifier summary */
+.page-purchase-order-form .po-verifier-section {
+    margin-top: 0.5rem;
+}
+
+.page-purchase-order-form .po-verifier-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border: 0.5px solid var(--po-border);
+    border-radius: 6px;
+    background: #ffffff;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-row .approval-role {
+    flex: 1 1 220px;
+    max-width: none;
+    margin: 0;
+    border: 0.5px solid var(--po-border);
+    border-radius: 6px;
+    background: #f9fafb;
+    padding: 0.75rem 0.85rem;
+    justify-content: flex-start;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-row .approval-role-body {
+    text-align: left;
+}
+
+.page-purchase-order-form .po-verifier-row .approval-name {
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.page-purchase-order-form .po-verifier-row .cv-appr-detail {
+    margin-top: 0.2rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.page-purchase-order-form .po-verifier-card.po-verifier-approved {
+    border-color: #b8d4a8;
+    background: var(--po-verified-bg);
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-card.po-verifier-approved .circle-icon {
+    background: #1D6B3A;
+    border-color: #1D6B3A;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-card.po-verifier-approved .approval-name,
+.page-purchase-order-form .po-verifier-card.po-verifier-approved .approval-sub,
+.page-purchase-order-form .po-verifier-card.po-verifier-approved .cv-appr-detail {
+    color: var(--po-verified-text);
+}
+
+.page-purchase-order-form .po-verifier-card.po-verifier-rejected {
+    border-color: #fecaca;
+    background: #fef2f2;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-card .circle-icon.inactive {
+    background: var(--po-verified-bg);
+    color: #1D6B3A;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-card .circle-icon.inactive i {
+    color: #94a3b8;
+}
+
+/* Action buttons — right-aligned, equal size */
+.page-purchase-order-form .rf-form-actions.po-action-bar.verifier-decision-bar {
+    justify-content: flex-end;
+    margin-top: 0.75rem;
+    margin-bottom: 0;
+    padding: 1rem 0 0;
+    background: transparent;
+    border: none;
+    border-top: 0.5px solid var(--po-border);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .rf-form-actions .btn-submit,
+.page-purchase-order-form .rf-form-actions .comptroller-reject-btn,
+.page-purchase-order-form .rf-form-actions .comptroller-undo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: unset;
+    width: auto;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    line-height: 1.2;
+    border-radius: 6px;
+    box-shadow: none;
+    transform: none;
+}
+
+.page-purchase-order-form .rf-form-actions .btn-submit {
+    background: #1D6B3A;
+    border: none;
+    color: #ffffff;
+}
+
+.page-purchase-order-form .rf-form-actions .btn-submit:hover {
+    background: #185a31;
+    transform: none;
+}
+
+.page-purchase-order-form .rf-form-actions .comptroller-reject-btn {
+    background: var(--po-reject);
+    border: none;
+    color: #ffffff;
+}
+
+.page-purchase-order-form .rf-form-actions .comptroller-reject-btn:hover:not(:disabled) {
+    background: #8c2626;
+    transform: none;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .rf-form-actions .comptroller-undo-btn {
+    background: transparent;
+    border: 0.5px solid var(--po-border);
+    color: #374151;
+}
+
+.page-purchase-order-form .rf-form-actions .comptroller-undo-btn:hover:not(:disabled) {
+    background: #f9fafb;
+    transform: none;
+    box-shadow: none;
+}
+
+@media (max-width: 900px) {
+    .page-purchase-order-form .po-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    .page-purchase-order-form .requisition-main {
+        padding: 0.75rem 1rem;
+    }
+
+    .page-purchase-order-form .requisition-card {
+        padding: 1rem 0.75rem 1.25rem;
+    }
+
+    .page-purchase-order-form .po-meta-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-purchase-order-form .rf-form-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .page-purchase-order-form .rf-form-actions .btn-submit,
+    .page-purchase-order-form .rf-form-actions .comptroller-reject-btn,
+    .page-purchase-order-form .rf-form-actions .comptroller-undo-btn {
+        width: 100%;
+    }
+}
+
 .purchase-order-card {
     max-width: 1100px;
+}
+
+.page-purchase-order-form .purchase-order-card {
+    max-width: 100%;
 }
 
 .purchase-order-document {
@@ -122,24 +491,6 @@
     pointer-events: none !important;
 }
 
-.po-total-row {
-    margin-top: 0.85rem;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 0.7rem;
-    color: #2e7d32;
-    font-size: 0.95rem;
-}
-
-.po-total-row strong {
-    font-size: 1.05rem;
-}
-
-.po-verifier-section .section-label {
-    margin-bottom: 0.75rem;
-}
-
 .po-verifier-card {
     border: 2px solid #cbd5e1;
     border-radius: 12px;
@@ -173,9 +524,9 @@
     margin-top: 1rem;
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: flex-end;
     align-items: center;
-    gap: 0.85rem;
+    gap: 0.65rem;
 }
 
 .comptroller-tax-pending-notice {

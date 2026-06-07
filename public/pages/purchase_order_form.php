@@ -59,7 +59,7 @@ $todayLabel = date('F j, Y');
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="page-purchase-order-form">
 <main class="requisition-main">
     <div class="requisition-card purchase-order-card purchase-order-document">
         <a href="<?php echo htmlspecialchars($backHref); ?>" class="requisition-close-btn po-no-print" id="poBackBtn" aria-label="Back" data-tooltip="Back">
@@ -68,8 +68,8 @@ $todayLabel = date('F j, Y');
 
         <div class="requisition-top po-header">
             <div class="logo-left">
-                <div class="requisition-logo-wlc-wrap po-seal-placeholder" aria-hidden="true">
-                    <img src="../assets/images/western-letye-logo.jpg" alt="" class="requisition-logo po-seal-img" decoding="async" />
+                <div class="requisition-logo-wlc-wrap">
+                    <img src="../assets/images/wlc-smart-logo.png" alt="WLC-SMART Inventory Office" class="requisition-logo-wlc" decoding="async" />
                 </div>
             </div>
             <div class="requisition-title">
@@ -82,61 +82,56 @@ $todayLabel = date('F j, Y');
                 <p class="requisition-section po-form-title">PURCHASE ORDER</p>
             </div>
             <div class="logo-right">
-                <div class="requisition-logo-wlc-wrap po-seal-placeholder" aria-hidden="true">
-                    <img src="../assets/images/wlc-smart-logo.png" alt="" class="requisition-logo-wlc po-seal-img" decoding="async" />
-                </div>
+                <img src="../assets/images/western-letye-logo.jpg" alt="College Logo" class="requisition-logo" />
             </div>
         </div>
 
         <div id="purchaseOrderForm" class="po-form">
-            <div class="requisition-info po-info-grid">
-                <div class="info-left info-grid">
-                    <div class="field-group">
-                        <label for="poNumber">PO Number</label>
-                        <input type="text" id="poNumber" class="po-readonly-field" value="—" readonly>
-                    </div>
-                    <div class="field-group">
-                        <label for="poRequestedBy">Requested By</label>
-                        <input type="text" id="poRequestedBy" class="po-readonly-field" value="<?php echo htmlspecialchars($displayName); ?>" readonly>
-                    </div>
-                    <div class="field-group">
-                        <label for="poLocation">Location / Facility</label>
-                        <input type="text" id="poLocation" class="po-readonly-field" value="—" readonly>
-                    </div>
-                    <div class="field-group">
-                        <label for="poSupplierName">Supplier Name</label>
-                        <input type="text" id="poSupplierName" class="po-readonly-field" value="—" readonly>
-                    </div>
-                    <div class="field-group">
-                        <label for="poSupplierTin">Supplier TIN Number</label>
-                        <input type="text" id="poSupplierTin" class="po-readonly-field" value="" placeholder="000-000-000-000" readonly>
-                    </div>
+            <div class="requisition-info po-meta-grid">
+                <div class="field-group">
+                    <label for="poNumber">PO Number</label>
+                    <input type="text" id="poNumber" class="po-readonly-field" value="—" readonly>
                 </div>
-                <div class="info-right">
-                    <div class="field-group">
-                        <label for="poDateIssued">Date Issued</label>
-                        <input type="text" id="poDateIssued" class="po-readonly-field" value="<?php echo htmlspecialchars($todayLabel); ?>" readonly>
-                    </div>
-                    <div class="field-group">
-                        <label for="poModeOfPayment">Mode of Payment</label>
-                        <input type="text" id="poModeOfPayment" class="po-readonly-field" value="—" readonly>
-                    </div>
-                    <div class="field-group">
-                        <label for="poPurpose">Purpose of Request</label>
-                        <input type="text" id="poPurpose" class="po-readonly-field" value="—" readonly>
-                    </div>
+                <div class="field-group">
+                    <label for="poRequestedBy">Requested By</label>
+                    <input type="text" id="poRequestedBy" class="po-readonly-field" value="<?php echo htmlspecialchars($displayName); ?>" readonly>
+                </div>
+                <div class="field-group">
+                    <label for="poDateIssued">Date Issued</label>
+                    <input type="text" id="poDateIssued" class="po-readonly-field" value="<?php echo htmlspecialchars($todayLabel); ?>" readonly>
+                </div>
+                <div class="field-group">
+                    <label for="poModeOfPayment">Mode of Payment</label>
+                    <input type="text" id="poModeOfPayment" class="po-readonly-field" value="—" readonly>
+                </div>
+                <div class="field-group">
+                    <label for="poLocation">Location / Facility</label>
+                    <input type="text" id="poLocation" class="po-readonly-field" value="—" readonly>
+                </div>
+                <div class="field-group">
+                    <label for="poSupplierName">Supplier Name</label>
+                    <input type="text" id="poSupplierName" class="po-readonly-field" value="—" readonly>
+                </div>
+                <div class="field-group">
+                    <label for="poSupplierTin">Supplier TIN Number</label>
+                    <input type="text" id="poSupplierTin" class="po-readonly-field" value="" placeholder="000-000-000-000" readonly>
+                </div>
+                <div class="field-group po-purpose-field">
+                    <label for="poPurpose">Purpose of Request</label>
+                    <input type="text" id="poPurpose" class="po-readonly-field" value="—" readonly>
                 </div>
             </div>
 
-            <div class="table-section">
-                <div class="section-label">Purchase order lines</div>
-                <div class="supplier-table-wrapper">
+            <section class="rf-section rf-section-po-lines">
+                <h2 class="rf-section-heading">Purchase Order Lines</h2>
+                <div class="table-section">
+                <div class="supplier-table-wrapper po-lines-table-wrap">
                     <table class="supplier-table po-lines-table" id="poLinesTable">
                         <thead>
                             <tr class="po-thead-main">
                                 <th>Description</th>
                                 <th>Sub-description</th>
-                                <th>QTY</th>
+                                <th>Qty</th>
                                 <th>Unit Price</th>
                                 <th>Amount</th>
                             </tr>
@@ -146,17 +141,20 @@ $todayLabel = date('F j, Y');
                                 <td colspan="5">Loading purchase order lines…</td>
                             </tr>
                         </tbody>
+                        <tfoot>
+                            <tr class="po-total-row">
+                                <td colspan="4" class="po-total-label">Total Amount</td>
+                                <td class="po-total-value"><strong id="poGrandTotal">PHP 0.00</strong></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
-                <div class="po-total-row">
-                    <span>Total Amount</span>
-                    <strong id="poGrandTotal">PHP 0.00</strong>
                 </div>
-            </div>
+            </section>
 
             <div class="approval-section po-verifier-section" aria-label="Verifier summary">
-                <div class="section-label">Verifier summary</div>
-                <div class="approval-card po-verifier-card">
+                <h2 class="rf-section-heading">Verifier Summary</h2>
+                <div class="approval-card po-verifier-card po-verifier-row">
                     <div class="approval-role" id="poPresidentVerifier">
                         <div class="circle-icon inactive"><i class="fas fa-check"></i></div>
                         <div class="approval-role-body">
@@ -230,7 +228,7 @@ $todayLabel = date('F j, Y');
             </div>
             <?php endif; ?>
 
-            <div class="comptroller-approve-wrapper po-action-bar verifier-decision-bar po-no-print">
+            <div class="comptroller-approve-wrapper po-action-bar verifier-decision-bar rf-form-actions po-no-print">
                 <?php if ($isPresidentVerifier): ?>
                 <button type="button" id="poApproveBtn" class="btn-submit" style="display:none;"><i class="fas fa-check" aria-hidden="true"></i> Approve</button>
                 <button type="button" id="poRejectBtn" class="btn-secondary comptroller-reject-btn" style="display:none;"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
