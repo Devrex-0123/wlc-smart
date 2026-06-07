@@ -1,3 +1,432 @@
+/* ── Purchase requisition form page (purchase_requisition_form.php only) ── */
+body.page-purchase-requisition-form {
+    background: #ffffff;
+    color: #1f2937;
+}
+
+.page-purchase-requisition-form {
+    --pr-primary: #1D6B3A;
+    --pr-verified-bg: #EAF3DE;
+    --pr-verified-text: #3B6D11;
+    --pr-reject: #A32D2D;
+    --pr-border: #d1d5db;
+}
+
+.page-purchase-requisition-form .requisition-main {
+    min-height: 100vh;
+    padding: 1rem 2.5%;
+    display: block;
+}
+
+.page-purchase-requisition-form .requisition-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    background: #ffffff;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 1.25rem 1.5rem 1.75rem;
+    gap: 1.15rem;
+}
+
+.page-purchase-requisition-form .requisition-close-btn {
+    border: 0.5px solid var(--pr-border);
+    background: #ffffff;
+    color: #1D6B3A;
+    box-shadow: none;
+    transform: none;
+}
+
+.page-purchase-requisition-form .requisition-close-btn:hover {
+    background: #f9fafb;
+    color: #1D6B3A;
+    transform: none;
+}
+
+.page-purchase-requisition-form .requisition-logo-wlc-wrap,
+.page-purchase-requisition-form .requisition-logo {
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .requisition-logo-wlc-wrap {
+    background: #ffffff;
+    border-color: #1D6B3A;
+}
+
+.page-purchase-requisition-form .requisition-logo {
+    border-color: #1D6B3A;
+}
+
+.page-purchase-requisition-form .requisition-title h1 {
+    color: #1D6B3A;
+}
+
+.page-purchase-requisition-form .requisition-section {
+    margin-top: 0.5rem;
+    color: #1D6B3A;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* Metadata — 4-column grid */
+.page-purchase-requisition-form .pr-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem 1.25rem;
+    margin-bottom: 0.5rem;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.page-purchase-requisition-form .pr-meta-grid .field-group label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.page-purchase-requisition-form .pr-meta-grid .field-group input {
+    width: 100%;
+    box-sizing: border-box;
+    background: #f3f4f6;
+    border: 0.5px solid var(--pr-border);
+    border-radius: 6px;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.9rem;
+    color: #111827;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .pr-purpose-field {
+    grid-column: 1 / -1;
+}
+
+/* Section labels */
+.page-purchase-requisition-form .rf-section {
+    margin-bottom: 0.75rem;
+}
+
+.page-purchase-requisition-form .rf-section-heading {
+    margin: 0 0 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 0.5px solid #1D6B3A;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #1D6B3A;
+    line-height: 1.3;
+}
+
+.page-purchase-requisition-form .table-section {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .pr-lines-table-wrap {
+    border: 0.5px solid var(--pr-border);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .purchase-req-table {
+    table-layout: fixed;
+    margin: 0;
+}
+
+.page-purchase-requisition-form .purchase-req-table thead th {
+    background: #1D6B3A !important;
+    color: #ffffff !important;
+    border-bottom: none !important;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.55rem 0.65rem;
+    text-align: left;
+}
+
+.page-purchase-requisition-form .purchase-req-table tbody td {
+    border-bottom: 0.5px solid #e5e7eb;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.88rem;
+    vertical-align: top;
+}
+
+.page-purchase-requisition-form .purchase-req-table tbody tr:nth-child(even) td {
+    background: #f9fafb;
+}
+
+.page-purchase-requisition-form .purchase-req-table tbody tr:last-child td {
+    border-bottom: 0.5px solid #e5e7eb;
+}
+
+.page-purchase-requisition-form .purchase-req-table tfoot .purchase-req-total-row td {
+    border-top: 0.5px solid var(--pr-border);
+    border-bottom: none;
+    background: #ffffff;
+    padding: 0.65rem 0.65rem;
+    font-weight: 700;
+    color: #111827;
+}
+
+.page-purchase-requisition-form .purchase-req-total-label {
+    text-align: right !important;
+    font-size: 0.88rem;
+    letter-spacing: 0.02em;
+}
+
+.page-purchase-requisition-form .purchase-req-total-value {
+    text-align: right !important;
+    color: #1D6B3A;
+}
+
+.page-purchase-requisition-form .purchase-req-total-value strong {
+    font-size: 0.95rem;
+    font-weight: 800;
+}
+
+/* Description cell typography */
+.page-purchase-requisition-form .pr-desc-main {
+    font-weight: 700;
+    color: #111827;
+}
+
+.page-purchase-requisition-form .pr-desc-meta {
+    margin-top: 0.2rem;
+    font-size: 0.78rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.page-purchase-requisition-form .pr-desc-spec {
+    margin-top: 0.15rem;
+    font-size: 0.76rem;
+    color: #94a3b8;
+}
+
+.page-purchase-requisition-form .purchase-req-table .pr-num {
+    text-align: left;
+    white-space: nowrap;
+}
+
+/* Verifier summary — horizontal row */
+.page-purchase-requisition-form .pr-verifier-summary {
+    margin-top: 0.5rem;
+    padding-top: 0.25rem;
+}
+
+.page-purchase-requisition-form .pr-verifier-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border: 0.5px solid var(--pr-border);
+    border-radius: 6px;
+    background: #ffffff;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .approval-role {
+    flex: 1 1 220px;
+    max-width: none;
+    margin: 0;
+    border: 0.5px solid var(--pr-border);
+    border-radius: 6px;
+    background: #f9fafb;
+    padding: 0.75rem 0.85rem;
+    justify-content: flex-start;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .approval-role:has(.circle-icon.active) {
+    background: var(--pr-verified-bg);
+    border-color: #b8d4a8;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .approval-role:has(.circle-icon.active) .approval-name,
+.page-purchase-requisition-form .pr-verifier-row .approval-role:has(.circle-icon.active) .approval-sub,
+.page-purchase-requisition-form .pr-verifier-row .approval-role:has(.circle-icon.active) .cv-appr-detail {
+    color: var(--pr-verified-text);
+}
+
+.page-purchase-requisition-form .pr-verifier-row .approval-role:has(.circle-icon.rejected) {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .circle-icon.active {
+    background: #1D6B3A;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .circle-icon.inactive {
+    background: #EAF3DE;
+    color: #1D6B3A;
+    opacity: 1;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .circle-icon.inactive i {
+    color: #94a3b8;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .circle-icon.rejected {
+    background: var(--pr-reject);
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .approval-role-body {
+    text-align: left;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .approval-name {
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.page-purchase-requisition-form .pr-verifier-row .cv-appr-detail {
+    margin-top: 0.2rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* Action buttons — right-aligned, equal size */
+.page-purchase-requisition-form .rf-form-actions.comptroller-approve-wrapper.verifier-decision-bar {
+    justify-content: flex-end;
+    margin-top: 0.75rem;
+    margin-bottom: 0;
+    padding: 1rem 0 0;
+    background: transparent;
+    border: none;
+    border-top: 0.5px solid var(--pr-border);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .rf-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.65rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.page-purchase-requisition-form .rf-form-actions .btn-submit,
+.page-purchase-requisition-form .rf-form-actions .comptroller-reject-btn,
+.page-purchase-requisition-form .rf-form-actions .comptroller-undo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: unset;
+    width: auto;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    line-height: 1.2;
+    border-radius: 6px;
+    box-shadow: none;
+    transform: none;
+}
+
+.page-purchase-requisition-form .rf-form-actions .btn-submit {
+    background: #1D6B3A;
+    border: none;
+    color: #ffffff;
+}
+
+.page-purchase-requisition-form .rf-form-actions .btn-submit:hover {
+    background: #185a31;
+    transform: none;
+}
+
+.page-purchase-requisition-form .rf-form-actions .comptroller-reject-btn {
+    background: var(--pr-reject);
+    border: none;
+    color: #ffffff;
+}
+
+.page-purchase-requisition-form .rf-form-actions .comptroller-reject-btn:hover:not(:disabled) {
+    background: #8c2626;
+    transform: none;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .rf-form-actions .comptroller-undo-btn {
+    background: transparent;
+    border: 0.5px solid var(--pr-border);
+    color: #374151;
+}
+
+.page-purchase-requisition-form .rf-form-actions .comptroller-undo-btn:hover:not(:disabled) {
+    background: #f9fafb;
+    transform: none;
+    box-shadow: none;
+}
+
+.page-purchase-requisition-form .pr-rejection-panel {
+    border-radius: 6px;
+    border: 0.5px solid var(--pr-border);
+    border-left: 0.5px solid var(--pr-border);
+    box-shadow: none;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.page-purchase-requisition-form .pr-rejection-panel.pr-rejection-panel--active {
+    border-color: #1D6B3A;
+    background: #EAF3DE;
+    box-shadow: none;
+}
+
+@media (max-width: 900px) {
+    .page-purchase-requisition-form .pr-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    .page-purchase-requisition-form .requisition-main {
+        padding: 0.75rem 1rem;
+    }
+
+    .page-purchase-requisition-form .requisition-card {
+        padding: 1rem 0.75rem 1.25rem;
+    }
+
+    .page-purchase-requisition-form .pr-meta-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-purchase-requisition-form .rf-form-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .page-purchase-requisition-form .rf-form-actions .btn-submit,
+    .page-purchase-requisition-form .rf-form-actions .comptroller-reject-btn,
+    .page-purchase-requisition-form .rf-form-actions .comptroller-undo-btn {
+        width: 100%;
+    }
+}
+
 .purchase-req-table {
     table-layout: fixed;
 }
@@ -50,31 +479,13 @@
     word-break: break-word;
 }
 
-.purchase-req-total {
-    margin-top: 0.85rem;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 0.7rem;
-    color: #14532d;
-    font-size: 0.95rem;
-}
-
-.purchase-req-total strong {
-    font-size: 1rem;
-}
-
 .purchase-approval-section {
     margin-top: 0.25rem;
 }
 
-.purchase-approval-section .section-label {
-    margin-bottom: 0.75rem;
-}
-
 /* Rejection note block below verifier actions */
 .purchase-approval-actions {
-    margin-top: 1.15rem;
+    margin-top: 0.75rem;
 }
 
 .pr-rejection-panel {
