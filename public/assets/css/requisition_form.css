@@ -3677,3 +3677,889 @@ body.page-requisition-form {
         width: 100%;
     }
 }
+
+/* ── Canvass form page layout (dean_canvass_form.php only) ── */
+body.page-canvass-form {
+    background: #ffffff;
+    color: #1f2937;
+}
+
+.page-canvass-form {
+    --cv-primary: #1D6B3A;
+    --cv-best-head: #0F6E56;
+    --cv-best-border: #1D9E75;
+    --cv-verified-bg: #EAF3DE;
+    --cv-verified-text: #3B6D11;
+    --cv-reject: #A32D2D;
+    --cv-border: #d1d5db;
+}
+
+.page-canvass-form .requisition-main {
+    min-height: 100vh;
+    padding: 1rem 2.5%;
+    display: block;
+}
+
+.page-canvass-form .requisition-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    background: #ffffff;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 1.25rem 1.5rem 1.75rem;
+    gap: 1.15rem;
+}
+
+.page-canvass-form .requisition-close-btn {
+    border: 0.5px solid var(--cv-border);
+    background: #ffffff;
+    color: #1D6B3A;
+    box-shadow: none;
+    transform: none;
+}
+
+.page-canvass-form .requisition-close-btn:hover {
+    background: #f9fafb;
+    color: #1D6B3A;
+    transform: none;
+}
+
+.page-canvass-form .requisition-logo-wlc-wrap,
+.page-canvass-form .requisition-logo {
+    box-shadow: none;
+}
+
+.page-canvass-form .requisition-logo-wlc-wrap {
+    background: #ffffff;
+    border-color: #1D6B3A;
+}
+
+.page-canvass-form .requisition-logo {
+    border-color: #1D6B3A;
+}
+
+.page-canvass-form .requisition-title h1 {
+    color: #1D6B3A;
+}
+
+.page-canvass-form .requisition-section {
+    margin-top: 0.5rem;
+    color: #1D6B3A;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* Workflow breadcrumb pills */
+.page-canvass-form .cv-workflow-breadcrumb {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 0 0 0.25rem;
+    padding: 0;
+}
+
+.page-canvass-form .cv-workflow-breadcrumb-track {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.5rem;
+}
+
+.page-canvass-form .cv-wf-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    border: 0.5px solid var(--cv-border);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.35;
+    color: #475569;
+    background: #f9fafb;
+}
+
+.page-canvass-form .cv-wf-pill--id {
+    color: #1D6B3A;
+    border-color: #1D6B3A;
+    background: #ffffff;
+}
+
+.page-canvass-form .cv-wf-pill--active {
+    color: #1D6B3A;
+    border-color: #1D6B3A;
+    background: #EAF3DE;
+}
+
+.page-canvass-form .cv-wf-pill--done {
+    color: #3B6D11;
+    border-color: #b8d4a8;
+    background: #EAF3DE;
+}
+
+.page-canvass-form .cv-wf-pill--rejected {
+    color: #991b1b;
+    border-color: #fecaca;
+    background: #fef2f2;
+}
+
+.page-canvass-form .cv-wf-sep {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.page-canvass-form .cv-workflow-breadcrumb-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.75rem;
+    border: 0.5px solid #1D6B3A;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #1D6B3A;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: none;
+}
+
+.page-canvass-form .cv-workflow-breadcrumb-link:hover {
+    background: #EAF3DE;
+}
+
+.page-canvass-form .cv-workflow-breadcrumb-hint {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.page-canvass-form .req-flow-context,
+.page-canvass-form .canvass-continue-banner {
+    border: 0.5px solid var(--cv-border);
+    border-radius: 6px;
+    background: #f9fafb;
+    box-shadow: none;
+}
+
+.page-canvass-form a.req-flow-context-link,
+.page-canvass-form a.canvass-continue-action {
+    border: 0.5px solid #1D6B3A;
+    border-radius: 6px;
+    color: #1D6B3A;
+    box-shadow: none;
+}
+
+/* Metadata — 4-column grid */
+.page-canvass-form .cv-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem 1.25rem;
+    margin-bottom: 0.5rem;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.page-canvass-form .cv-meta-grid .field-group label,
+.page-canvass-form .cv-meta-status-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.page-canvass-form .cv-meta-grid .field-group input,
+.page-canvass-form .cv-meta-grid #cvRequestDate,
+.page-canvass-form .cv-meta-grid #cvPurpose {
+    width: 100%;
+    box-sizing: border-box;
+    background: #f3f4f6;
+    border: 0.5px solid var(--cv-border);
+    border-radius: 6px;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.9rem;
+    color: #111827;
+    box-shadow: none;
+}
+
+.page-canvass-form .cv-meta-status-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.page-canvass-form .cv-canvass-status-badge {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    border: 0.5px solid var(--cv-border);
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: #f3f4f6;
+    color: #475569;
+}
+
+.page-canvass-form .cv-canvass-status-badge--complete {
+    background: #EAF3DE;
+    border-color: #b8d4a8;
+    color: #3B6D11;
+}
+
+.page-canvass-form .cv-canvass-status-badge--rejected {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+
+/* Section labels */
+.page-canvass-form .rf-section {
+    margin-bottom: 0.75rem;
+}
+
+.page-canvass-form .rf-section-heading {
+    margin: 0 0 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 0.5px solid #1D6B3A;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #1D6B3A;
+    line-height: 1.3;
+}
+
+.page-canvass-form .table-section {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.page-canvass-form .supplier-section {
+    margin-top: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+}
+
+/* Requisition items table */
+.page-canvass-form .requested-items-table-wrap {
+    border: 0.5px solid var(--cv-border);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: none;
+}
+
+.page-canvass-form .requested-items-table thead th {
+    background: #1D6B3A;
+    color: #ffffff;
+    border-bottom: none;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    padding: 0.5rem 0.75rem;
+}
+
+.page-canvass-form .requested-items-table tbody td {
+    border-bottom: 0.5px solid #e5e7eb;
+    padding: 0.55rem 0.75rem;
+}
+
+.page-canvass-form .requested-items-table tbody tr:nth-child(even) td {
+    background: #f9fafb;
+}
+
+.page-canvass-form .cv-req-line-meta {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #64748b;
+    margin-top: 0.15rem;
+}
+
+/* Preferred supplier matrix — fixed 3-column tracks (1 card = 1/3 width, 3 cards = one row) */
+.page-canvass-form #cvPreferredCards.cv-preferred-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+}
+
+.page-canvass-form .cv-canvassed-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.page-canvass-form .cv-pref-card {
+    border: 0.5px solid var(--cv-border);
+    border-radius: 6px;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.page-canvass-form .cv-pref-card-head {
+    background: #1D6B3A;
+    border-bottom: none;
+    padding: 0.65rem 0.75rem;
+}
+
+.page-canvass-form .cv-pref-card-head .cv-pref-name,
+.page-canvass-form .cv-pref-card-head .cv-pref-name button {
+    color: #ffffff;
+}
+
+.page-canvass-form .cv-pref-card-head .cv-pref-contact,
+.page-canvass-form .cv-pref-card-head .cv-pref-tin,
+.page-canvass-form .cv-pref-card-head .cv-pref-location {
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.page-canvass-form .cv-pref-card-head .cv-pref-tin-label {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.page-canvass-form .cv-pref-card-head .cv-pref-edit-btn {
+    border: 0.5px solid rgba(255, 255, 255, 0.45);
+    background: transparent;
+    color: #ffffff;
+}
+
+.page-canvass-form .cv-pref-card-head .cv-pref-remove-btn {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.45);
+}
+
+/* Preferred matrix — header layout + remove control */
+.page-canvass-form #cvPreferredCards .cv-pref-card {
+    min-width: 0;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-card-head {
+    position: relative;
+    align-items: flex-start;
+    padding-right: 6.5rem;
+    min-width: 0;
+    overflow: visible;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-card-id {
+    min-width: 0;
+    flex: 1;
+    align-items: flex-start;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-card-id > div {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-name {
+    flex-wrap: wrap;
+    word-break: break-word;
+    line-height: 1.3;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-contact,
+.page-canvass-form #cvPreferredCards .cv-pref-tin,
+.page-canvass-form #cvPreferredCards .cv-pref-location {
+    word-break: break-word;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-card-actions {
+    position: absolute;
+    top: 0.65rem;
+    right: 0.75rem;
+    flex-shrink: 0;
+    z-index: 1;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-remove-btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    width: auto;
+    height: auto;
+    padding: 4px 10px;
+    border: none;
+    border-radius: 6px;
+    background: #A32D2D;
+    color: #ffffff;
+    font-size: 0;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transform: none;
+    transition: background 0.15s ease;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-remove-btn::before {
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    content: '\f2ed';
+    font-size: 0.75rem;
+    color: #ffffff;
+    line-height: 1;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-remove-btn::after {
+    content: 'Remove';
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-remove-btn:hover {
+    background: #8c2626;
+    border-color: transparent;
+    transform: none;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-remove-btn:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+}
+
+.page-canvass-form .cv-pref-card-body {
+    padding: 0.65rem 0.75rem 0.75rem;
+    flex: 1;
+}
+
+/* Best supplier (all items suggested) */
+.page-canvass-form .cv-canvas-card:not(:has(.cv-pref-items-table tbody tr:not(.cv-gsd-suggested-row))) {
+    border: 1.5px solid var(--cv-best-border);
+}
+
+.page-canvass-form .cv-canvas-card:not(:has(.cv-pref-items-table tbody tr:not(.cv-gsd-suggested-row))) .cv-pref-card-head {
+    background: var(--cv-best-head);
+}
+
+.page-canvass-form .cv-canvas-card:not(:has(.cv-pref-items-table tbody tr:not(.cv-gsd-suggested-row))) .cv-canvass-head-name-row::after {
+    content: 'Best · all items';
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.4rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    border: 0.5px solid rgba(255, 255, 255, 0.45);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+    vertical-align: middle;
+}
+
+/* Item rows — name block + horizontal price line */
+.page-canvass-form .cv-pref-items-table thead {
+    display: none;
+}
+
+.page-canvass-form .cv-pref-items-table tbody tr {
+    display: block;
+    border-bottom: 0.5px solid #e5e7eb;
+    padding: 0.55rem 0;
+}
+
+.page-canvass-form .cv-pref-items-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.page-canvass-form .cv-pref-items-table tbody td {
+    display: block;
+    border: none;
+    padding: 0;
+}
+
+.page-canvass-form .cv-pref-items-table tbody td:first-child {
+    display: none;
+}
+
+.page-canvass-form .cv-pref-items-table tbody td:nth-child(2) {
+    margin-bottom: 0.35rem;
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: #111827;
+}
+
+.page-canvass-form .cv-pref-items-table tbody td:nth-child(3),
+.page-canvass-form .cv-pref-items-table tbody td:nth-child(4) {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    width: auto;
+}
+
+.page-canvass-form .cv-pref-items-table tbody td:nth-child(4) {
+    margin-left: 0.4rem;
+}
+
+.page-canvass-form .cv-pref-price-wrap,
+.page-canvass-form .cv-canvas-price-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    width: auto;
+}
+
+.page-canvass-form .cv-preferred-price-input,
+.page-canvass-form .supplier-price-input {
+    width: 5.5rem;
+    min-width: 5.5rem;
+    background: #f3f4f6;
+    border: 0.5px solid var(--cv-border);
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.88rem;
+    box-shadow: none;
+}
+
+.page-canvass-form .cv-preferred-price-input:focus,
+.page-canvass-form .supplier-price-input:focus {
+    outline: none;
+    border-color: #1D6B3A;
+    box-shadow: none;
+    background: #ffffff;
+}
+
+.page-canvass-form .cv-pref-peso {
+    color: #1D6B3A;
+    font-size: 0.75rem;
+}
+
+.page-canvass-form .cv-pref-photo-slot,
+.page-canvass-form .cv-pref-photo-view-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    border: 0.5px solid var(--cv-border);
+    border-radius: 6px;
+    box-shadow: none;
+}
+
+.page-canvass-form .cv-pref-photo-slot:hover,
+.page-canvass-form .cv-pref-photo-view-btn:hover {
+    border-color: #1D6B3A;
+    box-shadow: none;
+}
+
+.page-canvass-form .cv-pref-photo-thumb {
+    width: 32px;
+    height: 32px;
+}
+
+.page-canvass-form .cv-pref-photo-status {
+    display: none;
+}
+
+/* Preferred matrix — item name + single-line price/photo row */
+.page-canvass-form #cvPreferredCards .cv-pref-items-table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-items-table tbody td:nth-child(2) {
+    flex: 0 0 100%;
+    margin-bottom: 0.25rem;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-items-table tbody td:nth-child(3) {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-items-table tbody td:nth-child(4) {
+    flex: 0 0 32px;
+    width: 32px;
+    margin-left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-price-wrap {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+}
+
+.page-canvass-form #cvPreferredCards .cv-preferred-price-input {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+}
+
+/* Canvassed optional notes compact sub-section */
+.page-canvass-form .cv-canvass-optional-notes {
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 0.5px solid var(--cv-border);
+}
+
+.page-canvass-form .cv-canvass-optional-notes-divider {
+    font-size: 0.65rem;
+    color: #64748b;
+    margin-bottom: 0.5rem;
+}
+
+.page-canvass-form .cv-canvass-benefits-input,
+.page-canvass-form .cv-canvass-discount-label-input,
+.page-canvass-form .cv-canvass-discount-pct-input {
+    background: #f3f4f6;
+    border: 0.5px solid var(--cv-border);
+    border-radius: 6px;
+    box-shadow: none;
+}
+
+.page-canvass-form .cv-canvass-add-discount-btn {
+    border: 0.5px dashed #1D6B3A;
+    background: #ffffff;
+    color: #1D6B3A;
+    box-shadow: none;
+}
+
+/* Verifier strip — horizontal */
+.page-canvass-form .cv-approval-section .approval-card-canvass-verifiers {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: flex-start;
+}
+
+.page-canvass-form .cv-approval-section .approval-role {
+    flex: 1 1 180px;
+    max-width: none;
+    border: 0.5px solid var(--cv-border);
+    border-radius: 6px;
+    background: #f9fafb;
+    box-shadow: none;
+    justify-content: flex-start;
+}
+
+.page-canvass-form .cv-approval-section .approval-role:has(.circle-icon.active) {
+    background: #EAF3DE;
+    border-color: #b8d4a8;
+}
+
+.page-canvass-form .cv-approval-section .approval-role:has(.circle-icon.active) .approval-name,
+.page-canvass-form .cv-approval-section .approval-role:has(.circle-icon.active) .approval-sub,
+.page-canvass-form .cv-approval-section .approval-role:has(.circle-icon.active) .cv-appr-detail {
+    color: #3B6D11;
+}
+
+.page-canvass-form .cv-approval-section .circle-icon.active {
+    background: #1D6B3A;
+    box-shadow: none;
+}
+
+.page-canvass-form .cv-approval-section .approval-role-body {
+    text-align: left;
+}
+
+/* Abstract total / pricing overview */
+.page-canvass-form .rf-section-abstract-total .cv-pricing-overview-section {
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.page-canvass-form .rf-section-abstract-total .cv-pricing-overview-title {
+    display: none;
+}
+
+.page-canvass-form .cv-pricing-overview-table th {
+    background: #1D6B3A;
+    color: #ffffff;
+    border-bottom: none;
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+}
+
+.page-canvass-form .cv-pricing-overview-table tbody tr:nth-child(even) td {
+    background: #f9fafb;
+}
+
+.page-canvass-form .cv-pricing-overview-foot-label,
+.page-canvass-form .cv-pricing-overview-line-total-cell,
+.page-canvass-form .cv-pricing-overview-foot-total,
+.page-canvass-form .cv-pricing-overview-unit-price-cell {
+    text-align: right !important;
+}
+
+.page-canvass-form .cv-pricing-overview-foot-total {
+    color: #1D6B3A;
+    font-weight: 800;
+}
+
+/* Action buttons */
+.page-canvass-form .rf-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.65rem;
+    margin-top: 0.75rem;
+    padding-top: 1rem;
+    border-top: 0.5px solid var(--cv-border);
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.page-canvass-form .rf-form-actions.btn-submit-wrapper {
+    justify-content: flex-end;
+}
+
+.page-canvass-form .rf-form-actions .btn-submit {
+    background: #1D6B3A;
+    border: none;
+    border-radius: 6px;
+    box-shadow: none;
+    min-width: unset;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.92rem;
+    transform: none;
+}
+
+.page-canvass-form .rf-form-actions .btn-submit:hover {
+    background: #185a31;
+    transform: none;
+}
+
+.page-canvass-form .rf-form-actions .btn-secondary {
+    background: #ffffff;
+    color: #374151;
+    border: 0.5px solid var(--cv-border);
+    border-radius: 6px;
+    box-shadow: none;
+    min-width: unset;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.92rem;
+    transform: none;
+}
+
+.page-canvass-form .rf-form-actions .btn-secondary:hover {
+    background: #f9fafb;
+    transform: none;
+}
+
+.page-canvass-form .rf-form-actions .comptroller-reject-btn {
+    background: var(--cv-reject);
+    border: none;
+    color: #ffffff;
+    box-shadow: none;
+}
+
+.page-canvass-form .rf-form-actions .comptroller-undo-btn {
+    background: transparent;
+    border: 0.5px solid var(--cv-border);
+    color: #374151;
+    box-shadow: none;
+}
+
+.page-canvass-form .cv-canvasser-submit-row .cv-canvasser-save-hint {
+    text-align: right;
+}
+
+/* Quote photo lightbox */
+.page-canvass-form .cv-quote-photo-lightbox {
+    background: rgba(0, 0, 0, 0.92);
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.page-canvass-form .cv-quote-photo-lightbox-img {
+    box-shadow: none;
+    border-radius: 6px;
+}
+
+.page-canvass-form .cv-quote-photo-lightbox-close {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+}
+
+.page-canvass-form .btn-add-small {
+    box-shadow: none;
+    border-radius: 6px;
+    transform: none;
+}
+
+.page-canvass-form .btn-add-small:hover {
+    transform: none;
+}
+
+@media (max-width: 1100px) {
+    .page-canvass-form .cv-canvassed-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .page-canvass-form .cv-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .page-canvass-form #cvPreferredCards.cv-preferred-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .page-canvass-form #cvPreferredCards.cv-preferred-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .page-canvass-form .requisition-main {
+        padding: 0.75rem 1rem;
+    }
+
+    .page-canvass-form .requisition-card {
+        padding: 1rem 0.75rem 1.25rem;
+    }
+
+    .page-canvass-form .cv-meta-grid,
+    .page-canvass-form .cv-canvassed-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .page-canvass-form .rf-form-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .page-canvass-form .rf-form-actions .btn-submit,
+    .page-canvass-form .rf-form-actions .btn-secondary,
+    .page-canvass-form .rf-form-actions .comptroller-reject-btn,
+    .page-canvass-form .rf-form-actions .comptroller-undo-btn {
+        width: 100%;
+    }
+}

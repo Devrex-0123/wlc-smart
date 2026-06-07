@@ -382,6 +382,60 @@ if ($rfRequestId > 0 && $accessError === null) {
         $rfLinkText = 'Back to requisition';
     }
 }
+$cvWfCanvasStatus = 'pending';
+$cvWfGsdStatus = 'pending';
+$cvWfCompStatus = 'pending';
+$cvWfPresStatus = 'pending';
+if ($rfRequestId > 0 && $accessError === null) {
+    $cvApprStmt = $db->prepare(
+        'SELECT LOWER(TRIM(COALESCE(canvas_status, \'pending\'))) AS canvas_status,
+                LOWER(TRIM(COALESCE(gsd_status, \'pending\'))) AS gsd_status,
+                LOWER(TRIM(COALESCE(comp_status, \'pending\'))) AS comp_status,
+                LOWER(TRIM(COALESCE(pres_status, \'pending\'))) AS pres_status
+         FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+    );
+    $cvApprStmt->execute([$rfRequestId]);
+    $cvApprRow = $cvApprStmt->fetch(PDO::FETCH_ASSOC);
+    if ($cvApprRow) {
+        $cvWfCanvasStatus = strtolower(trim((string) ($cvApprRow['canvas_status'] ?? 'pending'))) ?: 'pending';
+        $cvWfGsdStatus = strtolower(trim((string) ($cvApprRow['gsd_status'] ?? 'pending'))) ?: 'pending';
+        $cvWfCompStatus = strtolower(trim((string) ($cvApprRow['comp_status'] ?? 'pending'))) ?: 'pending';
+        $cvWfPresStatus = strtolower(trim((string) ($cvApprRow['pres_status'] ?? 'pending'))) ?: 'pending';
+    }
+}
+$cvWfActiveStage = 'canvass';
+if ($isGsdCanvassReview) {
+    $cvWfActiveStage = 'gsd';
+} elseif ($isComptrollerCanvassReview || $isComptrollerCanvassHistory) {
+    $cvWfActiveStage = 'comptroller';
+} elseif ($isPresidentCanvassReview || $isPresidentCanvassHistory) {
+    $cvWfActiveStage = 'president';
+} elseif ($isCanvasserCanvassView) {
+    $cvWfActiveStage = 'canvass';
+}
+$cvWfPillClass = static function (string $status, string $stageKey, string $activeStage): string {
+    $s = strtolower(trim($status));
+    if ($s === 'accept') {
+        return 'cv-wf-pill--done';
+    }
+    if ($s === 'reject') {
+        return 'cv-wf-pill--rejected';
+    }
+    if ($stageKey === $activeStage) {
+        return 'cv-wf-pill--active';
+    }
+    return '';
+};
+$cvCanvassStatusLabel = 'Pending';
+$cvCanvassStatusClass = 'cv-canvass-status-badge--pending';
+if ($cvWfCanvasStatus === 'accept') {
+    $cvCanvassStatusLabel = 'Canvass complete';
+    $cvCanvassStatusClass = 'cv-canvass-status-badge--complete';
+} elseif ($cvWfCanvasStatus === 'reject') {
+    $cvCanvassStatusLabel = 'Canvass rejected';
+    $cvCanvassStatusClass = 'cv-canvass-status-badge--rejected';
+}
+
 $pageTitle = $rfRequestId > 0
     ? 'Abstract of quotation · Request #' . $rfRequestId . ' · WLC-SMART'
     : 'Canvass sheet · WLC-SMART';
@@ -403,7 +457,7 @@ $pageTitle = $rfRequestId > 0
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="page-canvass-form">
 
 <main class="requisition-main">
     <div class="requisition-card<?php echo $isCanvasMatrixReadonly ? ' gsd-canvass-readonly' : ''; ?>" id="canvassCard" data-request-id="<?php echo (int) $requestId; ?>" data-api="../../app/api/canvass_detail.php" data-dean-api="../../app/api/dean_requisition.php" data-gsd-readonly="<?php echo $isCanvasMatrixReadonly ? '1' : '0'; ?>" data-canvasser-register="<?php echo $isCanvasserCanvassView ? '1' : '0'; ?>">
@@ -437,9 +491,27 @@ $pageTitle = $rfRequestId > 0
         </div>
         <?php endif; ?>
 
-        <?php if ($rfRequestId > 0 && $accessError === null) {
-            require __DIR__ . '/partials/requisition_flow_context.php';
-        } ?>
+        <?php if ($rfRequestId > 0 && $accessError === null): ?>
+        <nav class="cv-workflow-breadcrumb" aria-label="Workflow progress">
+            <div class="cv-workflow-breadcrumb-track">
+                <span class="cv-wf-pill cv-wf-pill--id">Request #<?php echo (int) $rfRequestId; ?></span>
+                <span class="cv-wf-sep" aria-hidden="true">›</span>
+                <span class="cv-wf-pill <?php echo htmlspecialchars($cvWfPillClass($cvWfCanvasStatus, 'canvass', $cvWfActiveStage)); ?>">Canvass</span>
+                <span class="cv-wf-sep" aria-hidden="true">›</span>
+                <span class="cv-wf-pill <?php echo htmlspecialchars($cvWfPillClass($cvWfGsdStatus, 'gsd', $cvWfActiveStage)); ?>">G.S.D.</span>
+                <span class="cv-wf-sep" aria-hidden="true">›</span>
+                <span class="cv-wf-pill <?php echo htmlspecialchars($cvWfPillClass($cvWfCompStatus, 'comptroller', $cvWfActiveStage)); ?>">Comptroller</span>
+                <span class="cv-wf-sep" aria-hidden="true">›</span>
+                <span class="cv-wf-pill <?php echo htmlspecialchars($cvWfPillClass($cvWfPresStatus, 'president', $cvWfActiveStage)); ?>">President</span>
+            </div>
+            <?php if ($rfLinkUrl !== '' && $rfLinkText !== ''): ?>
+            <a class="cv-workflow-breadcrumb-link" href="<?php echo htmlspecialchars($rfLinkUrl); ?>"><?php echo htmlspecialchars($rfLinkText); ?></a>
+            <?php endif; ?>
+            <?php if ($rfHint !== ''): ?>
+            <p class="cv-workflow-breadcrumb-hint"><?php echo htmlspecialchars($rfHint); ?></p>
+            <?php endif; ?>
+        </nav>
+        <?php endif; ?>
         <?php if ($rfRequestId > 0 && $accessError === null && $canShowPurchaseRequisitionLink): ?>
         <div class="req-flow-context">
             <div class="req-flow-context-top">
@@ -472,35 +544,39 @@ $pageTitle = $rfRequestId > 0
         </div>
         <?php else: ?>
 
-        <div class="requisition-info">
-            <div class="info-left info-grid">
-                <div class="field-group">
-                    <label for="cvRequesterName">Requester Name</label>
-                    <input type="text" id="cvRequesterName" value="<?php echo htmlspecialchars($requesterDisplayName); ?>" disabled>
-                </div>
-                <div class="field-group">
-                    <label for="cvOfficeDisplay">Office</label>
-                    <input type="text" id="cvOfficeDisplay" value="—" disabled>
-                </div>
-                <div class="field-group">
-                    <label for="cvFacilityDisplay">Location / Facility</label>
-                    <input type="text" id="cvFacilityDisplay" value="—" disabled>
-                </div>
-                <div class="field-group">
-                    <label for="cvFacultyRole">Role</label>
-                    <input type="text" id="cvFacultyRole" value="<?php echo htmlspecialchars($requesterRoleDisplay); ?>" disabled>
-                </div>
+        <div class="requisition-info cv-meta-grid">
+            <div class="field-group">
+                <label for="cvRequesterName">Requester Name</label>
+                <input type="text" id="cvRequesterName" value="<?php echo htmlspecialchars($requesterDisplayName); ?>" disabled>
             </div>
-            <div class="info-right">
-                <label for="cvRequestDate">Requested date</label>
+            <div class="field-group">
+                <label for="cvOfficeDisplay">Office</label>
+                <input type="text" id="cvOfficeDisplay" value="—" disabled>
+            </div>
+            <div class="field-group">
+                <label for="cvRequestDate">Requested Date</label>
                 <input type="text" id="cvRequestDate" value="—" disabled>
-                <label for="cvPurpose" style="margin-top:0.6rem;">Purpose of request</label>
+            </div>
+            <div class="field-group">
+                <label for="cvPurpose">Purpose of Request</label>
                 <input type="text" id="cvPurpose" value="" disabled placeholder="—">
+            </div>
+            <div class="field-group">
+                <label for="cvFacilityDisplay">Location / Facility</label>
+                <input type="text" id="cvFacilityDisplay" value="—" disabled>
+            </div>
+            <div class="field-group">
+                <label for="cvFacultyRole">Role</label>
+                <input type="text" id="cvFacultyRole" value="<?php echo htmlspecialchars($requesterRoleDisplay); ?>" disabled>
+            </div>
+            <div class="field-group cv-meta-status-field">
+                <span class="cv-meta-status-label">Canvass Status</span>
+                <span id="cvCanvassStatusBadge" class="cv-canvass-status-badge <?php echo htmlspecialchars($cvCanvassStatusClass); ?>"><?php echo htmlspecialchars($cvCanvassStatusLabel); ?></span>
             </div>
         </div>
 
-        <div class="requested-items-summary cv-requested-ref" aria-label="Items from the requisition">
-            <div class="section-label requested-items-summary-label">Items requested on requisition</div>
+        <section class="rf-section rf-section-requisition-items cv-requested-ref" aria-label="Items from the requisition">
+            <h2 class="rf-section-heading">Items on Requisition</h2>
             <p class="cv-requested-ref-hint"><?php echo $isGsdCanvassReview
                 ? 'Line items as recorded on the original requisition (read-only).'
                 : ($isCanvasserCanvassView
@@ -511,7 +587,7 @@ $pageTitle = $rfRequestId > 0
                     <thead>
                         <tr>
                             <th scope="col">#</th>
-                            <th scope="col">Item</th>
+                            <th scope="col">Item / Sub-description</th>
                             <th scope="col">Qty</th>
                             <th scope="col">Unit</th>
                         </tr>
@@ -523,8 +599,9 @@ $pageTitle = $rfRequestId > 0
                     </tbody>
                 </table>
             </div>
-        </div>
+        </section>
 
+        <section class="rf-section rf-section-canvass-lines">
         <div class="table-section">
             <?php if (!$isCanvassStructureUiHidden && !$isCanvasserCanvassView): ?>
             <div class="cv-canvass-section-heading">
@@ -565,11 +642,14 @@ $pageTitle = $rfRequestId > 0
             <p class="cv-verifier-canvass-readonly-hint" style="margin:0 0 0.85rem;font-size:0.9rem;color:#475569;line-height:1.45;">Read-only. Only the <strong>requester</strong> may add or remove canvass lines and supplier columns. Assigned <strong>canvassers</strong> may add suppliers, register new suppliers, and enter prices on their workspace.</p>
             <?php endif; ?>
             <div id="cvItemChips" class="item-chips"><p class="item-chips-empty">No canvass items yet.</p></div>
+        </div>
+        </section>
 
             <?php if ($isRequesterOwnedCanvass || $isReviewerCanvassReadonly || $isCanvasserCanvassView): ?>
-            <div class="cv-preferred-section" id="cvPreferredSection">
+            <section class="rf-section rf-section-preferred cv-preferred-section" id="cvPreferredSection">
+                <h2 class="rf-section-heading">Preferred Supplier Matrix</h2>
                 <div class="cv-preferred-section-head" id="cvPreferredSectionHead">
-                    <span class="section-label">Preferred Suppliers</span>
+                    <span class="section-label sr-only">Preferred Suppliers</span>
                 </div>
                 <p class="cv-preferred-hint" id="cvPreferredHint"></p>
                 <div class="cv-preferred-picker">
@@ -583,14 +663,15 @@ $pageTitle = $rfRequestId > 0
                         <div id="cvPrefSupplierInfoPanelBody" class="cv-pref-supplier-info-panel-body"></div>
                     </div>
                 </div>
-                <div class="supplier-table-group-label preferred-supplier-label">Preferred supplier matrix</div>
+                <div class="supplier-table-group-label preferred-supplier-label sr-only">Preferred supplier matrix</div>
                 <div id="cvPreferredCards" class="cv-preferred-cards" aria-live="polite">
                     <div class="empty-state">Loading preferred suppliers…</div>
                 </div>
-            </div>
+            </section>
             <?php endif; ?>
 
-            <div class="supplier-section" id="cvCanvasSection" role="region" aria-label="Suppliers and pricing">
+            <section class="rf-section rf-section-canvassed supplier-section" id="cvCanvasSection" role="region" aria-label="Suppliers and pricing">
+                <h2 class="rf-section-heading">Canvassed Supplier Matrix</h2>
                 <?php if (!$isCanvassStructureUiHidden): ?>
                 <div class="supplier-picker">
                     <label for="cvSupplierDropdownBtn">Supplier</label>
@@ -632,20 +713,25 @@ $pageTitle = $rfRequestId > 0
                     </div>
                 </div>
 
-                <div class="supplier-table-group-label canvassed-supplier-label">Canvassed supplier matrix</div>
+                <div class="supplier-table-group-label canvassed-supplier-label sr-only">Canvassed supplier matrix</div>
                 <div id="cvCanvassedSupplierWrap" class="cv-canvassed-wrap" hidden>
                     <div id="cvCanvassedCards" class="cv-preferred-cards cv-canvassed-cards" aria-live="polite">
                         <div class="empty-state">No canvassed supplier quotes yet. This section is filled in by the assigned canvasser.</div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </section>
 
         <?php if ($showCanvassPricingOverview): ?>
+        <section class="rf-section rf-section-abstract-total">
+            <h2 class="rf-section-heading">Abstract Total</h2>
         <?php require __DIR__ . '/partials/canvass_pricing_overview.php'; ?>
+        </section>
         <?php endif; ?>
         <?php if ($showComptrollerPricingOverview): ?>
+        <section class="rf-section rf-section-abstract-total">
+            <h2 class="rf-section-heading">Abstract Total</h2>
         <?php require __DIR__ . '/partials/comptroller_pricing_overview.php'; ?>
+        </section>
         <?php endif; ?>
 
         <div class="approval-section cv-approval-section" aria-label="Canvass verification status">
@@ -706,14 +792,14 @@ $pageTitle = $rfRequestId > 0
         <div id="cvComptrollerDeferredBanners" class="cv-comptroller-deferred-banners" hidden aria-live="polite"></div>
         <?php endif; ?>
         <?php if ($isGsdCanvassReview): ?>
-        <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar">
+        <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar rf-form-actions">
             <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> Verify</button>
             <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
             <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <p id="gsdVerifyHint" class="gsd-verify-hint" aria-live="polite"></p>
         <?php elseif ($isComptrollerCanvassReview || $isPresidentCanvassReview): ?>
-        <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar">
+        <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar rf-form-actions">
             <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> Approve</button>
             <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
             <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
@@ -721,7 +807,7 @@ $pageTitle = $rfRequestId > 0
         <?php endif; ?>
 
         <?php if (!$isCanvasMatrixReadonly): ?>
-        <div class="btn-submit-wrapper<?php echo $isCanvasserCanvassView ? ' cv-canvasser-submit-row' : ''; ?>">
+        <div class="btn-submit-wrapper rf-form-actions<?php echo $isCanvasserCanvassView ? ' cv-canvasser-submit-row' : ''; ?>">
             <?php if ($isCanvasserCanvassView): ?>
             <button type="button" id="cvSaveDraftBtn" class="btn-secondary">Save draft</button>
             <button type="button" id="cvCompleteCanvassBtn" class="btn-submit">Complete canvassing</button>
