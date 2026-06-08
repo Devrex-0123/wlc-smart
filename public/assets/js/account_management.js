@@ -27,7 +27,9 @@ const closeModal = document.getElementById('closeModal');
 const addUserBtn = document.getElementById('addUserBtn');
 const modalTitle = document.getElementById('modalTitle');
 const userForm = document.getElementById('userForm');
-const usersTableBody = document.getElementById("usersTableBody");
+const adminUsersTableBody = document.getElementById('adminUsersTableBody');
+const deptUsersTableBody = document.getElementById('deptUsersTableBody');
+const usersListCard = document.querySelector('.users-list-card');
 const photoInput = document.getElementById('photo');
 const photoPreview = document.getElementById('photoPreview');
 const photoPlaceholder = document.getElementById('photoPlaceholder');
@@ -55,6 +57,59 @@ const disableConfirmCancel = document.getElementById('disableConfirmCancel');
 const disableConfirmOk = document.getElementById('disableConfirmOk');
 const disableConfirmEmail = document.getElementById('disableConfirmEmail');
 let pendingDisableUserId = null;
+
+// ---------------- Enable account confirmation ----------------
+const enableConfirmModal = document.getElementById('enableConfirmModal');
+const enableConfirmBackdrop = document.getElementById('enableConfirmBackdrop');
+const enableConfirmCancel = document.getElementById('enableConfirmCancel');
+const enableConfirmOk = document.getElementById('enableConfirmOk');
+const enableConfirmEmail = document.getElementById('enableConfirmEmail');
+let pendingEnableUserId = null;
+
+// ---------------- Save edit confirmation ----------------
+const saveConfirmModal = document.getElementById('saveConfirmModal');
+const saveConfirmBackdrop = document.getElementById('saveConfirmBackdrop');
+const saveConfirmCancel = document.getElementById('saveConfirmCancel');
+const saveConfirmOk = document.getElementById('saveConfirmOk');
+
+const accountSuccessModal = document.getElementById('accountSuccessModal');
+const accountSuccessBackdrop = document.getElementById('accountSuccessBackdrop');
+const accountSuccessMessage = document.getElementById('accountSuccessMessage');
+const accountSuccessOk = document.getElementById('accountSuccessOk');
+
+function openAccountSuccessModal(message) {
+    if (accountSuccessMessage) {
+        accountSuccessMessage.textContent = message;
+    }
+    if (accountSuccessModal) {
+        accountSuccessModal.classList.add('is-open');
+        accountSuccessModal.setAttribute('aria-hidden', 'false');
+        accountSuccessOk?.focus();
+    }
+}
+
+function closeAccountSuccessModal() {
+    if (accountSuccessModal) {
+        accountSuccessModal.classList.remove('is-open');
+        accountSuccessModal.setAttribute('aria-hidden', 'true');
+    }
+}
+
+function openSaveConfirmModal() {
+    if (saveConfirmModal) {
+        saveConfirmModal.classList.add('is-open');
+        saveConfirmModal.setAttribute('aria-hidden', 'false');
+        saveConfirmOk?.focus();
+    }
+}
+
+function closeSaveConfirmModal() {
+    if (saveConfirmModal) {
+        saveConfirmModal.classList.remove('is-open');
+        saveConfirmModal.setAttribute('aria-hidden', 'true');
+    }
+}
+
 const viewUserModal = document.getElementById('viewUserModal');
 const viewUserBackdrop = document.getElementById('viewUserBackdrop');
 const viewUserCloseBtn = document.getElementById('viewUserCloseBtn');
@@ -68,15 +123,53 @@ function formatDateTime(value) {
 
 function openViewUserModal(user) {
     if (!viewUserModal || !user) return;
+
+    const fullName = user.full_name || '—';
+    const email = user.email || '—';
+    const roleLabel = isCanvasserAssignee(user) ? 'Canvasser' : (user.role || '—');
+    const status = (user.account_status || 'active').toLowerCase();
+    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
     const consentText = user.has_consented == 1 ? `Accepted (${user.consent_version || 'n/a'})` : 'Not yet accepted';
-    document.getElementById('view_full_name').textContent = user.full_name || '—';
-    document.getElementById('view_email').textContent = user.email || '—';
-    document.getElementById('view_role').textContent = user.role || '—';
-    document.getElementById('view_status').textContent = user.account_status || '—';
-    document.getElementById('view_office').textContent = user.office_name || '—';
-    document.getElementById('view_consent').textContent = consentText;
-    document.getElementById('view_last_login').textContent = formatDateTime(user.last_login);
-    document.getElementById('view_created_at').textContent = formatDateTime(user.created_at);
+
+    const heroName = document.getElementById('view_hero_name');
+    const heroEmail = document.getElementById('view_hero_email');
+    const heroRole = document.getElementById('view_hero_role');
+    const viewPhoto = document.getElementById('view_photo');
+    const viewPhotoPlaceholder = document.getElementById('view_photo_placeholder');
+    const statusEl = document.getElementById('view_status');
+
+    if (heroName) heroName.textContent = fullName;
+    if (heroEmail) heroEmail.textContent = email;
+    if (heroRole) heroRole.textContent = roleLabel;
+
+    if (viewPhoto && viewPhotoPlaceholder) {
+        if (user.photo_url) {
+            viewPhoto.src = `../${user.photo_url}`;
+            viewPhoto.alt = `Photo of ${email}`;
+            viewPhoto.hidden = false;
+            viewPhotoPlaceholder.style.display = 'none';
+        } else {
+            viewPhoto.hidden = true;
+            viewPhoto.src = '';
+            viewPhotoPlaceholder.textContent = (email !== '—' ? email : 'U').charAt(0).toUpperCase();
+            viewPhotoPlaceholder.style.display = 'flex';
+        }
+    }
+
+    const contactEl = document.getElementById('view_contact_number');
+    if (contactEl) contactEl.textContent = user.contact_number || '—';
+    const officeEl = document.getElementById('view_office');
+    if (officeEl) officeEl.textContent = user.office_name || '—';
+    const consentEl = document.getElementById('view_consent');
+    if (consentEl) consentEl.textContent = consentText;
+    if (statusEl) {
+        statusEl.innerHTML = `<span class="status-pill status-${status}">${statusLabel}</span>`;
+    }
+    const lastLoginEl = document.getElementById('view_last_login');
+    if (lastLoginEl) lastLoginEl.textContent = formatDateTime(user.last_login);
+    const createdEl = document.getElementById('view_created_at');
+    if (createdEl) createdEl.textContent = formatDateTime(user.created_at);
+
     viewUserModal.classList.add('is-open');
     viewUserModal.setAttribute('aria-hidden', 'false');
 }
@@ -135,6 +228,30 @@ function closeDisableConfirmModal() {
     }
 }
 
+function openEnableConfirmModal(userId, email) {
+    pendingEnableUserId = userId;
+    if (enableConfirmEmail && email) {
+        enableConfirmEmail.textContent = email;
+        enableConfirmEmail.hidden = false;
+    } else if (enableConfirmEmail) {
+        enableConfirmEmail.textContent = '';
+        enableConfirmEmail.hidden = true;
+    }
+    if (enableConfirmModal) {
+        enableConfirmModal.classList.add('is-open');
+        enableConfirmModal.setAttribute('aria-hidden', 'false');
+        enableConfirmOk?.focus();
+    }
+}
+
+function closeEnableConfirmModal() {
+    pendingEnableUserId = null;
+    if (enableConfirmModal) {
+        enableConfirmModal.classList.remove('is-open');
+        enableConfirmModal.setAttribute('aria-hidden', 'true');
+    }
+}
+
 async function postToggleStatus(userId, nextStatus) {
     const res = await fetch('../../app/api/user_actions.php', {
         method: 'POST',
@@ -158,9 +275,9 @@ deleteConfirmOk?.addEventListener('click', async () => {
         });
         const data = await res.json();
         if (data.success) {
-            showToast('User soft-deleted successfully');
             closeDeleteConfirmModal();
             loadUsers();
+            openAccountSuccessModal('The user account has been deleted successfully.');
         } else {
             showToast(data.message || 'Failed to delete', 'error');
         }
@@ -180,9 +297,9 @@ disableConfirmOk?.addEventListener('click', async () => {
     try {
         const data = await postToggleStatus(userId, 'disabled');
         if (data.success) {
-            showToast(data.message || 'Account disabled');
             closeDisableConfirmModal();
             loadUsers();
+            openAccountSuccessModal('The account has been disabled successfully.');
         } else {
             showToast(data.message || 'Failed to update status', 'error');
         }
@@ -193,6 +310,38 @@ disableConfirmOk?.addEventListener('click', async () => {
     }
 });
 
+enableConfirmBackdrop?.addEventListener('click', closeEnableConfirmModal);
+enableConfirmCancel?.addEventListener('click', closeEnableConfirmModal);
+enableConfirmOk?.addEventListener('click', async () => {
+    if (!pendingEnableUserId) return;
+    const userId = pendingEnableUserId;
+    enableConfirmOk.disabled = true;
+    try {
+        const data = await postToggleStatus(userId, 'active');
+        if (data.success) {
+            closeEnableConfirmModal();
+            loadUsers();
+            openAccountSuccessModal('The account has been undisabled successfully.');
+        } else {
+            showToast(data.message || 'Failed to update status', 'error');
+        }
+    } catch (_) {
+        showToast('Network error', 'error');
+    } finally {
+        enableConfirmOk.disabled = false;
+    }
+});
+
+saveConfirmBackdrop?.addEventListener('click', closeSaveConfirmModal);
+saveConfirmCancel?.addEventListener('click', closeSaveConfirmModal);
+saveConfirmOk?.addEventListener('click', () => {
+    closeSaveConfirmModal();
+    submitUserForm();
+});
+
+accountSuccessBackdrop?.addEventListener('click', closeAccountSuccessModal);
+accountSuccessOk?.addEventListener('click', closeAccountSuccessModal);
+
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && deleteConfirmModal?.classList.contains('is-open')) {
         closeDeleteConfirmModal();
@@ -200,12 +349,22 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && disableConfirmModal?.classList.contains('is-open')) {
         closeDisableConfirmModal();
     }
+    if (e.key === 'Escape' && enableConfirmModal?.classList.contains('is-open')) {
+        closeEnableConfirmModal();
+    }
+    if (e.key === 'Escape' && saveConfirmModal?.classList.contains('is-open')) {
+        closeSaveConfirmModal();
+    }
+    if (e.key === 'Escape' && accountSuccessModal?.classList.contains('is-open')) {
+        closeAccountSuccessModal();
+    }
     if (e.key === 'Escape' && viewUserModal?.classList.contains('is-open')) {
         closeViewUserModal();
     }
 });
 viewUserBackdrop?.addEventListener('click', closeViewUserModal);
 viewUserCloseBtn?.addEventListener('click', closeViewUserModal);
+document.getElementById('viewUserCloseFooterBtn')?.addEventListener('click', closeViewUserModal);
 
 // ---------------- Strict Password Validation ----------------
 function validatePasswordStrict(pwd) {
@@ -229,17 +388,79 @@ function validatePasswordStrict(pwd) {
     else if (met >= 3) strength = 'Medium password';
     else strength = 'Weak password';
 
-    document.getElementById('passwordStrength').textContent = strength;
-    document.getElementById('passwordStrength').style.color = met === 5 ? '#10b981' : met >= 3 ? '#f59e0b' : '#ef4444';
+    const strengthEl = document.getElementById('passwordStrength');
+    if (strengthEl) {
+        strengthEl.textContent = strength;
+        strengthEl.style.color = met === 5 ? '#10b981' : met >= 3 ? '#f59e0b' : '#ef4444';
+    }
 
     return tests;
 }
 
-passwordInput?.addEventListener('input', () => {
-    if (modalTitle.textContent.includes('Add') || passwordInput.value) {
-        validatePasswordStrict(passwordInput.value);
+function resetPasswordFieldStyles() {
+    [passwordInput, confirmPasswordInput].forEach(input => {
+        input?.closest('.input-icon-wrapper')?.classList.remove('password-input--match', 'password-input--mismatch');
+    });
+    const matchEl = document.getElementById('passwordMatchStatus');
+    if (matchEl) {
+        matchEl.textContent = '';
+        matchEl.className = 'password-match-status';
     }
-});
+}
+
+function updatePasswordFeedback() {
+    const pwd = passwordInput?.value || '';
+    const confirmPwd = confirmPasswordInput?.value || '';
+    const isAdd = modalTitle.textContent.includes('Add');
+
+    if (isAdd || pwd) {
+        validatePasswordStrict(pwd);
+    } else {
+        validatePasswordStrict('');
+    }
+
+    const matchEl = document.getElementById('passwordMatchStatus');
+    const confirmWrap = confirmPasswordInput?.closest('.input-icon-wrapper');
+    const pwdWrap = passwordInput?.closest('.input-icon-wrapper');
+
+    confirmWrap?.classList.remove('password-input--match', 'password-input--mismatch');
+    pwdWrap?.classList.remove('password-input--match', 'password-input--mismatch');
+
+    if (!pwd && !confirmPwd) {
+        if (matchEl) {
+            matchEl.textContent = '';
+            matchEl.className = 'password-match-status';
+        }
+        return;
+    }
+
+    if (!confirmPwd) {
+        if (matchEl) {
+            matchEl.textContent = pwd ? 'Confirm the password above' : '';
+            matchEl.className = 'password-match-status password-match-status--pending';
+        }
+        return;
+    }
+
+    if (pwd === confirmPwd) {
+        if (matchEl) {
+            matchEl.textContent = 'Passwords match';
+            matchEl.className = 'password-match-status password-match-status--match';
+        }
+        confirmWrap?.classList.add('password-input--match');
+        if (pwd) pwdWrap?.classList.add('password-input--match');
+    } else {
+        if (matchEl) {
+            matchEl.textContent = 'Passwords do not match';
+            matchEl.className = 'password-match-status password-match-status--mismatch';
+        }
+        confirmWrap?.classList.add('password-input--mismatch');
+        if (pwd) pwdWrap?.classList.add('password-input--mismatch');
+    }
+}
+
+passwordInput?.addEventListener('input', updatePasswordFeedback);
+confirmPasswordInput?.addEventListener('input', updatePasswordFeedback);
 
 // Photo preview handler
 photoInput?.addEventListener('change', () => {
@@ -272,11 +493,9 @@ async function loadUsers() {
         const data = await res.json();
         allUsers = data.users || [];
         
-        // Clear sort and search when reloading
-        sortDropdown.value = '';
         searchInput.value = '';
         
-        renderUserTable(allUsers);
+        renderSplitUserTables(allUsers);
     } catch(err){
         console.error(err);
     }
@@ -301,87 +520,226 @@ async function populateOfficeDropdown() {
     }
 }
 populateOfficeDropdown();
-loadUsers();
+
+const profileRequiredFieldIds = ['full_name', 'contact_number', 'email', 'role', 'office_id'];
+const passwordFieldIds = ['password', 'confirm_password'];
+
+function setFormMode(mode) {
+    const isAdd = mode === 'add';
+    profileRequiredFieldIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.required = true;
+    });
+    passwordFieldIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.required = isAdd;
+    });
+    const changePasswordHeading = document.getElementById('changePasswordHeading');
+    if (changePasswordHeading) {
+        changePasswordHeading.hidden = isAdd;
+    }
+    const changePasswordHint = document.getElementById('changePasswordHint');
+    if (changePasswordHint) {
+        changePasswordHint.hidden = isAdd;
+    }
+    const passwordRequirements = document.getElementById('passwordRequirements');
+    if (passwordRequirements) {
+        passwordRequirements.style.display = 'block';
+    }
+    modal?.classList.toggle('user-modal--edit', !isAdd);
+}
+
+function validateContactNumberField(requireFilled = false) {
+    const el = document.getElementById('contact_number');
+    const value = (el?.value || '').trim();
+    if (!value) {
+        if (requireFilled) {
+            showToast('Please fill in Contact Number', 'error');
+            el?.focus();
+            return false;
+        }
+        return true;
+    }
+    if (!/^\d{11}$/.test(value)) {
+        showToast('Contact Number must be exactly 11 digits', 'error');
+        el?.focus();
+        return false;
+    }
+    return true;
+}
+
+function validateProfileFields() {
+    const checks = [
+        { id: 'full_name', label: 'Full Name' },
+        { id: 'contact_number', label: 'Contact Number' },
+        { id: 'email', label: 'Email Address' },
+        { id: 'role', label: 'Assigned Role' },
+        { id: 'office_id', label: 'Office / Department' },
+    ];
+
+    for (const { id, label } of checks) {
+        const el = document.getElementById(id);
+        if (!(el?.value || '').trim()) {
+            showToast(`Please fill in ${label}`, 'error');
+            el?.focus();
+            return false;
+        }
+    }
+
+    const accountStatus = document.getElementById('account_status');
+    if (!(accountStatus?.value || '').trim()) {
+        showToast('Please select Account Status', 'error');
+        accountStatus?.focus();
+        return false;
+    }
+
+    if (!validateContactNumberField(true)) {
+        return false;
+    }
+
+    return true;
+}
+
+function validateCreateUserForm() {
+    if (!validateProfileFields()) {
+        return false;
+    }
+
+    const passwordChecks = [
+        { id: 'password', label: 'Password' },
+        { id: 'confirm_password', label: 'Confirm Password' },
+    ];
+
+    for (const { id, label } of passwordChecks) {
+        const el = document.getElementById(id);
+        if (!(el?.value || '').trim()) {
+            showToast(`Please fill in ${label}`, 'error');
+            el?.focus();
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function validateEditUserForm() {
+    return validateProfileFields();
+}
 
 // ---------------- Modal & Submit (STRICT VALIDATION) ----------------
 addUserBtn.addEventListener('click', () => {
     modalTitle.textContent = 'Add User';
     userForm.reset();
+    setFormMode('add');
     // Reset photo preview
     if (photoPreview && photoPlaceholder) {
         photoPreview.src = '';
         photoPreview.style.display = 'none';
         photoPlaceholder.textContent = (document.getElementById('email').value || '').charAt(0).toUpperCase() || '';
     }
-    document.getElementById('password').required = true;
-    document.getElementById('confirm_password').required = true;
     document.getElementById('user_id').value = '';
-    document.getElementById('passwordRequirements').style.display = 'block';
-    document.getElementById('passwordStrength').textContent = '';
+    resetPasswordFieldStyles();
     modal.style.display = 'flex';
-    validatePasswordStrict('');
+    updatePasswordFeedback();
 });
 
-closeModal.addEventListener('click', () => modal.style.display = 'none');
-window.addEventListener('click', e => { if(e.target === modal) modal.style.display='none'; });
+function closeUserModal() {
+    if (modal) modal.style.display = 'none';
+}
+
+closeModal.addEventListener('click', closeUserModal);
+document.getElementById('cancelModalBtn')?.addEventListener('click', closeUserModal);
+window.addEventListener('click', e => { if (e.target === modal) closeUserModal(); });
 
 document.addEventListener('click', e => {
-    if(e.target.classList.contains('toggle-password')){
-        const input = e.target.previousElementSibling;
-        input.type = input.type==='password'?'text':'password';
+    if (e.target.classList.contains('toggle-password')) {
+        const input = e.target.closest('.input-icon-wrapper')?.querySelector('input');
+        if (!input) return;
+        input.type = input.type === 'password' ? 'text' : 'password';
         e.target.classList.toggle('fa-eye-slash');
     }
 });
 
-userForm.addEventListener('submit', async e => {
+document.getElementById('contact_number')?.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 11);
+});
+
+userForm.addEventListener('submit', e => {
     e.preventDefault();
-    saveBtn.disabled = true;
-    saveBtn.textContent = "Saving...";
+
+    const isAdd = modalTitle.textContent.includes('Add');
+
+    if (isAdd && !validateCreateUserForm()) {
+        return;
+    }
+
+    if (!isAdd && !validateEditUserForm()) {
+        return;
+    }
 
     const pwd = passwordInput.value;
     const confirmPwd = confirmPasswordInput.value;
 
-    if (pwd !== confirmPwd) {
+    if (isAdd && pwd !== confirmPwd) {
         showToast('Passwords do not match', 'error');
-        saveBtn.disabled = false;
-        saveBtn.textContent = "Save";
+        confirmPasswordInput?.focus();
         return;
     }
 
-    // STRICT: Only allow save if adding user OR password is filled and valid
-    if (modalTitle.textContent.includes('Add') || pwd) {
+    if (!isAdd && pwd && pwd !== confirmPwd) {
+        showToast('Passwords do not match', 'error');
+        confirmPasswordInput?.focus();
+        return;
+    }
+
+    if (isAdd || pwd) {
         const tests = validatePasswordStrict(pwd);
         const allPassed = Object.values(tests).every(Boolean);
         if (!allPassed) {
             showToast('Password must meet all requirements!', 'error');
-            saveBtn.disabled = false;
-            saveBtn.textContent = "Save";
             return;
         }
     }
 
+    if (modalTitle.textContent.includes('Edit')) {
+        openSaveConfirmModal();
+        return;
+    }
+
+    submitUserForm();
+});
+
+async function submitUserForm() {
+    const isAdd = modalTitle.textContent.includes('Add');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
     const formData = new FormData(userForm);
     try {
-        const res = await fetch('../../app/api/user_actions.php', { 
-            method:'POST', 
-            body: formData, 
-            credentials:'include' 
+        const res = await fetch('../../app/api/user_actions.php', {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
         });
         const data = await res.json();
-        if(data.success){ 
-            showToast(data.message || 'Saved successfully'); 
-            modal.style.display='none'; 
-            loadUsers(); 
+        if (data.success) {
+            modal.style.display = 'none';
+            loadUsers();
+            openAccountSuccessModal(
+                isAdd
+                    ? 'The new user has been added successfully.'
+                    : 'Your changes have been successfully saved.'
+            );
         } else {
             showToast(data.message || 'Action failed', 'error');
         }
-    } catch(err){
+    } catch (_) {
         showToast('An error occurred', 'error');
     } finally {
         saveBtn.disabled = false;
-        saveBtn.textContent = "Save";
+        saveBtn.textContent = 'Save';
     }
-});
+}
 
 // ---------------- Photo Lightbox helpers ----------------
 function openPhotoLightbox(src, email) {
@@ -410,7 +768,7 @@ photoLightbox?.addEventListener('click', e => {
 });
 
 // ---------------- Edit & DELETE (Now Instant Update) + photo click ----------------
-usersTableBody.addEventListener('click', async e => {
+usersListCard?.addEventListener('click', async e => {
     // Photo click -> open preview
     const photoWrapper = e.target.closest('.user-photo-wrapper');
     if (photoWrapper) {
@@ -438,16 +796,10 @@ usersTableBody.addEventListener('click', async e => {
             openDisableConfirmModal(uid, rowUser?.email || '');
             return;
         }
-        try {
-            const data = await postToggleStatus(uid, nextStatus);
-            if (data.success) {
-                showToast(data.message || 'Status updated');
-                loadUsers();
-            } else {
-                showToast(data.message || 'Failed to update status', 'error');
-            }
-        } catch (_) {
-            showToast('Network error', 'error');
+        if (nextStatus === 'active') {
+            const rowUser = allUsers.find(u => String(u.user_id) === String(uid));
+            openEnableConfirmModal(uid, rowUser?.email || '');
+            return;
         }
         return;
     }
@@ -456,6 +808,7 @@ usersTableBody.addEventListener('click', async e => {
         const user = allUsers.find(u => u.user_id == editBtn.dataset.id);
         if(!user){ showToast('User not found','error'); return; }
         modalTitle.textContent='Edit User';
+        setFormMode('edit');
         document.getElementById('user_id').value = user.user_id;
         document.getElementById('email').value = user.email;
         document.getElementById('full_name').value = user.full_name || '';
@@ -463,10 +816,10 @@ usersTableBody.addEventListener('click', async e => {
         document.getElementById('role').value = user.role;
         document.getElementById('office_id').value = user.office_id || '';
         document.getElementById('account_status').value = (user.account_status || 'active').toLowerCase();
-        document.getElementById('password').required = false;
-        document.getElementById('confirm_password').required = false;
-        document.getElementById('passwordRequirements').style.display = 'none';
-        document.getElementById('passwordStrength').textContent = 'Leave blank to keep current password';
+        document.getElementById('password').value = '';
+        document.getElementById('confirm_password').value = '';
+        resetPasswordFieldStyles();
+        updatePasswordFeedback();
 
         // Set photo preview for existing user
         if (photoPreview && photoPlaceholder) {
@@ -498,42 +851,77 @@ usersTableBody.addEventListener('click', async e => {
     }
 });
 
-// -------- SEARCH & SORT FUNCTIONALITY --------
+// -------- SEARCH, SORT & SPLIT USER TABLES --------
 const searchInput = document.getElementById('searchInput');
-const sortDropdown = document.getElementById('sortDropdown');
+const ADMIN_ROLE_DEFS = [
+    { role: 'GSD officer', label: 'GSD' },
+    { role: 'Comptroller', label: 'Comptroller' },
+    { role: 'President', label: 'President' },
+    { role: 'Canvasser', label: 'Canvasser' },
+    { role: 'Laboratory Manager', label: 'Laboratory Manager' },
+    { role: 'Employee', label: 'Employee' },
+    { role: 'User', label: 'User' },
+];
 
-function renderUserTable(users) {
-    usersTableBody.innerHTML = '';
-    if (!users || users.length === 0) {
-        usersTableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:50px;color:#64748b;">No users found.</td></tr>`;
-        return;
+const DEPT_ROLE_DEFS = [
+    { role: 'Dean', label: 'Dean' },
+];
+
+function normalizeUserRole(role) {
+    return String(role || '').trim().toLowerCase();
+}
+
+function isCanvasserAssignee(user) {
+    return user && (Number(user.is_canvasser_assignee) === 1 || normalizeUserRole(user.role) === 'canvasser');
+}
+
+function usersForRoleDef(users, roleDef) {
+    if (roleDef.role === 'Canvasser') {
+        return users.filter(u => isCanvasserAssignee(u));
     }
+    if (roleDef.role === 'Employee') {
+        return users.filter(u => (u.role || '').trim() === 'Employee' && !isCanvasserAssignee(u));
+    }
+    return users.filter(u => (u.role || '').trim() === roleDef.role);
+}
 
-    users.forEach((user, index) => {
-        const firstLetter = (user.email || '').charAt(0).toUpperCase();
-        const hasPhoto = !!user.photo_url;
-        const photoSrc = hasPhoto ? `../${user.photo_url}` : '';
+function isAdminPanelUser(user) {
+    const role = normalizeUserRole(user.role);
+    return role !== 'dean' && role !== 'inventory manager';
+}
 
-        const tr = document.createElement('tr');
-        const status = (user.account_status || 'active').toLowerCase();
-        const nextStatus = status === 'active' ? 'disabled' : 'active';
-        const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-        tr.innerHTML = `
-            <td>${index+1}</td>
-            <td>
-                <div class="user-photo-wrapper" data-email="${user.email}" data-photo="${photoSrc}">
-                    ${hasPhoto
-                        ? `<img src="${photoSrc}" alt="Photo of ${user.email}" class="user-photo-thumb">`
-                        : `<div class="user-photo-placeholder">${firstLetter}</div>`
-                    }
-                </div>
-            </td>
-            <td>${user.full_name || ''}</td>
-            <td>${user.email}</td>
-            <td>${user.role}</td>
-            <td><span class="status-pill status-${status}">${statusLabel}</span></td>
-            <td>${user.office_name || ''}</td>
-            <td>
+function isDeptPanelUser(user) {
+    return (user.role || '').trim() === 'Dean';
+}
+
+function buildUserRowHtml(user, rowNum, showRole = true) {
+    const firstLetter = (user.email || '').charAt(0).toUpperCase();
+    const hasPhoto = !!user.photo_url;
+    const photoSrc = hasPhoto ? `../${user.photo_url}` : '';
+    const status = (user.account_status || 'active').toLowerCase();
+    const nextStatus = status === 'active' ? 'disabled' : 'active';
+    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+    const roleLabel = showRole && isCanvasserAssignee(user) ? 'Canvasser' : (user.role || '');
+    const roleCell = showRole ? `<td>${roleLabel}</td>` : '';
+    const fullName = (user.full_name || '').trim() || '—';
+
+    return `
+        <td>${rowNum}</td>
+        <td>
+            <div class="user-photo-wrapper" data-email="${user.email}" data-photo="${photoSrc}">
+                ${hasPhoto
+                    ? `<img src="${photoSrc}" alt="Photo of ${user.email}" class="user-photo-thumb">`
+                    : `<div class="user-photo-placeholder">${firstLetter}</div>`
+                }
+            </div>
+        </td>
+        <td class="users-col-full-name" title="${fullName}">${fullName}</td>
+        <td>${user.email}</td>
+        ${roleCell}
+        <td class="users-col-status"><span class="status-pill status-${status}">${statusLabel}</span></td>
+        <td>${user.office_name || ''}</td>
+        <td>
+            <div class="user-action-cell">
                 <button class="action-btn view" data-id="${user.user_id}" title="View details">
                     <i class="fas fa-eye"></i>
                 </button>
@@ -542,15 +930,68 @@ function renderUserTable(users) {
                 </button>
                 <button class="action-btn edit" data-id="${user.user_id}"><i class="fas fa-edit"></i></button>
                 <button class="action-btn delete" data-id="${user.user_id}"><i class="fas fa-trash"></i></button>
-            </td>
-        `;
-        usersTableBody.appendChild(tr);
+            </div>
+        </td>
+    `;
+}
+
+function renderRolePanel(tbody, users, panelConfig) {
+    const { roleDefs, colspan, showRole, sortOption, rowOffset = 0 } = panelConfig;
+
+    tbody.innerHTML = '';
+    let rowNum = rowOffset;
+
+    roleDefs.forEach(roleDef => {
+        let roleUsers = usersForRoleDef(users, roleDef);
+        if (sortOption) {
+            roleUsers = sortUsers(roleUsers, sortOption);
+        }
+        if (!roleUsers.length) return;
+
+        roleUsers.forEach(user => {
+            rowNum += 1;
+            const tr = document.createElement('tr');
+            tr.innerHTML = buildUserRowHtml(user, rowNum, showRole);
+            tbody.appendChild(tr);
+        });
+    });
+
+    if (rowNum === rowOffset) {
+        tbody.innerHTML = `<tr><td colspan="${colspan}" class="users-table-loading">No users found.</td></tr>`;
+    }
+
+    return rowNum;
+}
+
+function renderSplitUserTables(users) {
+    const adminUsers = users.filter(isAdminPanelUser);
+    const deptUsers = users.filter(isDeptPanelUser);
+
+    if (!adminUsersTableBody || !deptUsersTableBody) return;
+
+    if (!users.length) {
+        adminUsersTableBody.innerHTML = '<tr><td colspan="8" class="users-table-loading">No users found.</td></tr>';
+        deptUsersTableBody.innerHTML = '<tr><td colspan="7" class="users-table-loading">No users found.</td></tr>';
+        return;
+    }
+
+    renderRolePanel(adminUsersTableBody, adminUsers, {
+        roleDefs: ADMIN_ROLE_DEFS,
+        colspan: 8,
+        showRole: true,
+        rowOffset: 0,
+    });
+
+    renderRolePanel(deptUsersTableBody, deptUsers, {
+        roleDefs: DEPT_ROLE_DEFS,
+        colspan: 7,
+        showRole: false,
+        rowOffset: 0,
     });
 }
 
 function searchAndFilterUsers() {
     const searchTerm = (searchInput.value || '').toLowerCase().trim();
-    const sortOption = sortDropdown.value;
 
     let filteredUsers = allUsers.filter(user => {
         if (!searchTerm) return true;
@@ -562,12 +1003,7 @@ function searchAndFilterUsers() {
         return email.includes(searchTerm) || fullName.includes(searchTerm) || role.includes(searchTerm) || office.includes(searchTerm);
     });
 
-    // Apply sorting
-    if (sortOption) {
-        filteredUsers = sortUsers(filteredUsers, sortOption);
-    }
-
-    renderUserTable(filteredUsers);
+    renderSplitUserTables(filteredUsers);
 }
 
 function sortUsers(users, sortOption) {
@@ -595,6 +1031,6 @@ function sortUsers(users, sortOption) {
     }
 }
 
-// Event listeners for search and sort
 searchInput?.addEventListener('input', searchAndFilterUsers);
-sortDropdown?.addEventListener('change', searchAndFilterUsers);
+
+loadUsers();

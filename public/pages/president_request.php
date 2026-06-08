@@ -28,7 +28,7 @@ $pvActive = 'request';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Request — President Verifier — IMRMS</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
     <link rel="stylesheet" href="../assets/css/dean_requisition_management.css">
     <link rel="stylesheet" href="../assets/css/gsd.css">
     <link rel="stylesheet" href="../assets/css/president_verifier.css">

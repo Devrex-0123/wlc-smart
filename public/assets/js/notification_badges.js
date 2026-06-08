@@ -204,3 +204,21 @@
         startPolling();
     }
 })();
+
+/*
+ * Back-navigation guard for authenticated pages.
+ * Once logged in, pressing the browser's Back button must never return the
+ * user to the login/landing page. We push a history state on load and re-push
+ * it whenever the user navigates back, keeping them on the current page.
+ * Server-side session guards remain the source of truth for access control.
+ */
+(function () {
+    try {
+        history.pushState(null, document.title, location.href);
+        window.addEventListener('popstate', function () {
+            history.pushState(null, document.title, location.href);
+        });
+    } catch (e) {
+        /* History API unavailable: server-side guards still protect access. */
+    }
+})();

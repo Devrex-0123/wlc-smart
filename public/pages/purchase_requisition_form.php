@@ -49,7 +49,7 @@ if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Purchase requisition · Not available</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
     <link rel="stylesheet" href="../assets/css/requisition_form.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -74,7 +74,7 @@ if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Purchase requisition · WLC-SMART</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
     <link rel="stylesheet" href="../assets/css/requisition_form.css">
     <link rel="stylesheet" href="../assets/css/purchase_requisition_form.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">

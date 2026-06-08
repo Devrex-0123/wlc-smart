@@ -1,27 +1,29 @@
 document.addEventListener('DOMContentLoaded', function () {
   const modal = document.getElementById('loginModal');
-  const loginBtn = document.getElementById('loginBtn');           // Header Login
-  const getStartedBtn = document.getElementById('getStartedBtn'); // Hero button
-  const closeBtn = document.querySelector('.close');
+  const loginBtn = document.getElementById('loginBtn');           // Header Login (legacy)
+  const getStartedBtn = document.getElementById('getStartedBtn'); // Nav button
+  const heroLaunchBtn = document.getElementById('heroLaunchBtn'); // Hero "Launch System"
+  const footerLaunchLink = document.getElementById('footerLaunchLink'); // Footer "Launch System"
+  const closeBtn = document.querySelector('.modal-close-x') || document.querySelector('.close');
   const togglePassword = document.querySelector('.toggle-password');
   const passwordField = document.getElementById('password');
   const toggleIcon = document.getElementById('toggleIcon');
 
-  function openModal() {
-    modal.style.display = 'block';
-    void modal.offsetWidth; 
-    modal.classList.add('show');
+  const ACTIVE_CLASS = 'display-active';
+
+  function openModal(e) {
+    if (e) e.preventDefault();
+    modal.classList.add(ACTIVE_CLASS);
   }
 
   function closeModal() {
-    modal.classList.remove('show');
-    setTimeout(() => {
-      modal.style.display = 'none';
-    }, 500);
+    modal.classList.remove(ACTIVE_CLASS);
   }
 
   if (loginBtn) loginBtn.addEventListener('click', openModal);
   if (getStartedBtn) getStartedBtn.addEventListener('click', openModal);
+  if (heroLaunchBtn) heroLaunchBtn.addEventListener('click', openModal);
+  if (footerLaunchLink) footerLaunchLink.addEventListener('click', openModal);
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
 
   // Re-open login modal after returning from policy pages.
@@ -30,6 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
     openModal();
   }
 
+  // Close when clicking the dark overlay (outside the modal box)
   window.addEventListener('click', function (e) {
     if (e.target === modal) closeModal();
   });
@@ -46,7 +49,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Close with Escape key
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && modal.classList.contains('show')) {
+    if (e.key === 'Escape' && modal.classList.contains(ACTIVE_CLASS)) {
       closeModal();
     }
   });

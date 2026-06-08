@@ -104,20 +104,42 @@ try {
     if ($action === 'update_profile') {
         $fullName = trim((string)($_POST['full_name'] ?? ''));
         $contact = trim((string)($_POST['contact_number'] ?? ''));
+        $email = strtolower(trim((string)($_POST['email'] ?? '')));
 
+        if ($fullName === '') {
+            sendJson(['success' => false, 'message' => 'Full Name is required']);
+        }
         if ($fullName !== '' && strlen($fullName) > 150) {
             sendJson(['success' => false, 'message' => 'Full name must be 150 characters or less']);
         }
-        if ($contact !== '' && (!preg_match('/^[0-9+\-\s()]{7,20}$/', $contact))) {
-            sendJson(['success' => false, 'message' => 'Contact number format is invalid']);
+        if ($contact === '') {
+            sendJson(['success' => false, 'message' => 'Contact Number is required']);
+        }
+        if (!preg_match('/^\d{11}$/', $contact)) {
+            sendJson(['success' => false, 'message' => 'Contact Number must be exactly 11 digits']);
+        }
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            sendJson(['success' => false, 'message' => 'A valid email address is required']);
         }
 
-        $userModel->updateProfile($userId, $fullName !== '' ? $fullName : null, $contact !== '' ? $contact : null);
-        if ($fullName !== '') {
-            $_SESSION['user_name'] = $fullName;
+        $dupStmt = $db->prepare(
+            'SELECT user_id FROM user WHERE LOWER(Email) = ? AND user_id != ? AND deleted_at IS NULL LIMIT 1'
+        );
+        $dupStmt->execute([$email, $userId]);
+        if ($dupStmt->fetch(PDO::FETCH_ASSOC)) {
+            sendJson(['success' => false, 'message' => 'Email is already in use']);
         }
+
+        $userModel->updateProfile(
+            $userId,
+            $fullName,
+            $contact,
+            $email
+        );
+        $_SESSION['user_name'] = $fullName;
+        $_SESSION['user_email'] = $email;
         logProfileActivity($db, $userId, 'Profile Update', 'Updated profile information');
-        AuditLogger::logCriticalAction($db, $userId, $userId, 'update', 'profile', $userId, 'Updated profile fields full_name/contact_number');
+        AuditLogger::logCriticalAction($db, $userId, $userId, 'update', 'profile', $userId, 'Updated profile fields full_name/contact_number/email');
         sendJson(['success' => true, 'message' => 'Profile updated']);
     }
 
@@ -152,7 +174,28 @@ try {
         $userModel->updatePasswordHashByUserId($userId, $next);
         logProfileActivity($db, $userId, 'Password Change', 'Changed account password');
         AuditLogger::logCriticalAction($db, $userId, $userId, 'update', 'profile_password', $userId, 'Updated own account password');
-        sendJson(['success' => true, 'message' => 'Password updated']);
+
+        $logStmt = $db->prepare("
+            SELECT log_id FROM log_history
+            WHERE user_id = ? AND (time_out IS NULL OR time_out = time_in)
+            ORDER BY time_in DESC
+            LIMIT 1
+        ");
+        $logStmt->execute([$userId]);
+        $activeLog = $logStmt->fetch(PDO::FETCH_ASSOC);
+        if ($activeLog) {
+            $updateLog = $db->prepare('UPDATE log_history SET time_out = NOW() WHERE log_id = ?');
+            $updateLog->execute([(int)$activeLog['log_id']]);
+        }
+
+        $userModel->clearRememberTokenByUserId($userId);
+        session_destroy();
+
+        sendJson([
+            'success' => true,
+            'logout_required' => true,
+            'message' => 'Password updated. Please log in again with your new password.',
+        ]);
     }
 
     if ($action === 'request_deletion') {

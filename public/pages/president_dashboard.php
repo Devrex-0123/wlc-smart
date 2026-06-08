@@ -24,7 +24,7 @@ $pvActive = 'dashboard';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard — President Verifier — IMRMS</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
     <link rel="stylesheet" href="../assets/css/gsd.css">
     <link rel="stylesheet" href="../assets/css/president_verifier.css">
     <link rel="stylesheet" href="../assets/css/loading.css">

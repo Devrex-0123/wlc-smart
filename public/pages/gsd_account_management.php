@@ -39,7 +39,7 @@ $gsdActive = 'accounts';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Account Management - GSD - IMRMS</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
     <link rel="stylesheet" href="../assets/css/gsd.css">
     <link rel="stylesheet" href="../assets/css/dean_account_management.css">
     <link rel="stylesheet" href="../assets/css/loading.css">

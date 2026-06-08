@@ -9,8 +9,7 @@
         <div class="sidebar-brand-logo-wrap">
             <img src="../assets/images/wlc-smart-logo.png" alt="WLC-SMART Inventory Office" class="sidebar-brand-logo" decoding="async" />
         </div>
-        <hr class="sidebar-brand-rule" />
         <p class="sidebar-brand-subtitle">WLC-SMART</p>
     </div>
 </div>
-<script defer src="../assets/js/notification_badges.js"></script>
+<script defer src="../assets/js/notification_badges.js?v=wlc8"></script>
