@@ -72,8 +72,12 @@ if ($from === 'progress' && $viewRequestId > 0) {
     $backUrl = 'dean_requisition_management.php';
 } elseif ($from === 'history') {
     $backUrl = $isInventoryManager ? 'audit_trail.php' : ($roleLc === 'dean' ? 'dean_requisition_status.php' : 'audit_trail.php');
+} elseif ($from === 'inventory' && $viewRequestId > 0) {
+    $progressQs = 'rid=' . $viewRequestId . ($progressFrom === 'status' ? '&from=status' : '');
+    $backUrl = 'requisition_status_progress.php?' . $progressQs;
 } elseif ($from === 'comptroller' && $viewRequestId > 0) {
-    $backUrl = 'requisition_status_progress.php?rid=' . $viewRequestId;
+    $progressQs = 'rid=' . $viewRequestId . ($progressFrom === 'status' ? '&from=status' : '');
+    $backUrl = 'requisition_status_progress.php?' . $progressQs;
 } elseif ($from === 'gsd' && $viewRequestId > 0) {
     $backUrl = 'gsd_request.php';
 } elseif ($from === 'president' && $viewRequestId > 0) {

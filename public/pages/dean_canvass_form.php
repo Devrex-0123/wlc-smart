@@ -125,10 +125,8 @@ if ($requestId <= 0) {
         }
     }
 } elseif ($from === 'inventory') {
-    $accessErrorReturnHref =
-        $progressFrom === 'status'
-            ? ('requisition_status_progress.php?rid=' . $requestId . '&from=status')
-            : 'requisition_management.php';
+    $inventoryProgressQs = 'rid=' . $requestId . ($progressFrom === 'status' ? '&from=status' : '');
+    $accessErrorReturnHref = 'requisition_status_progress.php?' . $inventoryProgressQs;
     $backHref = $accessErrorReturnHref;
     $isInventoryRole = ($roleLc === 'inventory manager' || $roleLc === 'inventory_manager');
     if (!$isInventoryRole) {
@@ -159,7 +157,10 @@ if ($requestId <= 0) {
         }
     }
 } elseif ($from === 'comptroller' || ($from === 'history' && $isComptrollerRole)) {
-    $comptrollerProgressHref = 'requisition_status_progress.php' . ($requestId > 0 ? ('?rid=' . $requestId) : '');
+    $comptrollerProgressQs = $requestId > 0
+        ? ('rid=' . $requestId . ($progressFrom === 'status' ? '&from=status' : ''))
+        : '';
+    $comptrollerProgressHref = 'requisition_status_progress.php' . ($comptrollerProgressQs !== '' ? ('?' . $comptrollerProgressQs) : '');
     $backHref = $from === 'history' ? 'audit_trail.php' : $comptrollerProgressHref;
     $accessErrorReturnHref = $backHref;
     if (!$isComptrollerRole) {

@@ -22,12 +22,6 @@ if (!$isComptroller && !$isInventoryManager) {
     exit;
 }
 
-$username = trim((string)($user['full_name'] ?? ''));
-if ($username === '') {
-    $username = explode('@', (string)($user['Email'] ?? ''))[0] ?? 'User';
-}
-$initials = strtoupper(substr($user['Email'] ?? 'A', 0, 1));
-
 $rspReadonly = '1';
 $rspViewer = $isComptroller ? 'comptroller' : 'inventory';
 $rspBackHref = $isComptroller ? 'comptroller_requests.php' : 'requisition_management.php';
@@ -57,40 +51,7 @@ if ($isComptroller) {
 <?php if ($isComptroller): ?>
     <?php require __DIR__ . '/partials/comptroller_sidebar.php'; ?>
 <?php else: ?>
-<aside class="sidebar" id="sidebar">
-    <?php require __DIR__ . '/partials/sidebar_brand_header.php'; ?>
-    <nav>
-        <ul class="sidebar-nav">
-            <li><a href="dashboard.php"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-            <li><a href="requisition_management.php"><i class="fas fa-file-signature"></i> <span>Requisition Management</span></a></li>
-            <li><a href="requisition_status.php" class="active" data-notification-key="requester_attention" data-notification-view-key="requester_attention"><i class="fas fa-bars-progress"></i> <span>Status</span></a></li>
-            <li><a href="audit_trail.php"><i class="fas fa-shield-alt"></i> <span>Audit Trail</span></a></li>
-            <li><a href="account_management.php"><i class="fas fa-users-cog"></i> <span>Account Management</span></a></li>
-            <li><a href="facility_management.php"><i class="fas fa-building"></i> <span>Facility Management</span></a></li>
-            <li><a href="item_management.php"><i class="fas fa-box"></i> <span>Item Management</span></a></li>
-            <li><a href="inventory_management.php"><i class="fas fa-cubes"></i> <span>Inventory Management</span></a></li>
-            <li><a href="supplier_management.php"><i class="fas fa-truck"></i> <span>Supplier Management</span></a></li>
-        </ul>
-    </nav>
-    <div class="sidebar-footer">
-        <div class="user-profile">
-            <div class="user-avatar">
-                <?php if (!empty($user['photo_url'])): ?>
-                    <img src="../<?php echo htmlspecialchars($user['photo_url']); ?>" alt="Profile Photo" class="user-avatar-img">
-                <?php else: ?>
-                    <div class="user-avatar-initials"><?php echo htmlspecialchars($initials); ?></div>
-                <?php endif; ?>
-            </div>
-            <div class="user-details">
-                <h4><?php echo htmlspecialchars($username); ?></h4>
-                <p><?php echo htmlspecialchars($user['role'] ?? ''); ?></p>
-            </div>
-        </div>
-        <button id="logoutBtn" class="btn-logout-sidebar">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </button>
-    </div>
-</aside>
+    <?php $imActivePage = 'requisition_status.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 <?php endif; ?>
 
 <main class="main-content">
@@ -109,6 +70,8 @@ if ($isComptroller) {
 <script src="../assets/js/logout.js?v=wlc1"></script>
 <?php if ($isComptroller): ?>
 <script src="../assets/js/comptroller_shell.js"></script>
+<?php else: ?>
+<?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 <?php endif; ?>
 <script src="../assets/js/requisition_status_progress.js"></script>
 </body>
