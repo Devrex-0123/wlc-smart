@@ -1,9 +1,39 @@
 const ITEMS_PER_PAGE = 10;
+
+let itemsPerPage = ITEMS_PER_PAGE;
 let allLogged = [];
 let allActivity = [];
 let loggedPage = 1;
 let activityPage = 1;
-let activeView = "logged";
+let activeView = "activity";
+
+function formatCount(value) {
+  const n = Number(value) || 0;
+  return n.toLocaleString("en-US");
+}
+
+function animateCount(el, target, duration = 900) {
+  if (!el) return;
+  const end = Math.max(0, Number(target) || 0);
+  const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (prefersReduced || end === 0) {
+    el.textContent = formatCount(end);
+    return;
+  }
+
+  const start = performance.now();
+
+  function frame(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(end * eased);
+    el.textContent = formatCount(current);
+    if (progress < 1) requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+}
 
 function parseDateValue(value) {
   if (!value || value === "Active Session") return null;
@@ -26,34 +56,22 @@ function getFilters() {
   return {
     search: (document.getElementById("globalSearch")?.value || "").toLowerCase().trim(),
     from: document.getElementById("dateFrom")?.value || "",
-    to: document.getElementById("dateTo")?.value || "",
-    action: (document.getElementById("actionTypeFilter")?.value || "all").toLowerCase()
+    to: document.getElementById("dateTo")?.value || ""
   };
-}
-
-function matchesAction(text, action) {
-  if (!action || action === "all") return true;
-  const normalized = String(text || "").toLowerCase();
-  if (action === "other") {
-    return !["add", "edit", "update", "delete", "login", "logout", "approve", "reject"].some((token) => normalized.includes(token));
-  }
-  return normalized.includes(action);
 }
 
 function renderLogged() {
   const tbody = document.getElementById("loggedBody");
-  const { search, from, to, action } = getFilters();
+  const { search, from, to } = getFilters();
   const filtered = allLogged.filter((row) => {
     const searchHit = !search || [row.email, row.role, row.status, row.time_in, row.time_out].some((v) => String(v || "").toLowerCase().includes(search));
-    const actionText = `${row.status || ""} ${row.duration || ""}`;
-    const actionHit = matchesAction(actionText, action);
-    return searchHit && actionHit && dateRangeMatch(row.time_in, from, to);
+    return searchHit && dateRangeMatch(row.time_in, from, to);
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
   loggedPage = Math.min(loggedPage, totalPages);
-  const start = (loggedPage - 1) * ITEMS_PER_PAGE;
-  const pageItems = filtered.slice(start, start + ITEMS_PER_PAGE);
+  const start = (loggedPage - 1) * itemsPerPage;
+  const pageItems = filtered.slice(start, start + itemsPerPage);
 
   tbody.innerHTML = pageItems.length ? "" : `<tr><td colspan="8" style="text-align:center;padding:36px;color:#64748b;">No logged records found.</td></tr>`;
   pageItems.forEach((log, i) => {
@@ -71,26 +89,23 @@ function renderLogged() {
     tbody.appendChild(tr);
   });
 
-  document.getElementById("loggedPageInfo").textContent = `Page ${loggedPage} of ${totalPages}`;
+  document.getElementById("loggedPageInfo").textContent = `Page ${loggedPage} of ${totalPages} (${filtered.length} records)`;
   document.getElementById("prevLoggedBtn").disabled = loggedPage === 1;
   document.getElementById("nextLoggedBtn").disabled = loggedPage === totalPages;
-  document.getElementById("loggedCount").textContent = String(filtered.length);
 }
 
 function renderActivity() {
   const tbody = document.getElementById("activityBody");
-  const { search, from, to, action } = getFilters();
+  const { search, from, to } = getFilters();
   const filtered = allActivity.filter((row) => {
     const searchHit = !search || [row.user, row.role, row.type, row.description, row.time].some((v) => String(v || "").toLowerCase().includes(search));
-    const actionText = `${row.type || ""} ${row.description || ""}`;
-    const actionHit = matchesAction(actionText, action);
-    return searchHit && actionHit && dateRangeMatch(row.time, from, to);
+    return searchHit && dateRangeMatch(row.time, from, to);
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
   activityPage = Math.min(activityPage, totalPages);
-  const start = (activityPage - 1) * ITEMS_PER_PAGE;
-  const pageItems = filtered.slice(start, start + ITEMS_PER_PAGE);
+  const start = (activityPage - 1) * itemsPerPage;
+  const pageItems = filtered.slice(start, start + itemsPerPage);
 
   tbody.innerHTML = pageItems.length ? "" : `<tr><td colspan="7" style="text-align:center;padding:36px;color:#64748b;">No activity records found.</td></tr>`;
   pageItems.forEach((act, i) => {
@@ -107,10 +122,16 @@ function renderActivity() {
     tbody.appendChild(tr);
   });
 
-  document.getElementById("activityPageInfo").textContent = `Page ${activityPage} of ${totalPages}`;
+  document.getElementById("activityPageInfo").textContent = `Page ${activityPage} of ${totalPages} (${filtered.length} records)`;
   document.getElementById("prevActivityBtn").disabled = activityPage === 1;
   document.getElementById("nextActivityBtn").disabled = activityPage === totalPages;
-  document.getElementById("activityCount").textContent = String(filtered.length);
+}
+
+function renderSummary(summary = {}) {
+  animateCount(document.getElementById("todaysActivitiesCount"), summary.todays_activities);
+  animateCount(document.getElementById("activeUsersCount"), summary.active_users);
+  animateCount(document.getElementById("failedLoginCount"), summary.failed_login_attempts);
+  animateCount(document.getElementById("totalAuditRecordsCount"), summary.total_audit_records);
 }
 
 function renderActiveView() {
@@ -119,19 +140,27 @@ function renderActiveView() {
   } else {
     renderActivity();
   }
-  document.getElementById("combinedCount").textContent = String(allLogged.length + allActivity.length);
+}
+
+async function loadSummary() {
+  try {
+    const res = await fetch("../../app/api/get_audit_summary.php", { credentials: "include" });
+    const data = await res.json();
+    renderSummary(data.success ? (data.summary || {}) : {});
+  } catch (_) {
+    renderSummary({});
+  }
 }
 
 function setView(nextView) {
   activeView = nextView;
-  const actionFilter = document.getElementById("actionTypeFilter");
-  if (actionFilter) {
-    actionFilter.disabled = false;
-  }
   document.getElementById("loggedPanel").style.display = nextView === "logged" ? "" : "none";
   document.getElementById("activityPanel").style.display = nextView === "activity" ? "" : "none";
   document.getElementById("showLoggedBtn").classList.toggle("active", nextView === "logged");
   document.getElementById("showActivityBtn").classList.toggle("active", nextView === "activity");
+  itemsPerPage = ITEMS_PER_PAGE;
+  loggedPage = 1;
+  activityPage = 1;
   renderActiveView();
 }
 
@@ -149,9 +178,10 @@ async function loadAuditData() {
     allLogged = [];
     allActivity = [];
   }
+  itemsPerPage = ITEMS_PER_PAGE;
   renderLogged();
   renderActivity();
-  document.getElementById("combinedCount").textContent = String(allLogged.length + allActivity.length);
+  await loadSummary();
 }
 
 document.getElementById("showLoggedBtn")?.addEventListener("click", () => setView("logged"));
@@ -171,18 +201,9 @@ document.getElementById("dateTo")?.addEventListener("change", () => {
   activityPage = 1;
   renderActiveView();
 });
-document.getElementById("actionTypeFilter")?.addEventListener("change", () => {
-  loggedPage = 1;
-  activityPage = 1;
-  renderActiveView();
-});
 document.getElementById("clearDateBtn")?.addEventListener("click", () => {
   document.getElementById("dateFrom").value = "";
   document.getElementById("dateTo").value = "";
-  const actionFilter = document.getElementById("actionTypeFilter");
-  if (actionFilter) {
-    actionFilter.value = "all";
-  }
   loggedPage = 1;
   activityPage = 1;
   renderActiveView();
@@ -215,9 +236,10 @@ document.addEventListener("click", (e) => {
   }
 });
 window.addEventListener("resize", () => {
-  if (!mobileMenuBtn || !sidebar) return;
-  mobileMenuBtn.style.display = window.innerWidth > 768 ? "none" : "block";
-  if (window.innerWidth > 768) sidebar.classList.remove("open");
+  if (mobileMenuBtn && sidebar) {
+    mobileMenuBtn.style.display = window.innerWidth > 768 ? "none" : "block";
+    if (window.innerWidth > 768) sidebar.classList.remove("open");
+  }
 });
 
 loadAuditData();

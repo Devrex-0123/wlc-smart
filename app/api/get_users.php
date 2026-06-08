@@ -33,7 +33,18 @@ try {
             u.updated_at,
             u.office_id,
             u.photo_url,
-            d.`office_name` AS office_name
+            d.`office_name` AS office_name,
+            (
+                LOWER(TRIM(u.role)) = 'canvasser'
+                OR EXISTS (
+                    SELECT 1 FROM canvasser_action_history h
+                    WHERE h.user_id = u.user_id
+                )
+                OR EXISTS (
+                    SELECT 1 FROM canvass_verification_approval c
+                    WHERE c.canvas_assignee_user_id = u.user_id
+                )
+            ) AS is_canvasser_assignee
         FROM user u
         LEFT JOIN offices d ON u.office_id = d.office_id
         WHERE u.deleted_at IS NULL

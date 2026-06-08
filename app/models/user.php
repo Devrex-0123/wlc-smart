@@ -106,6 +106,20 @@ class User {
         return $stmt->execute([(string)$version, (int)$userId]);
     }
 
+    /**
+     * Returns true when the account's has_consented flag is set to 1,
+     * regardless of consent version. Used to decide whether the login
+     * modal must run the document-review workflow.
+     */
+    public function hasConsentedByEmail($email) {
+        $sql = "SELECT has_consented FROM `user` WHERE LOWER(Email) = LOWER(?) AND deleted_at IS NULL LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([(string)$email]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) return false;
+        return (int)($row['has_consented'] ?? 0) === 1;
+    }
+
     public function hasCurrentConsentByEmail($email, $version) {
         $sql = "SELECT has_consented, consent_version FROM `user` WHERE LOWER(Email) = LOWER(?) AND deleted_at IS NULL LIMIT 1";
         $stmt = $this->db->prepare($sql);
@@ -127,7 +141,18 @@ class User {
         return $stmt->execute([(int)$userId]);
     }
 
-    public function updateProfile($userId, $fullName, $contactNumber) {
+    public function updateProfile($userId, $fullName, $contactNumber, $email = null) {
+        if ($email !== null) {
+            $sql = "UPDATE `user` SET full_name = ?, contact_number = ?, Email = ?, updated_at = NOW() WHERE user_id = ?";
+            $stmt = $this->db->prepare($sql);
+            return $stmt->execute([
+                $fullName !== null ? trim((string)$fullName) : null,
+                $contactNumber !== null ? trim((string)$contactNumber) : null,
+                strtolower(trim((string)$email)),
+                (int)$userId
+            ]);
+        }
+
         $sql = "UPDATE `user` SET full_name = ?, contact_number = ?, updated_at = NOW() WHERE user_id = ?";
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([

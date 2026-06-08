@@ -3,6 +3,12 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Prevent authenticated pages from being served from the browser cache, so a
+// logged-out user pressing Back cannot see a stale dashboard.
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: Thu, 01 Jan 1970 00:00:00 GMT");
+
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../../index.php");
     exit;

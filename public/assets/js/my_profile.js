@@ -2,9 +2,10 @@
   const root = document.getElementById("myProfilePage");
   if (!root) return;
 
-  const msg = document.getElementById("msg");
+
   const fullNameEl = document.getElementById("full_name");
   const contactEl = document.getElementById("contact_number");
+  const emailEl = document.getElementById("email");
   const saveBtn = document.getElementById("saveProfileBtn");
   const editBtn = document.getElementById("editProfileBtn");
   const cancelBtn = document.getElementById("cancelProfileBtn");
@@ -18,16 +19,56 @@
   const newPasswordEl = document.getElementById("new_password");
   const confirmPasswordEl = document.getElementById("confirm_password");
 
+  const profileConfirmModal = document.getElementById("profileConfirmModal");
+  const profileConfirmBackdrop = document.getElementById("profileConfirmBackdrop");
+  const profileConfirmCancel = document.getElementById("profileConfirmCancel");
+  const profileConfirmOk = document.getElementById("profileConfirmOk");
+
+  const passwordConfirmModal = document.getElementById("passwordConfirmModal");
+  const passwordConfirmBackdrop = document.getElementById("passwordConfirmBackdrop");
+  const passwordConfirmCancel = document.getElementById("passwordConfirmCancel");
+  const passwordConfirmOk = document.getElementById("passwordConfirmOk");
+
+  const profileSuccessModal = document.getElementById("profileSuccessModal");
+  const profileSuccessBackdrop = document.getElementById("profileSuccessBackdrop");
+  const profileSuccessMessage = document.getElementById("profileSuccessMessage");
+  const profileSuccessOk = document.getElementById("profileSuccessOk");
+  const toastContainer = document.getElementById("toastContainer");
+
   const apiUrl = root.dataset.apiUrl || "../../app/api/my_profile.php";
+  let successModalOnClose = null;
 
   let originalProfile = {
     full_name: fullNameEl.value || "",
-    contact_number: contactEl.value || ""
+    contact_number: contactEl.value || "",
+    email: emailEl.value || ""
   };
 
-  function notify(text, ok) {
-    msg.textContent = text || "";
-    msg.style.color = ok ? "#166534" : "#991b1b";
+  function showToast(text) {
+    if (!toastContainer || !text) return;
+    const div = document.createElement("div");
+    div.className = "profile-toast";
+    div.textContent = text;
+    toastContainer.appendChild(div);
+    setTimeout(() => div.remove(), 4000);
+  }
+
+  function openSuccessModal(message, onClose) {
+    if (!profileSuccessModal || !profileSuccessMessage) return;
+    successModalOnClose = typeof onClose === "function" ? onClose : null;
+    profileSuccessMessage.textContent = message;
+    profileSuccessModal.classList.add("is-open");
+    profileSuccessModal.setAttribute("aria-hidden", "false");
+    profileSuccessOk?.focus();
+  }
+
+  function closeSuccessModal() {
+    if (!profileSuccessModal) return;
+    profileSuccessModal.classList.remove("is-open");
+    profileSuccessModal.setAttribute("aria-hidden", "true");
+    const callback = successModalOnClose;
+    successModalOnClose = null;
+    if (callback) callback();
   }
 
   async function parseApiResponse(res) {
@@ -43,6 +84,18 @@
     passwordInlineError.textContent = text || "";
   }
 
+  function openConfirmModal(modal) {
+    if (!modal) return;
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeConfirmModal(modal) {
+    if (!modal) return;
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+
   function formatDate(value) {
     if (!value) return "—";
     const dt = new Date(String(value).replace(" ", "T"));
@@ -50,9 +103,57 @@
     return dt.toLocaleString();
   }
 
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+  }
+
+  function isValidContactNumber(value) {
+    return /^\d{11}$/.test(String(value || "").trim());
+  }
+
+  function profileFieldsComplete() {
+    return (
+      fullNameEl.value.trim() !== "" &&
+      contactEl.value.trim() !== "" &&
+      emailEl.value.trim() !== "" &&
+      isValidEmail(emailEl.value) &&
+      isValidContactNumber(contactEl.value)
+    );
+  }
+
+  function validateProfileFields() {
+    if (!fullNameEl.value.trim()) {
+      showToast("Please fill in Full Name.");
+      fullNameEl.focus();
+      return false;
+    }
+    if (!contactEl.value.trim()) {
+      showToast("Please fill in Contact Number.");
+      contactEl.focus();
+      return false;
+    }
+    if (!isValidContactNumber(contactEl.value)) {
+      showToast("Contact Number must be exactly 11 digits.");
+      contactEl.focus();
+      return false;
+    }
+    if (!emailEl.value.trim()) {
+      showToast("Please fill in Email.");
+      emailEl.focus();
+      return false;
+    }
+    if (!isValidEmail(emailEl.value)) {
+      showToast("Please enter a valid email address.");
+      emailEl.focus();
+      return false;
+    }
+    return true;
+  }
+
   function setEditMode(enabled) {
     fullNameEl.disabled = !enabled;
     contactEl.disabled = !enabled;
+    emailEl.disabled = !enabled;
     editBtn.classList.toggle("is-hidden", enabled);
     saveBtn.classList.toggle("is-hidden", !enabled);
     cancelBtn.classList.toggle("is-hidden", !enabled);
@@ -62,8 +163,17 @@
   function refreshSaveButtonState() {
     const changed =
       fullNameEl.value.trim() !== (originalProfile.full_name || "") ||
-      contactEl.value.trim() !== (originalProfile.contact_number || "");
-    saveBtn.disabled = !changed;
+      contactEl.value.trim() !== (originalProfile.contact_number || "") ||
+      emailEl.value.trim().toLowerCase() !== (originalProfile.email || "").trim().toLowerCase();
+    saveBtn.disabled = !changed || !profileFieldsComplete();
+  }
+
+  function getDisplayInitials(name) {
+    const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+    return (parts[0] || "U").charAt(0).toUpperCase();
   }
 
   function applyPhoto(url, initials) {
@@ -97,7 +207,7 @@
     const strength = document.getElementById("passwordStrength");
     if (strength) {
       strength.textContent = met === 5 ? "Strong password" : met >= 3 ? "Medium password" : "Weak password";
-      strength.style.color = met === 5 ? "#10b981" : met >= 3 ? "#f59e0b" : "#ef4444";
+      strength.style.color = met === 5 ? "#16a34a" : met >= 3 ? "#d97706" : "#dc2626";
     }
 
     return Object.values(tests).every(Boolean);
@@ -105,29 +215,36 @@
 
   function setProfileFromResponse(u) {
     const displayName = (u.full_name || u.email || "U").trim();
-    originalProfile = { full_name: u.full_name || "", contact_number: u.contact_number || "" };
+    originalProfile = {
+      full_name: u.full_name || "",
+      contact_number: u.contact_number || "",
+      email: u.email || ""
+    };
     fullNameEl.value = u.full_name || "";
     contactEl.value = u.contact_number || "";
-    document.getElementById("email").value = u.email || "";
+    emailEl.value = u.email || "";
     document.getElementById("role").value = u.role || "";
+    const roleText = document.getElementById("role_text");
+    if (roleText) {
+      roleText.textContent = u.role || "—";
+    }
     document.getElementById("office").value = u.office_name || "";
     document.getElementById("password_updated_at").value = formatDate(u.password_updated_at);
-    applyPhoto(u.photo_url || "", displayName.charAt(0).toUpperCase());
+    applyPhoto(u.photo_url || "", getDisplayInitials(displayName));
+    const profileHeaderName = document.getElementById("profileHeaderName");
+    if (profileHeaderName) {
+      profileHeaderName.textContent = displayName;
+    }
     const sidebarName = document.querySelector(".sidebar-footer .user-details h4");
     if (sidebarName) {
       sidebarName.textContent = displayName;
     }
+    const consentAccepted = Number(u.has_consented) === 1;
     const consentBadge = document.getElementById("consent_badge");
-    consentBadge.textContent = Number(u.has_consented) === 1 ? "Accepted" : "Pending";
-    consentBadge.classList.toggle("accepted", Number(u.has_consented) === 1);
-    document.getElementById("viewMyData").innerHTML =
-      `<strong>My Data Snapshot</strong><br>
-      Full Name: ${u.full_name || "—"}<br>
-      Email: ${u.email || "—"}<br>
-      Role: ${u.role || "—"}<br>
-      Office: ${u.office_name || "—"}<br>
-      Contact Number: ${u.contact_number || "—"}<br>
-      Consent: ${Number(u.has_consented) === 1 ? `Accepted (${u.consent_version || "n/a"})` : "Not yet accepted"}`;
+    consentBadge.classList.toggle("accepted", consentAccepted);
+    consentBadge.innerHTML = consentAccepted
+      ? '<i class="fas fa-check" aria-hidden="true"></i> Accepted'
+      : "Pending";
     setEditMode(false);
   }
 
@@ -135,10 +252,21 @@
     const res = await fetch(`${apiUrl}?action=get`, { credentials: "include" });
     const data = await parseApiResponse(res);
     if (!data.success) {
-      notify(data.message || "Failed to load profile");
+      showToast(data.message || "Failed to load profile");
       return;
     }
     setProfileFromResponse(data.user || {});
+  }
+
+  function redirectToLogin(message) {
+    if (message) {
+      try {
+        sessionStorage.setItem("login_notice", message);
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    window.location.href = "../../index.php";
   }
 
   editBtn.addEventListener("click", function () {
@@ -149,37 +277,68 @@
   cancelBtn.addEventListener("click", function () {
     fullNameEl.value = originalProfile.full_name || "";
     contactEl.value = originalProfile.contact_number || "";
+    emailEl.value = originalProfile.email || "";
     setEditMode(false);
-    notify("");
   });
 
   fullNameEl.addEventListener("input", refreshSaveButtonState);
-  contactEl.addEventListener("input", refreshSaveButtonState);
+  contactEl.addEventListener("input", function (e) {
+    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 11);
+    refreshSaveButtonState();
+  });
+  emailEl.addEventListener("input", refreshSaveButtonState);
 
-  saveBtn.addEventListener("click", async function () {
+  const saveBtnDefaultHtml =
+    '<i class="fas fa-check" aria-hidden="true"></i> Save changes';
+  const changePasswordBtnDefaultHtml =
+    '<i class="fas fa-lock" aria-hidden="true"></i> Update password';
+
+  async function submitProfileSave() {
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving...";
     try {
+      if (!validateProfileFields()) {
+        refreshSaveButtonState();
+        return;
+      }
+
+      const emailValue = emailEl.value.trim().toLowerCase();
       const body = new URLSearchParams({
         action: "update_profile",
         full_name: fullNameEl.value.trim(),
-        contact_number: contactEl.value.trim()
+        contact_number: contactEl.value.trim(),
+        email: emailValue
       });
       const res = await fetch(apiUrl, { method: "POST", credentials: "include", body });
       const data = await parseApiResponse(res);
-      notify(data.message || "Updated", !!data.success);
       if (data.success) {
         await loadProfile();
+        openSuccessModal("Your changes have been successfully saved.");
       } else {
+        showToast(data.message || "Failed to save profile.");
         refreshSaveButtonState();
       }
     } catch (_) {
-      notify("Unable to save profile right now.");
+      showToast("Unable to save profile right now.");
       refreshSaveButtonState();
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = "Save Changes";
+      saveBtn.innerHTML = saveBtnDefaultHtml;
     }
+  }
+
+  saveBtn.addEventListener("click", function () {
+    if (!validateProfileFields()) {
+      return;
+    }
+    openConfirmModal(profileConfirmModal);
+  });
+
+  profileConfirmBackdrop?.addEventListener("click", () => closeConfirmModal(profileConfirmModal));
+  profileConfirmCancel?.addEventListener("click", () => closeConfirmModal(profileConfirmModal));
+  profileConfirmOk?.addEventListener("click", () => {
+    closeConfirmModal(profileConfirmModal);
+    submitProfileSave();
   });
 
   newPasswordEl.addEventListener("input", function () {
@@ -187,18 +346,7 @@
     setPasswordError("");
   });
 
-  changePasswordBtn.addEventListener("click", async function () {
-    setPasswordError("");
-    const validPassword = evaluatePassword(newPasswordEl.value);
-    if (!validPassword) {
-      setPasswordError("Password does not meet all requirements.");
-      return;
-    }
-    if (newPasswordEl.value !== confirmPasswordEl.value) {
-      setPasswordError("New password and confirm password do not match.");
-      return;
-    }
-
+  async function submitPasswordChange() {
     changePasswordBtn.disabled = true;
     changePasswordBtn.textContent = "Updating...";
     try {
@@ -212,18 +360,103 @@
       const data = await parseApiResponse(res);
       if (!data.success) {
         setPasswordError(data.message || "Failed to update password.");
-      } else {
-        notify(data.message || "Password updated.", true);
-        currentPasswordEl.value = "";
-        newPasswordEl.value = "";
-        confirmPasswordEl.value = "";
-        evaluatePassword("");
-        await loadProfile();
+        return;
       }
+
+      if (data.logout_required) {
+        openSuccessModal("Your password has been changed successfully.", () => {
+          redirectToLogin();
+        });
+        return;
+      }
+
+      openSuccessModal("Your password has been changed successfully.");
+      clearPasswordFields();
+      await loadProfile();
     } finally {
       changePasswordBtn.disabled = false;
-      changePasswordBtn.textContent = "Update Password";
+      changePasswordBtn.innerHTML = changePasswordBtnDefaultHtml;
     }
+  }
+
+  function clearPasswordFields() {
+    if (currentPasswordEl) currentPasswordEl.value = "";
+    if (newPasswordEl) newPasswordEl.value = "";
+    if (confirmPasswordEl) confirmPasswordEl.value = "";
+    setPasswordError("");
+    evaluatePassword("");
+    document.querySelectorAll(".password-toggle").forEach((toggleBtn) => {
+      const targetId = toggleBtn.getAttribute("data-target");
+      const input = targetId ? document.getElementById(targetId) : null;
+      if (input) input.type = "password";
+      const icon = toggleBtn.querySelector("i");
+      if (icon) {
+        icon.classList.add("fa-eye");
+        icon.classList.remove("fa-eye-slash");
+      }
+    });
+  }
+
+  function closePasswordConfirmModal() {
+    closeConfirmModal(passwordConfirmModal);
+    clearPasswordFields();
+  }
+
+  changePasswordBtn.addEventListener("click", function () {
+    setPasswordError("");
+    const validPassword = evaluatePassword(newPasswordEl.value);
+    if (!validPassword) {
+      setPasswordError("Password does not meet all requirements.");
+      return;
+    }
+    if (newPasswordEl.value !== confirmPasswordEl.value) {
+      setPasswordError("New password and confirm password do not match.");
+      return;
+    }
+    if (!currentPasswordEl.value) {
+      setPasswordError("Current password is required.");
+      return;
+    }
+    openConfirmModal(passwordConfirmModal);
+  });
+
+  passwordConfirmBackdrop?.addEventListener("click", closePasswordConfirmModal);
+  passwordConfirmCancel?.addEventListener("click", closePasswordConfirmModal);
+  passwordConfirmOk?.addEventListener("click", () => {
+    closeConfirmModal(passwordConfirmModal);
+    submitPasswordChange();
+  });
+
+  profileSuccessBackdrop?.addEventListener("click", closeSuccessModal);
+  profileSuccessOk?.addEventListener("click", closeSuccessModal);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (profileSuccessModal?.classList.contains("is-open")) {
+      closeSuccessModal();
+      return;
+    }
+    if (profileConfirmModal?.classList.contains("is-open")) {
+      closeConfirmModal(profileConfirmModal);
+    }
+    if (passwordConfirmModal?.classList.contains("is-open")) {
+      closePasswordConfirmModal();
+    }
+  });
+
+  document.querySelectorAll(".password-toggle").forEach(function (toggleBtn) {
+    toggleBtn.addEventListener("click", function () {
+      const targetId = toggleBtn.getAttribute("data-target");
+      const input = targetId ? document.getElementById(targetId) : null;
+      if (!input) return;
+      const icon = toggleBtn.querySelector("i");
+      const showPassword = input.type === "password";
+      input.type = showPassword ? "text" : "password";
+      if (icon) {
+        icon.classList.toggle("fa-eye", !showPassword);
+        icon.classList.toggle("fa-eye-slash", showPassword);
+      }
+    });
   });
 
   profilePhotoInput.addEventListener("change", function () {
@@ -238,10 +471,13 @@
     reader.readAsDataURL(file);
   });
 
+  const uploadPhotoBtnDefaultHtml =
+    '<i class="fas fa-upload" aria-hidden="true"></i> Upload photo';
+
   uploadPhotoBtn.addEventListener("click", async function () {
     const file = profilePhotoInput.files && profilePhotoInput.files[0];
     if (!file) {
-      notify("Please choose an image file first.");
+      profilePhotoInput.click();
       return;
     }
     uploadPhotoBtn.disabled = true;
@@ -252,76 +488,18 @@
       form.append("photo", file);
       const res = await fetch(apiUrl, { method: "POST", credentials: "include", body: form });
       const data = await parseApiResponse(res);
-      notify(data.message || "Upload complete", !!data.success);
       if (data.success) {
         profilePhotoInput.value = "";
         await loadProfile();
+      } else {
+        showToast(data.message || "Upload failed.");
       }
     } finally {
       uploadPhotoBtn.disabled = false;
-      uploadPhotoBtn.textContent = "Upload Photo";
+      uploadPhotoBtn.innerHTML = uploadPhotoBtnDefaultHtml;
     }
   });
 
   evaluatePassword("");
   loadProfile();
-
-  (function setupLegalModals() {
-    const privacyModal = document.getElementById("privacyModal");
-    const termsModal = document.getElementById("termsModal");
-    const openPrivacyBtn = document.getElementById("openPrivacyNoticeBtn");
-    const openTermsBtn = document.getElementById("openTermsModalBtn");
-    const privacyClose = document.getElementById("privacyModalClose");
-    const termsClose = document.getElementById("termsModalClose");
-
-    if (!privacyModal || !termsModal || !openPrivacyBtn || !openTermsBtn) return;
-
-    let lastFocus = null;
-
-    function openModal(modal) {
-      lastFocus = document.activeElement;
-      modal.removeAttribute("hidden");
-      const closeEl = modal.querySelector(".profile-modal-close");
-      if (closeEl) closeEl.focus();
-    }
-
-    function closeModal(modal) {
-      modal.setAttribute("hidden", "");
-      if (lastFocus && typeof lastFocus.focus === "function") {
-        lastFocus.focus();
-      }
-      lastFocus = null;
-    }
-
-    openPrivacyBtn.addEventListener("click", function () {
-      openModal(privacyModal);
-    });
-    openTermsBtn.addEventListener("click", function () {
-      openModal(termsModal);
-    });
-
-    if (privacyClose) {
-      privacyClose.addEventListener("click", function () {
-        closeModal(privacyModal);
-      });
-    }
-    if (termsClose) {
-      termsClose.addEventListener("click", function () {
-        closeModal(termsModal);
-      });
-    }
-
-    privacyModal.addEventListener("click", function (e) {
-      if (e.target === privacyModal) closeModal(privacyModal);
-    });
-    termsModal.addEventListener("click", function (e) {
-      if (e.target === termsModal) closeModal(termsModal);
-    });
-
-    document.addEventListener("keydown", function (e) {
-      if (e.key !== "Escape") return;
-      if (!privacyModal.hasAttribute("hidden")) closeModal(privacyModal);
-      else if (!termsModal.hasAttribute("hidden")) closeModal(termsModal);
-    });
-  })();
 })();

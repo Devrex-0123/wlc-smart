@@ -12,17 +12,21 @@ if (!isset($_SESSION['user_id'])) {
 $db = Database::connect();
 
 try {
+    $totalCount = (int) $db->query("SELECT COUNT(*) FROM user_activity")->fetchColumn();
+
     $stmt = $db->query("
         SELECT 
             a.activity_id,
+            a.user_id,
             a.activity_type,
             a.description,
             a.created_at,
             u.Email AS user_email,
+            u.full_name AS user_full_name,
             u.role AS user_role
         FROM user_activity a
         LEFT JOIN user u ON a.user_id = u.user_id
-        ORDER BY a.created_at DESC
+        ORDER BY a.created_at DESC, a.activity_id DESC
     ");
 
     $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -30,9 +34,17 @@ try {
     $formatted = [];
     foreach ($records as $row) {
         $time = new DateTime($row['created_at']);
+        $userLabel = trim((string)($row['user_email'] ?? ''));
+        if ($userLabel === '') {
+            $userLabel = trim((string)($row['user_full_name'] ?? ''));
+        }
+        if ($userLabel === '') {
+            $userLabel = 'Unknown';
+        }
+
         $formatted[] = [
             "activity_id" => $row['activity_id'],
-            "user"        => $row['user_email'] ?? 'Unknown',
+            "user"        => $userLabel,
             "role"        => $row['user_role'] ?? 'N/A',
             "type"        => $row['activity_type'],
             "description" => $row['description'],
@@ -43,7 +55,8 @@ try {
     echo json_encode([
         "success" => true,
         "activities" => $formatted,
-        "count" => count($formatted)
+        "count" => count($formatted),
+        "total_count" => $totalCount
     ]);
 
 } catch (Exception $e) {
