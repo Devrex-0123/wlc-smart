@@ -73,11 +73,11 @@ if ($from === 'progress' && $viewRequestId > 0) {
 } elseif ($from === 'history') {
     $backUrl = $isInventoryManager ? 'audit_trail.php' : ($roleLc === 'dean' ? 'dean_requisition_status.php' : 'audit_trail.php');
 } elseif ($from === 'comptroller' && $viewRequestId > 0) {
-    $backUrl = 'comptroller_requests.php';
+    $backUrl = 'requisition_status_progress.php?rid=' . $viewRequestId;
 } elseif ($from === 'gsd' && $viewRequestId > 0) {
     $backUrl = 'gsd_request.php';
 } elseif ($from === 'president' && $viewRequestId > 0) {
-    $backUrl = 'president_request.php';
+    $backUrl = 'president_requisition_status_progress.php?rid=' . $viewRequestId;
 } elseif ($from === 'canvasser' && $viewRequestId > 0) {
     $backUrl = 'canvasser_request.php';
 }
@@ -137,7 +137,7 @@ if ($viewingRequest && $viewRequestId > 0) {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="page-requisition-form">
 
 <main class="requisition-main">
     <div class="requisition-card<?php echo $applyViewOnlyChrome ? ' view-only' : ''; ?><?php echo ($isInventoryManagerActiveReview || $isCanvasserActiveReview || $isComptrollerActiveReview || $isGsdActiveReview || $isPresidentActiveReview) ? ' comptroller-request-review' : ''; ?><?php echo $isCanvasserActiveReview ? ' canvasser-matrix-edit' : ''; ?>">
@@ -163,9 +163,23 @@ if ($viewingRequest && $viewRequestId > 0) {
                 <img src="../assets/images/western-letye-logo.jpg" alt="College Logo" class="requisition-logo" />
             </div>
         </div>
-        <?php if ($rfRequestId > 0) {
-            require __DIR__ . '/partials/requisition_flow_context.php';
-        } ?>
+        <?php if ($rfRequestId > 0): ?>
+        <nav class="req-breadcrumb" aria-label="Request context">
+            <div class="req-breadcrumb-track">
+                <span class="req-breadcrumb-pill req-breadcrumb-pill--id">Request #<?php echo (int) $rfRequestId; ?></span>
+                <?php if ($rfStepLine !== ''): ?>
+                <span class="req-breadcrumb-sep" aria-hidden="true">›</span>
+                <span class="req-breadcrumb-pill req-breadcrumb-pill--stage"><?php echo htmlspecialchars($rfStepLine); ?></span>
+                <?php endif; ?>
+            </div>
+            <?php if ($rfLinkUrl !== '' && $rfLinkText !== ''): ?>
+            <a class="req-breadcrumb-link" href="<?php echo htmlspecialchars($rfLinkUrl); ?>"><?php echo htmlspecialchars($rfLinkText); ?></a>
+            <?php endif; ?>
+            <?php if ($rfHint !== ''): ?>
+            <p class="req-breadcrumb-hint"><?php echo htmlspecialchars($rfHint); ?></p>
+            <?php endif; ?>
+        </nav>
+        <?php endif; ?>
         <?php if ($canShowPurchaseRequisitionLink): ?>
         <div class="req-flow-context">
             <div class="req-flow-context-top">
@@ -176,33 +190,33 @@ if ($viewingRequest && $viewRequestId > 0) {
             </div>
         </div>
         <?php endif; ?>
-        <div class="requisition-info">
-            <div class="info-left info-grid">
-                <div class="field-group">
-                    <label for="requesterName">Requester Name</label>
-                    <input type="text" id="requesterName" value="<?php echo htmlspecialchars($displayName); ?>" disabled>
-                </div>
-                <div class="field-group">
-                    <label for="officeSelect">Office</label>
-                    <select id="officeSelect">
-                        <option value="">Select Office</option>
-                    </select>
-                </div>
-                <div class="field-group">
-                    <label for="facilitySelect">Location / Facility</label>
-                    <select id="facilitySelect">
-                        <option value="">Select Location</option>
-                    </select>
-                </div>
-                <div class="field-group">
-                    <label for="facultyRole">Faculty Role</label>
-                    <input type="text" id="facultyRole" value="<?php echo htmlspecialchars($user['role'] ?? ''); ?>" disabled>
-                </div>
+        <div class="requisition-info requisition-meta-grid">
+            <div class="field-group">
+                <label for="requesterName">Requester Name</label>
+                <input type="text" id="requesterName" value="<?php echo htmlspecialchars($displayName); ?>" disabled>
             </div>
-            <div class="info-right">
-                <label for="requestDate">REQUESTED DATE</label>
+            <div class="field-group">
+                <label for="officeSelect">Office</label>
+                <select id="officeSelect">
+                    <option value="">Select Office</option>
+                </select>
+            </div>
+            <div class="field-group">
+                <label for="requestDate">Requested Date</label>
                 <input type="date" id="requestDate" value="<?php echo date('Y-m-d'); ?>">
-                <label for="requestPurpose" style="margin-top:0.6rem;">Purpose of request</label>
+            </div>
+            <div class="field-group">
+                <label for="facilitySelect">Location / Facility</label>
+                <select id="facilitySelect">
+                    <option value="">Select Location</option>
+                </select>
+            </div>
+            <div class="field-group">
+                <label for="facultyRole">Faculty Role</label>
+                <input type="text" id="facultyRole" value="<?php echo htmlspecialchars($user['role'] ?? ''); ?>" disabled>
+            </div>
+            <div class="field-group">
+                <label for="requestPurpose">Purpose of Request</label>
                 <input type="text" id="requestPurpose" placeholder="For new laboratory, replacement item, etc.">
             </div>
         </div>
@@ -217,8 +231,9 @@ if ($viewingRequest && $viewRequestId > 0) {
         </div>
         <?php endif; ?>
 
-        <div class="table-section">
-            <div class="section-label">Requested Item:</div>
+        <section class="rf-section rf-section-items">
+            <h2 class="rf-section-heading">Requested Items</h2>
+            <div class="table-section">
             <div class="form-grid">
                 <input type="text" id="itemName" placeholder="Item Name" list="itemNameSuggestions" autocomplete="off">
                 <datalist id="itemNameSuggestions"></datalist>
@@ -241,13 +256,18 @@ if ($viewingRequest && $viewRequestId > 0) {
             </div>
             <?php endif; ?>
 
+            </div>
+        </section>
+
+        <section class="rf-section rf-section-note">
+            <h2 class="rf-section-heading">Note / Message</h2>
             <div class="note-group">
-                <label for="requestMessage" class="note-label">Note / Message</label>
+                <label for="requestMessage" class="note-label sr-only">Note / Message</label>
                 <textarea id="requestMessage" rows="3" placeholder="Add note or message here... (use this for urgent/immediate requests)"></textarea>
             </div>
-        </div>
+        </section>
 
-        <div class="approval-section">
+        <div class="approval-section rf-verifier-summary">
             <div class="approval-card">
               <div class="approval-role<?php echo $isGsdCanvasAssigneeUi ? ' approval-role-gsd-assignee' : ''; ?>">
                     <div class="circle-icon inactive"><i class="fas fa-check"></i></div>
@@ -272,7 +292,7 @@ if ($viewingRequest && $viewRequestId > 0) {
         </div>
 
         <?php if (!$isCanvasserActiveReview): ?>
-        <div class="btn-submit-wrapper">
+        <div class="btn-submit-wrapper rf-form-actions">
             <button id="saveDraftBtn" class="btn-secondary" title="Save form as draft - you can edit it later">
                 <i class="fas fa-floppy-disk"></i> Save as Draft
             </button>
@@ -280,10 +300,10 @@ if ($viewingRequest && $viewRequestId > 0) {
         </div>
         <?php endif; ?>
         <?php if ($isInventoryManagerActiveReview || $isComptrollerActiveReview || $isGsdActiveReview || $isPresidentActiveReview): ?>
-        <div class="comptroller-approve-wrapper">
-            <button type="button" id="comptrollerApproveBtn" class="btn-submit"><?php echo $isInventoryManagerActiveReview ? 'Accept requisition' : 'Approve'; ?></button>
-            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn">Reject</button>
-            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;">Undo decision</button>
+        <div class="comptroller-approve-wrapper verifier-decision-bar rf-form-actions">
+            <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> <?php echo $isInventoryManagerActiveReview ? 'Accept requisition' : 'Approve'; ?></button>
+            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
+            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <?php if ($isInventoryManagerActiveReview): ?>
         <div class="note-group">

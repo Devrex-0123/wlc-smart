@@ -198,6 +198,9 @@ try {
                    COALESCE(cva.pres_status, 'pending') AS pres_status,
                    COALESCE(pra.pr_inv_status, 'pending') AS pr_inv_status,
                    COALESCE(pra.pr_pres_status, 'pending') AS pr_pres_status,
+                   po.id AS purchase_order_id,
+                   po.po_number AS purchase_order_number,
+                   po.status AS purchase_order_status,
                    {$agg}
             FROM requisition_item r
             LEFT JOIN user u ON u.user_id = r.user_id
@@ -205,6 +208,7 @@ try {
             LEFT JOIN requisition_form_approval rfa ON rfa.request_id = r.request_id
             LEFT JOIN canvass_verification_approval cva ON cva.request_id = r.request_id
             LEFT JOIN purchase_requisition_approval pra ON pra.request_id = r.request_id
+            LEFT JOIN purchase_orders po ON po.requisition_id = r.request_id AND po.deleted_at IS NULL
             WHERE r.submission_status = 'submitted'
             ORDER BY r.created_at DESC, r.request_id DESC
         ");
@@ -230,6 +234,9 @@ try {
                 'pres_status' => (string)($row['pres_status'] ?? 'pending'),
                 'pr_inv_status' => (string)($row['pr_inv_status'] ?? 'pending'),
                 'pr_pres_status' => (string)($row['pr_pres_status'] ?? 'pending'),
+                'purchase_order_id' => !empty($row['purchase_order_id']) ? (int) $row['purchase_order_id'] : null,
+                'purchase_order_number' => (string)($row['purchase_order_number'] ?? ''),
+                'purchase_order_status' => (string)($row['purchase_order_status'] ?? ''),
                 'requester' => $requester,
                 'office' => $row['office_name'] ?? '—',
             ];

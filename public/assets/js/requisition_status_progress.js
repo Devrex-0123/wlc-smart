@@ -8,6 +8,9 @@ const FORM_VIEWS_PREFIX = 'imrms_form_views_';
 const ADMIN_API = '../../app/api/admin_requisition.php';
 const ADMIN_LIST_API = '../../app/api/admin_requisition.php?action=list_requests';
 const DEAN_LIST_API = '../../app/api/dean_requisition.php?action=list_requests';
+const PRESIDENT_LIST_API = '../../app/api/president/requests.php?action=list_requests';
+const COMPTROLLER_LIST_API = '../../app/api/comptroller.php?action=list_requests';
+const PURCHASE_ORDER_API = '../../app/api/purchase_order.php';
 
 let progressRecord = null;
 
@@ -181,15 +184,84 @@ function prStatusLower(record, key) {
     return String((record && record[key]) || '').trim().toLowerCase();
 }
 
+/** Inventory and President have both accepted the purchase requisition. */
+function purchaseRequisitionFullyAccepted(record) {
+    return (
+        prStatusLower(record, 'pr_inv_status') === 'accept' &&
+        prStatusLower(record, 'pr_pres_status') === 'accept'
+    );
+}
+
+function canViewWorkflowForms(config) {
+    return (
+        config.deanFlow ||
+        config.viewer === 'inventory' ||
+        config.viewer === 'comptroller' ||
+        config.viewer === 'president'
+    );
+}
+
+async function ensurePurchaseOrderForProgress(requestId, record) {
+    if (requestId == null || !record || !purchaseRequisitionFullyAccepted(record)) {
+        return record;
+    }
+    try {
+        const body = new URLSearchParams({
+            action: 'ensure_for_request',
+            request_id: String(requestId),
+        });
+        const res = await fetch(PURCHASE_ORDER_API, {
+            method: 'POST',
+            credentials: 'include',
+            body,
+        });
+        const data = await res.json();
+        if (!data.success || !data.data) {
+            return record;
+        }
+        const merged = {
+            ...record,
+            purchase_order_id: Number(data.data.id || 0) || null,
+            purchase_order_number: String(data.data.po_number || ''),
+            purchase_order_status: String(data.data.status || record.purchase_order_status || 'pending'),
+        };
+        try {
+            sessionStorage.setItem(STORAGE_PREFIX + String(requestId), JSON.stringify(merged));
+        } catch {
+            /* ignore */
+        }
+        return merged;
+    } catch {
+        return record;
+    }
+}
+
+function purchaseOrderExists(record) {
+    return Number(record?.purchase_order_id || 0) > 0;
+}
+
+function poStatusLower(record) {
+    return String((record && record.purchase_order_status) || '').trim().toLowerCase();
+}
+
 /**
- * Purchase requisition verifiers: `pr_inv_status`, `pr_pres_status` (list_requests APIs + DB).
- * Step 4 = PR form, 5 = validate PR, 6 = purchase order. Any `accept` moves past “validate PR”.
+ * Purchase flow after canvass is fully verified (0-based STEP_DEFS indices):
+ * 4 PR form · 5 validate PR · 6 generate PO · 7 president validates PO · 8 delivery.
  */
 function currentIndexAfterCanvasForPurchaseFlow(record) {
+    if (purchaseRequisitionFullyAccepted(record)) {
+        if (purchaseOrderExists(record)) {
+            if (poStatusLower(record) === 'approved') {
+                return 8;
+            }
+            return 7;
+        }
+        return 6;
+    }
     const inv = prStatusLower(record, 'pr_inv_status');
     const pres = prStatusLower(record, 'pr_pres_status');
     if (inv === 'accept' || pres === 'accept') {
-        return 6;
+        return 5;
     }
     return 5;
 }
@@ -272,6 +344,50 @@ async function refreshDeanProgressRecordFromApi(requestId) {
 async function refreshAdminProgressRecordFromApi(requestId) {
     try {
         const res = await fetch(ADMIN_LIST_API, { credentials: 'include' });
+        const data = await res.json();
+        if (!data.success || !Array.isArray(data.requests)) {
+            return null;
+        }
+        const fresh = data.requests.find((r) => Number(r.request_id) === Number(requestId));
+        if (!fresh) {
+            return null;
+        }
+        try {
+            sessionStorage.setItem(STORAGE_PREFIX + String(requestId), JSON.stringify(fresh));
+        } catch {
+            /* ignore */
+        }
+        return fresh;
+    } catch {
+        return null;
+    }
+}
+
+async function refreshPresidentProgressRecordFromApi(requestId) {
+    try {
+        const res = await fetch(PRESIDENT_LIST_API, { credentials: 'include' });
+        const data = await res.json();
+        if (!data.success || !Array.isArray(data.requests)) {
+            return null;
+        }
+        const fresh = data.requests.find((r) => Number(r.request_id) === Number(requestId));
+        if (!fresh) {
+            return null;
+        }
+        try {
+            sessionStorage.setItem(STORAGE_PREFIX + String(requestId), JSON.stringify(fresh));
+        } catch {
+            /* ignore */
+        }
+        return fresh;
+    } catch {
+        return null;
+    }
+}
+
+async function refreshComptrollerProgressRecordFromApi(requestId) {
+    try {
+        const res = await fetch(COMPTROLLER_LIST_API, { credentials: 'include' });
         const data = await res.json();
         if (!data.success || !Array.isArray(data.requests)) {
             return null;
@@ -420,9 +536,19 @@ function renderApp(root, record, config) {
 
     const progressFromParam = config.progressFrom === 'status' ? '&progress_from=status' : '';
     const reqNum = numericRequestId(record);
+    let requisitionFormFrom = 'progress';
+    if (config.viewer === 'president') {
+        requisitionFormFrom = 'president';
+    } else if (config.viewer === 'inventory') {
+        requisitionFormFrom = 'inventory';
+    } else if (config.viewer === 'comptroller') {
+        requisitionFormFrom = 'comptroller';
+    }
     const formHref =
         reqNum != null
-            ? 'dean_requisition_form.php?view=1&from=progress&request_id=' +
+            ? 'dean_requisition_form.php?view=1&from=' +
+              encodeURIComponent(requisitionFormFrom) +
+              '&request_id=' +
               encodeURIComponent(String(reqNum)) +
               progressFromParam
             : '#';
@@ -431,6 +557,8 @@ function renderApp(root, record, config) {
         canvassFromParam = '&from=inventory';
     } else if (config.viewer === 'comptroller') {
         canvassFromParam = '&from=comptroller';
+    } else if (config.viewer === 'president') {
+        canvassFromParam = '&from=president';
     }
     const canvassHref =
         reqNum != null
@@ -444,8 +572,10 @@ function renderApp(root, record, config) {
         purchaseFromParam = 'inventory';
     } else if (config.viewer === 'comptroller') {
         purchaseFromParam = 'comptroller';
+    } else if (config.viewer === 'president') {
+        purchaseFromParam = 'president';
     } else if (config.deanFlow) {
-        purchaseFromParam = 'requisition';
+        purchaseFromParam = 'progress';
     }
     const purchaseHref =
         reqNum != null
@@ -453,6 +583,17 @@ function renderApp(root, record, config) {
               encodeURIComponent(String(reqNum)) +
               '&from=' +
               encodeURIComponent(purchaseFromParam)
+            : '#';
+    let purchaseOrderFromParam = purchaseFromParam;
+    const poId = Number(record.purchase_order_id || 0);
+    const purchaseOrderHref =
+        reqNum != null && poId > 0
+            ? 'purchase_order_form.php?id=' +
+              encodeURIComponent(String(poId)) +
+              '&request_id=' +
+              encodeURIComponent(String(reqNum)) +
+              '&from=' +
+              encodeURIComponent(purchaseOrderFromParam)
             : '#';
     const rqLc = String(record.requisition_status || '').trim().toLowerCase();
     const stTrim = String(record.status || '').trim();
@@ -470,12 +611,19 @@ function renderApp(root, record, config) {
                 <a href="${canvassHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}" data-form-type="canvass"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
             </li>`
         : '';
-    const showPurchaseCta =
-        (config.viewer === 'inventory' || config.deanFlow) && canvassFullyVerified(record);
+    const showPurchaseCta = canViewWorkflowForms(config) && canvassFullyVerified(record);
     const purchaseRow = showPurchaseCta
         ? `<li class="rsp-form-link-row">
                 <span class="rsp-form-link-text">Purchase requisition form${!isFormViewed(numericRequestId(record), 'purchase') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>
                 <a href="${purchaseHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}" data-form-type="purchase"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
+            </li>`
+        : '';
+    const showPurchaseOrderCta =
+        canViewWorkflowForms(config) && purchaseRequisitionFullyAccepted(record) && poId > 0;
+    const purchaseOrderRow = showPurchaseOrderCta
+        ? `<li class="rsp-form-link-row">
+                <span class="rsp-form-link-text">Purchase order form${!isFormViewed(numericRequestId(record), 'purchase_order') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>
+                <a href="${purchaseOrderHref}" class="rsp-form-view${reqNum == null || poId <= 0 ? ' rsp-form-view-disabled' : ''}" data-form-type="purchase_order"${reqNum == null || poId <= 0 ? ' aria-disabled="true"' : ''}>View</a>
             </li>`
         : '';
 
@@ -525,6 +673,7 @@ function renderApp(root, record, config) {
                             </li>
                             ${canvassRow}
                             ${purchaseRow}
+                            ${purchaseOrderRow}
                         </ul>
                     </div>
                 </div>
@@ -640,10 +789,20 @@ async function initProgressView() {
         if (fresh) {
             record = fresh;
         }
-    } else if (config.viewer === 'inventory' || config.viewer === 'comptroller') {
+    } else if (config.viewer === 'inventory') {
         const adminFresh = await refreshAdminProgressRecordFromApi(rid);
         if (adminFresh) {
             record = adminFresh;
+        }
+    } else if (config.viewer === 'comptroller') {
+        const compFresh = await refreshComptrollerProgressRecordFromApi(rid);
+        if (compFresh) {
+            record = compFresh;
+        }
+    } else if (config.viewer === 'president') {
+        const presidentFresh = await refreshPresidentProgressRecordFromApi(rid);
+        if (presidentFresh) {
+            record = presidentFresh;
         }
     }
 
@@ -655,6 +814,8 @@ async function initProgressView() {
     if (config.viewer === 'inventory' || config.viewer === 'comptroller') {
         record = await enrichAdminProgressRecord(rid, record);
     }
+
+    record = await ensurePurchaseOrderForProgress(rid, record);
 
     renderApp(root, record, config);
 }

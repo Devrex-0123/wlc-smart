@@ -103,7 +103,7 @@ $comptrollerActive = 'dashboard';
         <p style="margin-bottom: 0;">
             <strong id="compStatTotalLines">—</strong> requisition line(s) in the system;
             <strong id="compStatCompletedAll">—</strong> marked completed (all time).
-            Open <a href="comptroller_requests.php" style="color: #16a34a; font-weight: 600;">Requests</a> to browse lines or
+            Open <a href="comptroller_requests.php" style="color: #16a34a; font-weight: 600;">Requisition Management</a> to browse lines or
             <a href="audit_trail.php" style="color: #16a34a; font-weight: 600;">Audit Trail</a> for login and activity logs.
         </p>
     </div>

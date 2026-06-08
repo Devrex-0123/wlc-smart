@@ -1,8 +1,10 @@
 /**
- * President verifier — requisition list; View opens canvass sheet with president approve/reject.
+ * President verifier — requisition list; Status opens workflow progress (forms + purchase order).
  */
 (function () {
     const API = '../../app/api/president/requests.php';
+    const REQ_PROGRESS_KEY = 'imrms_req_progress_';
+    const REQ_VIEWS_PREFIX = 'imrms_request_views_';
 
     const requestTableBody = document.getElementById('pvRequestTableBody');
     const searchInput = document.getElementById('pvReqSearch');
@@ -140,8 +142,8 @@
             <td><span class="status-pill ${statusClass(r.status)}">${esc(r.status || '—')}</span></td>
             <td>
                 <div class="actions-cell">
-                    <button type="button" class="edit pv-view-form-btn" data-request-id="${esc(String(r.request_id))}" title="View request form">
-                        <i class="fas fa-file-lines"></i> View${indicatorHtml}
+                    <button type="button" class="edit pv-status-btn" data-id="${esc(r.id)}" data-request-id="${esc(String(r.request_id))}" title="View workflow and forms">
+                        <i class="fas fa-bars-progress"></i> Status${indicatorHtml}
                     </button>
                 </div>
             </td>
@@ -156,20 +158,23 @@
 
     if (requestTableBody) {
         requestTableBody.addEventListener('click', (e) => {
-            const btn = e.target.closest('.pv-view-form-btn');
+            const btn = e.target.closest('.pv-status-btn');
             if (!btn) return;
-            const rid = btn.dataset.requestId;
-            if (!rid) return;
-            // Mark request as viewed
-            markRequestViewed(parseInt(rid, 10));
-            // Remove indicator if present
+            const record = requests.find((r) => r.id === btn.dataset.id);
+            if (!record) return;
+            try {
+                sessionStorage.setItem(REQ_PROGRESS_KEY + String(record.request_id), JSON.stringify(record));
+            } catch {
+                return;
+            }
+            markRequestViewed(record.request_id);
             const indicator = btn.querySelector('.request-indicator');
             if (indicator) {
                 indicator.remove();
             }
             window.location.href =
-                'dean_canvass_form.php?from=president&request_id=' +
-                encodeURIComponent(String(rid));
+                'president_requisition_status_progress.php?rid=' +
+                encodeURIComponent(String(record.request_id));
         });
     }
 

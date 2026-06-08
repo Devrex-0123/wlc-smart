@@ -27,7 +27,7 @@ $pvActive = 'request';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Request — President Verifier — IMRMS</title>
+    <title>Requisition Management — President Verifier — IMRMS</title>
     <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
     <link rel="stylesheet" href="../assets/css/dean_requisition_management.css">
     <link rel="stylesheet" href="../assets/css/gsd.css">
@@ -43,8 +43,8 @@ $pvActive = 'request';
     <div class="page-header management-header">
         <div>
             <div class="gsd-kicker" style="margin-bottom: 0.75rem;"><i class="fas fa-stamp"></i> President verifier workspace</div>
-            <h1>Request Management</h1>
-            <p>View requisition lines (read-only list). Open <strong>View</strong> to see the form and <strong>Approve</strong> or <strong>Reject</strong> as President.</p>
+            <h1>Requisition Management</h1>
+            <p>Review submitted requisitions. Use <strong>Status</strong> to open the workflow progress and access canvass, purchase requisition, and purchase order forms.</p>
         </div>
     </div>
 

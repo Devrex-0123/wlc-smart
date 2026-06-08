@@ -21,15 +21,18 @@ $isPresidentVerifier = in_array($roleLc, ['president', 'president verifier', 've
 $requestId = (int) ($_GET['request_id'] ?? 0);
 $from = trim((string) ($_GET['from'] ?? ''));
 
+$progressQs = $requestId > 0 ? ('?rid=' . $requestId) : '';
 $backHref = 'dean_requisition_management.php';
 if ($from === 'gsd') {
     $backHref = 'gsd_request.php';
 } elseif ($from === 'comptroller') {
-    $backHref = 'comptroller_requests.php';
+    $backHref = 'requisition_status_progress.php' . $progressQs;
 } elseif ($from === 'president') {
-    $backHref = 'president_request.php';
+    $backHref = 'president_requisition_status_progress.php' . $progressQs;
 } elseif ($from === 'inventory') {
-    $backHref = 'requisition_management.php';
+    $backHref = 'requisition_status_progress.php' . $progressQs;
+} elseif ($from === 'progress' || $from === 'requisition') {
+    $backHref = 'dean_requisition_status_progress.php' . $progressQs;
 } elseif ($from === 'history') {
     $backHref = 'audit_trail.php';
 }
@@ -37,9 +40,13 @@ if ($from === 'gsd') {
 if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)) {
     header('Content-Type: text/html; charset=UTF-8');
     http_response_code(403);
-    $progressFallback = (in_array($roleLc, ['inventory manager', 'inventory_manager', 'comptroller'], true))
-        ? ('requisition_status_progress.php?rid=' . (int) $requestId)
-        : ('dean_requisition_status_progress.php?rid=' . (int) $requestId);
+    if (in_array($roleLc, ['inventory manager', 'inventory_manager', 'comptroller'], true)) {
+        $progressFallback = 'requisition_status_progress.php?rid=' . (int) $requestId;
+    } elseif ($isPresidentVerifier) {
+        $progressFallback = 'president_requisition_status_progress.php?rid=' . (int) $requestId;
+    } else {
+        $progressFallback = 'dean_requisition_status_progress.php?rid=' . (int) $requestId;
+    }
     $safeBack = htmlspecialchars($backHref, ENT_QUOTES, 'UTF-8');
     $safeProgress = htmlspecialchars($progressFallback, ENT_QUOTES, 'UTF-8');
     ?>
@@ -80,7 +87,7 @@ if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="page-purchase-requisition-form">
 <main class="requisition-main">
     <div class="requisition-card purchase-requisition-card">
         <a href="<?php echo htmlspecialchars($backHref); ?>" class="requisition-close-btn" id="purchaseReqBackBtn" data-fallback-href="<?php echo htmlspecialchars($backHref); ?>" aria-label="Back" data-tooltip="Back">
@@ -107,40 +114,41 @@ if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)
             </div>
         </div>
 
-        <div class="requisition-info">
-            <div class="info-left info-grid">
-                <div class="field-group">
-                    <label for="prRequestNo">Request #</label>
-                    <input type="text" id="prRequestNo" value="—" disabled>
-                </div>
-                <div class="field-group">
-                    <label for="prRequester">Requester Name</label>
-                    <input type="text" id="prRequester" value="<?php echo htmlspecialchars($displayName); ?>" disabled>
-                </div>
-                <div class="field-group">
-                    <label for="prLocation">Location / Facility</label>
-                    <input type="text" id="prLocation" value="—" disabled>
-                </div>
+        <div class="requisition-info pr-meta-grid">
+            <div class="field-group">
+                <label for="prRequestNo">Request #</label>
+                <input type="text" id="prRequestNo" value="—" disabled>
             </div>
-            <div class="info-right">
-                <label for="prRequestedAt">REQUESTED DATE</label>
+            <div class="field-group">
+                <label for="prRequester">Requester Name</label>
+                <input type="text" id="prRequester" value="<?php echo htmlspecialchars($displayName); ?>" disabled>
+            </div>
+            <div class="field-group">
+                <label for="prRequestedAt">Requested Date</label>
                 <input type="text" id="prRequestedAt" value="—" disabled>
-                <label for="prPurpose" style="margin-top:0.6rem;">Purpose of request</label>
+            </div>
+            <div class="field-group">
+                <label for="prLocation">Location / Facility</label>
+                <input type="text" id="prLocation" value="—" disabled>
+            </div>
+            <div class="field-group pr-purpose-field">
+                <label for="prPurpose">Purpose of Request</label>
                 <input type="text" id="prPurpose" value="—" disabled>
             </div>
         </div>
 
-        <div class="table-section">
-            <div class="section-label">Purchase requisition lines</div>
-            <div class="supplier-table-wrapper">
+        <section class="rf-section rf-section-pr-lines">
+            <h2 class="rf-section-heading">Purchase Requisition Lines</h2>
+            <div class="table-section">
+            <div class="supplier-table-wrapper pr-lines-table-wrap">
                 <table class="supplier-table purchase-req-table" id="purchaseReqTable">
                     <thead>
                         <tr>
-                            <th>DESCRIPTION</th>
-                            <th>QTY</th>
-                            <th>SUPPLIER</th>
-                            <th>UNIT PRICE</th>
-                            <th>AMOUNT</th>
+                            <th>Description</th>
+                            <th>Qty</th>
+                            <th>Supplier</th>
+                            <th>Unit Price</th>
+                            <th>Amount</th>
                         </tr>
                     </thead>
                     <tbody id="purchaseReqBody">
@@ -148,17 +156,20 @@ if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)
                             <td colspan="5" class="empty-state">Loading purchase requisition lines...</td>
                         </tr>
                     </tbody>
+                    <tfoot>
+                        <tr class="purchase-req-total-row">
+                            <td colspan="4" class="purchase-req-total-label">Total Amount</td>
+                            <td class="purchase-req-total-value"><strong id="purchaseReqGrandTotal">PHP 0.00</strong></td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
-            <div class="purchase-req-total">
-                <span>Total Amount</span>
-                <strong id="purchaseReqGrandTotal">PHP 0.00</strong>
             </div>
-        </div>
+        </section>
 
-        <div class="approval-section purchase-approval-section" aria-label="Purchase requisition verifier summary">
-            <div class="section-label">Verifier summary</div>
-            <div class="approval-card approval-card-canvass-verifiers">
+        <div class="approval-section purchase-approval-section pr-verifier-summary" aria-label="Purchase requisition verifier summary">
+            <h2 class="rf-section-heading">Verifier Summary</h2>
+            <div class="approval-card approval-card-canvass-verifiers pr-verifier-row">
                 <div class="approval-role">
                     <div class="circle-icon inactive"><i class="fas fa-check"></i></div>
                     <div class="approval-role-body">
@@ -178,10 +189,10 @@ if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)
             </div>
         </div>
         <?php if ($isInventoryVerifier || $isPresidentVerifier): ?>
-        <div class="comptroller-approve-wrapper purchase-approval-actions">
-            <button type="button" id="prApproveBtn" class="btn-submit">Accept</button>
-            <button type="button" id="prRejectBtn" class="btn-secondary comptroller-reject-btn">Reject</button>
-            <button type="button" id="prUndoBtn" class="btn-secondary comptroller-undo-btn" style="display:none;">Undo decision</button>
+        <div class="comptroller-approve-wrapper purchase-approval-actions verifier-decision-bar rf-form-actions">
+            <button type="button" id="prApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> Accept</button>
+            <button type="button" id="prRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
+            <button type="button" id="prUndoBtn" class="btn-secondary comptroller-undo-btn" style="display:none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <?php if ($isInventoryVerifier): ?>
         <div class="pr-rejection-panel pr-rejection-panel--hidden note-group" aria-hidden="true">

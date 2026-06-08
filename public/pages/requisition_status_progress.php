@@ -35,7 +35,7 @@ $progressPageFrom = $_GET['from'] ?? '';
 $rspProgressBackHref = ($progressPageFrom === 'status') ? 'requisition_status.php' : $rspBackHref;
 $rspBackAriaLabel = ($progressPageFrom === 'status')
     ? 'Back to Status list'
-    : ($isComptroller ? 'Back to requests' : 'Back to Requisition Management');
+    : ($isComptroller ? 'Back to Requisition Management' : 'Back to Requisition Management');
 
 if ($isComptroller) {
     $comptrollerActive = 'requests';
@@ -98,7 +98,7 @@ if ($isComptroller) {
     <div class="page-header management-header" style="margin-bottom: 1rem;">
         <div>
             <h1>Requisition progress</h1>
-            <p>Visual workflow for this request (overview).</p>
+            <p>Workflow overview for this request. Open forms below to review canvass, purchase requisition, or purchase order.</p>
         </div>
     </div>
     <div id="rspRoot" data-readonly="<?php echo htmlspecialchars($rspReadonly, ENT_QUOTES, 'UTF-8'); ?>" data-viewer="<?php echo htmlspecialchars($rspViewer, ENT_QUOTES, 'UTF-8'); ?>" data-back-href="<?php echo htmlspecialchars($rspProgressBackHref, ENT_QUOTES, 'UTF-8'); ?>" data-progress-from="<?php echo htmlspecialchars($progressPageFrom, ENT_QUOTES, 'UTF-8'); ?>"></div>
@@ -107,6 +107,9 @@ if ($isComptroller) {
 <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Menu"><i class="fas fa-bars"></i></button>
 
 <script src="../assets/js/logout.js?v=wlc1"></script>
+<?php if ($isComptroller): ?>
+<script src="../assets/js/comptroller_shell.js"></script>
+<?php endif; ?>
 <script src="../assets/js/requisition_status_progress.js"></script>
 </body>
 </html>

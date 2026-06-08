@@ -1,0 +1,952 @@
+/* ── Purchase order form page (purchase_order_form.php only) ── */
+body.page-purchase-order-form {
+    background: #ffffff;
+    color: #1f2937;
+}
+
+.page-purchase-order-form {
+    --po-primary: #1D6B3A;
+    --po-verified-bg: #EAF3DE;
+    --po-verified-text: #3B6D11;
+    --po-reject: #A32D2D;
+    --po-border: #d1d5db;
+}
+
+.page-purchase-order-form .requisition-main {
+    min-height: 100vh;
+    padding: 1rem 2.5%;
+    display: block;
+}
+
+.page-purchase-order-form .requisition-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    background: #ffffff;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 1.25rem 1.5rem 1.75rem;
+    gap: 1.15rem;
+}
+
+.page-purchase-order-form .requisition-close-btn {
+    border: 0.5px solid var(--po-border);
+    background: #ffffff;
+    color: #1D6B3A;
+    box-shadow: none;
+    transform: none;
+}
+
+.page-purchase-order-form .requisition-close-btn:hover {
+    background: #f9fafb;
+    color: #1D6B3A;
+    transform: none;
+}
+
+.page-purchase-order-form .requisition-logo-wlc-wrap,
+.page-purchase-order-form .requisition-logo {
+    box-shadow: none;
+    border-color: #1D6B3A;
+}
+
+.page-purchase-order-form .requisition-logo-wlc-wrap {
+    background: #ffffff;
+}
+
+.page-purchase-order-form .requisition-title h1,
+.page-purchase-order-form .po-form-title {
+    color: #1D6B3A !important;
+}
+
+.page-purchase-order-form .requisition-section {
+    margin-top: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+/* Metadata grid */
+.page-purchase-order-form .po-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem 1.25rem;
+    margin-bottom: 0.5rem;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.page-purchase-order-form .po-meta-grid .field-group label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.page-purchase-order-form .po-meta-grid .po-readonly-field {
+    width: 100%;
+    box-sizing: border-box;
+    background: #f3f4f6;
+    border: 0.5px solid var(--po-border);
+    border-radius: 6px;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.9rem;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-purpose-field {
+    grid-column: 1 / -1;
+}
+
+/* Section labels */
+.page-purchase-order-form .rf-section {
+    margin-bottom: 0.75rem;
+}
+
+.page-purchase-order-form .rf-section-heading {
+    margin: 0 0 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 0.5px solid #1D6B3A;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #1D6B3A;
+    line-height: 1.3;
+}
+
+.page-purchase-order-form .table-section {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-lines-table-wrap {
+    border: 0.5px solid var(--po-border);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-lines-table thead tr.po-thead-main th {
+    background: #1D6B3A !important;
+    color: #ffffff !important;
+    border-color: transparent !important;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.55rem 0.65rem;
+}
+
+.page-purchase-order-form .po-lines-table thead tr {
+    background: #1D6B3A !important;
+}
+
+.page-purchase-order-form .po-lines-table tbody td {
+    border-bottom: 0.5px solid #e5e7eb;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.88rem;
+}
+
+.page-purchase-order-form .po-lines-table tbody tr:nth-child(even) td {
+    background: #f9fafb !important;
+}
+
+.page-purchase-order-form .po-lines-table tbody tr:nth-child(odd) td {
+    background: #ffffff !important;
+}
+
+.page-purchase-order-form .po-lines-table tfoot .po-total-row td {
+    border-top: 0.5px solid var(--po-border);
+    background: #ffffff !important;
+    padding: 0.65rem 0.65rem;
+    font-weight: 700;
+}
+
+.page-purchase-order-form .po-total-label {
+    text-align: right !important;
+    color: #111827;
+    font-size: 0.88rem;
+}
+
+.page-purchase-order-form .po-total-value {
+    text-align: right !important;
+    color: #1D6B3A;
+}
+
+.page-purchase-order-form .po-total-value strong {
+    font-size: 0.95rem;
+    font-weight: 800;
+}
+
+/* Verifier summary */
+.page-purchase-order-form .po-verifier-section {
+    margin-top: 0.5rem;
+}
+
+.page-purchase-order-form .po-verifier-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    border: 0.5px solid var(--po-border);
+    border-radius: 6px;
+    background: #ffffff;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-row .approval-role {
+    flex: 1 1 220px;
+    max-width: none;
+    margin: 0;
+    border: 0.5px solid var(--po-border);
+    border-radius: 6px;
+    background: #f9fafb;
+    padding: 0.75rem 0.85rem;
+    justify-content: flex-start;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-row .approval-role-body {
+    text-align: left;
+}
+
+.page-purchase-order-form .po-verifier-row .approval-name {
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.page-purchase-order-form .po-verifier-row .cv-appr-detail {
+    margin-top: 0.2rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.page-purchase-order-form .po-verifier-card.po-verifier-approved {
+    border-color: #b8d4a8;
+    background: var(--po-verified-bg);
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-card.po-verifier-approved .circle-icon {
+    background: #1D6B3A;
+    border-color: #1D6B3A;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-card.po-verifier-approved .approval-name,
+.page-purchase-order-form .po-verifier-card.po-verifier-approved .approval-sub,
+.page-purchase-order-form .po-verifier-card.po-verifier-approved .cv-appr-detail {
+    color: var(--po-verified-text);
+}
+
+.page-purchase-order-form .po-verifier-card.po-verifier-rejected {
+    border-color: #fecaca;
+    background: #fef2f2;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-card .circle-icon.inactive {
+    background: var(--po-verified-bg);
+    color: #1D6B3A;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .po-verifier-card .circle-icon.inactive i {
+    color: #94a3b8;
+}
+
+/* Action buttons — right-aligned, equal size */
+.page-purchase-order-form .rf-form-actions.po-action-bar.verifier-decision-bar {
+    justify-content: flex-end;
+    margin-top: 0.75rem;
+    margin-bottom: 0;
+    padding: 1rem 0 0;
+    background: transparent;
+    border: none;
+    border-top: 0.5px solid var(--po-border);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .rf-form-actions .btn-submit,
+.page-purchase-order-form .rf-form-actions .comptroller-reject-btn,
+.page-purchase-order-form .rf-form-actions .comptroller-undo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: unset;
+    width: auto;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    line-height: 1.2;
+    border-radius: 6px;
+    box-shadow: none;
+    transform: none;
+}
+
+.page-purchase-order-form .rf-form-actions .btn-submit {
+    background: #1D6B3A;
+    border: none;
+    color: #ffffff;
+}
+
+.page-purchase-order-form .rf-form-actions .btn-submit:hover {
+    background: #185a31;
+    transform: none;
+}
+
+.page-purchase-order-form .rf-form-actions .comptroller-reject-btn {
+    background: var(--po-reject);
+    border: none;
+    color: #ffffff;
+}
+
+.page-purchase-order-form .rf-form-actions .comptroller-reject-btn:hover:not(:disabled) {
+    background: #8c2626;
+    transform: none;
+    box-shadow: none;
+}
+
+.page-purchase-order-form .rf-form-actions .comptroller-undo-btn {
+    background: transparent;
+    border: 0.5px solid var(--po-border);
+    color: #374151;
+}
+
+.page-purchase-order-form .rf-form-actions .comptroller-undo-btn:hover:not(:disabled) {
+    background: #f9fafb;
+    transform: none;
+    box-shadow: none;
+}
+
+@media (max-width: 900px) {
+    .page-purchase-order-form .po-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    .page-purchase-order-form .requisition-main {
+        padding: 0.75rem 1rem;
+    }
+
+    .page-purchase-order-form .requisition-card {
+        padding: 1rem 0.75rem 1.25rem;
+    }
+
+    .page-purchase-order-form .po-meta-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-purchase-order-form .rf-form-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .page-purchase-order-form .rf-form-actions .btn-submit,
+    .page-purchase-order-form .rf-form-actions .comptroller-reject-btn,
+    .page-purchase-order-form .rf-form-actions .comptroller-undo-btn {
+        width: 100%;
+    }
+}
+
+.purchase-order-card {
+    max-width: 1100px;
+}
+
+.page-purchase-order-form .purchase-order-card {
+    max-width: 100%;
+}
+
+.purchase-order-document {
+    user-select: text;
+}
+
+.po-form-title {
+    color: #2e7d32 !important;
+}
+
+.po-seal-placeholder {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+}
+
+.po-seal-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.po-readonly-field {
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #0f172a;
+    cursor: default;
+}
+
+.po-readonly-field:focus {
+    outline: none;
+    border-color: #e2e8f0;
+    box-shadow: none;
+}
+
+.po-info-grid .field-group input.po-readonly-field {
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.po-lines-table thead tr.po-thead-main th {
+    background: #2e7d32;
+    color: #fff;
+    border-color: #1b5e20;
+}
+
+.po-lines-table thead tr {
+    background: #1b5e20;
+}
+
+.po-lines-table th,
+.po-lines-table td {
+    vertical-align: middle;
+    cursor: default !important;
+}
+
+.po-lines-table tr,
+.po-lines-table tr:hover,
+.po-lines-table tr:focus,
+.po-lines-table tr:focus-within {
+    background: inherit !important;
+}
+
+.po-lines-table td,
+.po-lines-table td:hover,
+.po-lines-table td:focus {
+    background: inherit !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.po-lines-table th:nth-child(3),
+.po-lines-table th:nth-child(4),
+.po-lines-table th:nth-child(5),
+.po-lines-table td:nth-child(3),
+.po-lines-table td:nth-child(4),
+.po-lines-table td:nth-child(5) {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.po-lines-table th:nth-child(1) { width: 30%; }
+.po-lines-table th:nth-child(2) { width: 26%; }
+.po-lines-table th:nth-child(3) { width: 10%; }
+.po-lines-table th:nth-child(4) { width: 17%; }
+.po-lines-table th:nth-child(5) { width: 17%; }
+
+.po-line-text {
+    color: #0f172a;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.po-line-num {
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+}
+
+.po-line-amount-cell {
+    font-weight: 600;
+    color: #14532d;
+}
+
+.po-line-empty,
+.po-line-loading {
+    text-align: center;
+    color: #64748b;
+}
+
+.po-lines-table input,
+.po-lines-table td[contenteditable] {
+    pointer-events: none !important;
+}
+
+.po-verifier-card {
+    border: 2px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    background: #f8fafc;
+}
+
+.po-verifier-card.po-verifier-approved {
+    border-color: #2e7d32;
+    background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+}
+
+.po-verifier-card.po-verifier-approved .circle-icon {
+    background: #2e7d32;
+    border-color: #2e7d32;
+    color: #fff;
+}
+
+.po-verifier-card.po-verifier-rejected {
+    border-color: #dc2626;
+    background: #fef2f2;
+}
+
+.po-verifier-card.po-verifier-rejected .circle-icon {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #fff;
+}
+
+.po-action-bar {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.comptroller-tax-pending-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 1rem 0 0.5rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 10px;
+    border: 1px solid #fde68a;
+    background: #fffbeb;
+    color: #92400e;
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+.comptroller-tax-pending-notice i {
+    margin-top: 0.1rem;
+    color: #d97706;
+}
+
+.comptroller-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 18px 0 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #854f0b;
+}
+
+.comptroller-divider::before,
+.comptroller-divider::after {
+    content: '';
+    flex: 1;
+    height: 0.5px;
+    background: #ef9f27;
+}
+
+.comptroller-section {
+    border: 1.5px solid #ef9f27;
+    border-radius: 10px;
+    padding: 16px;
+    background: #fffdf7;
+    margin-bottom: 16px;
+}
+
+.comptroller-section-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+.comptroller-section-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #412402;
+}
+
+.comptroller-section-subtitle {
+    margin: 0.2rem 0 0;
+    font-size: 0.78rem;
+    color: #854f0b;
+}
+
+.comptroller-tax-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.comptroller-tax-badge--pending {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
+
+.comptroller-tax-badge--computed {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #86efac;
+}
+
+.comptroller-tax-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #ef9f27;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+}
+
+.comptroller-tax-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.comptroller-tax-table th,
+.comptroller-tax-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #fde68a;
+    vertical-align: middle;
+}
+
+.comptroller-tax-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.tax-table-header {
+    background: #fac775;
+    color: #412402;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 7px 10px;
+    text-align: left;
+}
+
+.tax-table-header--action {
+    width: 72px;
+    text-align: center;
+}
+
+.po-tax-type-select,
+.po-tax-rate-select,
+.po-tax-label-input,
+.po-tax-amount-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.82rem;
+    font-family: inherit;
+    background: #fff;
+}
+
+.po-tax-amount-readonly {
+    display: block;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: #7c2d12;
+}
+
+.po-tax-remove-btn {
+    border: none;
+    background: #fee2e2;
+    color: #b91c1c;
+    border-radius: 6px;
+    padding: 0.35rem 0.55rem;
+    cursor: pointer;
+    font-size: 0.78rem;
+}
+
+.po-tax-remove-btn:hover {
+    background: #fecaca;
+}
+
+.comptroller-tax-quick-add {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+}
+
+.btn-tax-ewt,
+.btn-tax-vat,
+.btn-tax-other,
+.btn-tax-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    font-family: inherit;
+}
+
+.btn-tax-ewt {
+    background: #e6f1fb;
+    color: #0c447c;
+    border: 1.5px solid #378add;
+}
+
+.btn-tax-ewt:hover {
+    background: #b5d4f4;
+}
+
+.btn-tax-ewt.active {
+    background: #378add;
+    color: #fff;
+    border-color: #185fa5;
+}
+
+.btn-tax-vat {
+    background: #e1f5ee;
+    color: #085041;
+    border: 1.5px solid #1d9e75;
+}
+
+.btn-tax-vat:hover {
+    background: #9fe1cb;
+}
+
+.btn-tax-vat.active {
+    background: #1d9e75;
+    color: #fff;
+    border-color: #0f6e56;
+}
+
+.btn-tax-other {
+    background: #faeeda;
+    color: #633806;
+    border: 1.5px solid #ef9f27;
+}
+
+.btn-tax-other:hover {
+    background: #fac775;
+}
+
+.btn-tax-other.active {
+    background: #ef9f27;
+    color: #fff;
+    border-color: #ba7517;
+}
+
+.btn-tax-add {
+    background: transparent;
+    color: #5f5e5a;
+    border: 1.5px dashed #cbd5e1;
+}
+
+.btn-tax-add:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+
+.btn-tax-ewt:disabled,
+.btn-tax-vat:disabled,
+.btn-tax-other:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.po-tax-ewt-fields,
+.po-tax-vat-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 200px;
+}
+
+.po-tax-mini-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.1rem;
+}
+
+.po-tax-transaction-select,
+.po-tax-rate-pct-input,
+.po-tax-label-input,
+.po-tax-amount-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.82rem;
+    font-family: inherit;
+    background: #fff;
+}
+
+.po-tax-rate-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.po-tax-rate-suffix {
+    font-size: 0.82rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.po-tax-rate-fixed {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #412402;
+}
+
+.po-vat-condition {
+    margin-top: 0.15rem;
+}
+
+.po-vat-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    font-size: 0.8rem;
+    color: #334155;
+}
+
+.po-vat-radio-group label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+}
+
+.vat-warning,
+.po-vat-warning {
+    font-size: 11px;
+    color: #993c1d;
+    background: #faece7;
+    border: 0.5px solid #f0997b;
+    border-radius: 6px;
+    padding: 4px 10px;
+    display: inline-block;
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
+.comptroller-tax-breakdown {
+    background: #fff;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 0.75rem 0.85rem;
+    margin-bottom: 0.85rem;
+}
+
+.breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 4px 0;
+    color: #64748b;
+}
+
+.breakdown-row--deduction {
+    color: #7c2d12;
+}
+
+.breakdown-row--deduction strong {
+    color: #b45309;
+    font-weight: 600;
+}
+
+.breakdown-total {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 500;
+    color: #2e7d32;
+    border-top: 0.5px solid #e2e8f0;
+    padding-top: 8px;
+    margin-top: 4px;
+}
+
+.comptroller-tax-notes-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #412402;
+    margin-bottom: 0.35rem;
+}
+
+.comptroller-tax-notes {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.55rem 0.65rem;
+    font-size: 0.85rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 72px;
+    margin-bottom: 0.85rem;
+}
+
+.comptroller-tax-save-row {
+    display: flex;
+    justify-content: center;
+}
+
+.comptroller-tax-save-row .btn-submit {
+    min-width: 200px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+}
+
+@media print {
+    .po-no-print,
+    .requisition-close-btn,
+    .po-action-bar,
+    .comptroller-tax-pending-notice,
+    .comptroller-divider,
+    .comptroller-section {
+        display: none !important;
+    }
+
+    .purchase-order-card {
+        box-shadow: none;
+        border: none;
+        max-width: none;
+    }
+}
