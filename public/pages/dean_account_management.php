@@ -42,7 +42,7 @@ $initials = strtoupper(substr($currentUser['Email'], 0, 1));
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Account Management - Dean Dashboard</title>
-<link rel="stylesheet" href="../assets/css/dashboard.css">
+<link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
 <link rel="stylesheet" href="../assets/css/dean_account_management.css">
 <link rel="stylesheet" href="../assets/css/loading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">

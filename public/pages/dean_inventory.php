@@ -46,7 +46,7 @@ $initials = strtoupper(substr($currentUser['Email'] ?? 'D', 0, 1));
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory — Dean</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
     <link rel="stylesheet" href="../assets/css/dean_requisition_management.css">
     <link rel="stylesheet" href="../assets/css/dean_inventory.css">
     <link rel="stylesheet" href="../assets/css/loading.css">

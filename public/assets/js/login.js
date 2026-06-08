@@ -5,129 +5,212 @@ document.addEventListener("DOMContentLoaded", function () {
     const emailInput = document.getElementById("email");
     const passwordInput = document.getElementById("password");
     const privacyCheckbox = document.getElementById("privacyCheckbox");
+    const privacyAgreementLabel = document.getElementById("privacyAgreementLabel");
     const privacyLink = document.getElementById("privacyLink");
     const termsLink = document.getElementById("termsLink");
     const consentHint = document.getElementById("consentHint");
-    const CURRENT_CONSENT_VERSION = "v1.0";
-    let consentLookupTimer = null;
-    let consentLookupRequestSeq = 0;
 
-    // Clear form inputs on page load/refresh unless returning from privacy policy
-    window.addEventListener('load', () => {
-        const privacySource = sessionStorage.getItem('privacySource');
-        
-        if (privacySource === 'login') {
-            // User is returning from privacy policy - restore form inputs
-            const savedEmail = sessionStorage.getItem('loginEmail');
-            const savedPassword = sessionStorage.getItem('loginPassword');
-            
-            if (savedEmail) emailInput.value = savedEmail;
-            if (savedPassword) passwordInput.value = savedPassword;
-            
-            // Clear the saved data after restoring
-            sessionStorage.removeItem('privacySource');
-            sessionStorage.removeItem('loginEmail');
-            sessionStorage.removeItem('loginPassword');
-        } else {
-            // Normal page load/refresh - clear all form inputs
-            emailInput.value = '';
-            passwordInput.value = '';
-        }
+    /* =========================================================
+       MANDATORY CONSENT WORKFLOW
+       - Both policy links start BLUE (attention).
+       - Clicking a link turns it GREY (opened/completed).
+       - Checkbox stays disabled until BOTH links are grey.
+       - Login button stays disabled until the checkbox is ticked.
+       ========================================================= */
+    const consentState = { privacy: false, terms: false };
+
+    function bothDocumentsOpened() {
+        return consentState.privacy && consentState.terms;
+    }
+
+    function refreshLoginButton() {
+        const ready = bothDocumentsOpened() && privacyCheckbox && privacyCheckbox.checked;
+        if (loginBtn) loginBtn.disabled = !ready;
+    }
+
+    function refreshConsentUI() {
+        const opened = bothDocumentsOpened();
 
         if (privacyCheckbox) {
-            privacyCheckbox.checked = false;
+            privacyCheckbox.disabled = !opened;
+            if (!opened) {
+                privacyCheckbox.checked = false;
+                delete privacyCheckbox.dataset.locked;
+            }
         }
 
-        // Ensure login button remains enabled (consent is validated on submit)
-        if (loginBtn) {
-            loginBtn.disabled = false;
-            loginBtn.style.opacity = "";
-            loginBtn.style.cursor = "";
+        if (privacyAgreementLabel) {
+            privacyAgreementLabel.classList.toggle("is-disabled", !opened);
         }
-    });
 
-    // Handle checkbox toggle
-    if (privacyCheckbox) {
-        privacyCheckbox.addEventListener('change', function () {
-            if (consentHint) consentHint.textContent = "";
+        if (consentHint) {
+            if (!opened) {
+                consentHint.textContent = "Open both documents above to continue.";
+            } else if (!privacyCheckbox.checked) {
+                consentHint.textContent = "Now tick the box to confirm your agreement.";
+            } else {
+                consentHint.textContent = "";
+            }
+        }
+
+        refreshLoginButton();
+    }
+
+    function markConsentLinkOpened(link, key) {
+        if (!link) return;
+        link.classList.remove("link-attention");
+        link.classList.add("link-visited");
+        consentState[key] = true;
+        refreshConsentUI();
+    }
+
+    // Links use target="_blank", so the document opens in a new tab while the
+    // login modal stays in place. We just flip the link to its grey state.
+    if (privacyLink) {
+        privacyLink.addEventListener("click", function () {
+            markConsentLinkOpened(privacyLink, "privacy");
+        });
+    }
+    if (termsLink) {
+        termsLink.addEventListener("click", function () {
+            markConsentLinkOpened(termsLink, "terms");
         });
     }
 
-    emailInput.addEventListener("input", function () {
-        const email = this.value.trim();
-        const normalizedEmail = email.toLowerCase();
-        const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    if (privacyCheckbox) {
+        // Block any interaction while disabled, and lock it in once ticked.
+        privacyCheckbox.addEventListener("click", function (e) {
+            if (privacyCheckbox.disabled) {
+                e.preventDefault();
+                return;
+            }
+            if (privacyCheckbox.dataset.locked === "1") {
+                e.preventDefault();
+            }
+        });
 
-        // Default to unchecked for changed/invalid email.
-        if (privacyCheckbox) {
-            privacyCheckbox.checked = false;
-        }
-
-        if (consentLookupTimer) clearTimeout(consentLookupTimer);
-        if (!validEmail) return;
-
-        consentLookupTimer = setTimeout(async () => {
-            const requestId = ++consentLookupRequestSeq;
-            const existingConsent = await hasExistingConsent(normalizedEmail);
-
-            // Ignore stale async responses from previous email values.
-            if (requestId !== consentLookupRequestSeq) return;
-            if (emailInput.value.trim().toLowerCase() !== normalizedEmail) return;
-
-            if (existingConsent && privacyCheckbox) {
-                privacyCheckbox.checked = true;
+        privacyCheckbox.addEventListener("change", function () {
+            if (privacyCheckbox.checked) {
+                privacyCheckbox.dataset.locked = "1"; // lock in as checked
                 if (consentHint) consentHint.textContent = "";
             }
-        }, 250);
+            refreshLoginButton();
+        });
+    }
+
+    // Initialize the consent UI on load.
+    refreshConsentUI();
+
+    /* ---------------------------------------------------------
+       PERSISTENT CONSENT: look up has_consented by email.
+       has_consented = 1  -> skip workflow (box pre-checked/locked)
+       has_consented = 0  -> require the open-both-documents workflow
+       (The server re-verifies this on authentication.)
+       --------------------------------------------------------- */
+    const CONSENT_VERSION = "v1.0";
+    let consentOnFile = false;
+    let consentLookupTimer = null;
+    let consentLookupSeq = 0;
+
+    async function fetchConsentStatus(email) {
+        try {
+            const body = new URLSearchParams({
+                email: email.trim().toLowerCase(),
+                consent_version: CONSENT_VERSION
+            });
+            const res = await fetch("app/api/consent_status.php", {
+                method: "POST",
+                body,
+                credentials: "include"
+            });
+            const data = await res.json();
+            return Boolean(data && data.success && data.has_consented);
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function applyConsentOnFile() {
+        consentOnFile = true;
+        consentState.privacy = true;
+        consentState.terms = true;
+
+        [privacyLink, termsLink].forEach(function (link) {
+            if (!link) return;
+            link.classList.remove("link-attention");
+            link.classList.add("link-visited");
+        });
+
+        if (privacyCheckbox) {
+            privacyCheckbox.disabled = false;
+            privacyCheckbox.checked = true;
+            privacyCheckbox.dataset.locked = "1";
+        }
+        if (privacyAgreementLabel) privacyAgreementLabel.classList.remove("is-disabled");
+        if (consentHint) consentHint.textContent = "";
+
+        refreshLoginButton();
+    }
+
+    function applyConsentRequired() {
+        consentOnFile = false;
+        consentState.privacy = false;
+        consentState.terms = false;
+
+        [privacyLink, termsLink].forEach(function (link) {
+            if (!link) return;
+            link.classList.add("link-attention");
+            link.classList.remove("link-visited");
+        });
+
+        if (privacyCheckbox) {
+            delete privacyCheckbox.dataset.locked;
+            privacyCheckbox.checked = false;
+        }
+
+        refreshConsentUI();
+    }
+
+    if (emailInput) {
+        emailInput.addEventListener("input", function () {
+            const email = this.value.trim().toLowerCase();
+            const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+            if (consentLookupTimer) clearTimeout(consentLookupTimer);
+
+            if (!validEmail) {
+                // Reverting to an incomplete email re-locks a previously skipped workflow.
+                if (consentOnFile) applyConsentRequired();
+                return;
+            }
+
+            consentLookupTimer = setTimeout(async () => {
+                const seq = ++consentLookupSeq;
+                const consented = await fetchConsentStatus(email);
+
+                // Ignore stale responses / changed input.
+                if (seq !== consentLookupSeq) return;
+                if (emailInput.value.trim().toLowerCase() !== email) return;
+
+                if (consented) {
+                    applyConsentOnFile();
+                } else if (consentOnFile) {
+                    // Switched from a consented account to one that still needs the workflow.
+                    applyConsentRequired();
+                }
+            }, 300);
+        });
+    }
+
+    // Clear sensitive inputs on a fresh page load.
+    window.addEventListener("load", () => {
+        if (emailInput) emailInput.value = "";
+        if (passwordInput) passwordInput.value = "";
     });
 
-    // Handle privacy policy link click
-    if (privacyLink) {
-        privacyLink.addEventListener("click", function (e) {
-            e.preventDefault();
-            // Save current form inputs only if they have values
-            if (emailInput.value.trim()) {
-                sessionStorage.setItem('loginEmail', emailInput.value);
-                sessionStorage.setItem('loginPassword', passwordInput.value);
-            }
-            sessionStorage.setItem('privacySource', 'login');
-            // Navigate to privacy policy
-            window.location.href = "public/pages/privacy_policy.php?return=login";
-        });
-    }
-
-    if (termsLink) {
-        termsLink.addEventListener("click", function (e) {
-            e.preventDefault();
-            // Save current form inputs only if they have values
-            if (emailInput.value.trim()) {
-                sessionStorage.setItem('loginEmail', emailInput.value);
-                sessionStorage.setItem('loginPassword', passwordInput.value);
-            }
-            sessionStorage.setItem('privacySource', 'login');
-            window.location.href = "public/pages/terms_conditions.php?return=login";
-        });
-    }
-
-    // Optional prompt when the login modal opens
-    const modal = document.getElementById("loginModal");
-    if (modal) {
-        let consentPromptShown = sessionStorage.getItem("wlcSmartConsentPromptShown") === "1";
-
-        const observer = new MutationObserver(() => {
-            if (!modal.classList.contains("show")) return;
-            if (consentPromptShown) return;
-
-            if (consentHint) {
-                consentHint.textContent = "Please review and accept the Privacy Notice and Terms & Conditions to continue.";
-            }
-            sessionStorage.setItem("wlcSmartConsentPromptShown", "1");
-            consentPromptShown = true;
-        });
-
-        observer.observe(modal, { attributes: true, attributeFilter: ["class"] });
-    }
-
+    /* =========================================================
+       LOCKOUT / ATTEMPT HANDLING + AUTHENTICATION
+       ========================================================= */
     const APP_BRAND = "WLC-SMART";
 
     function showLoadingScreen(text = "Loading") {
@@ -144,14 +227,6 @@ document.addEventListener("DOMContentLoaded", function () {
             </div>
         `;
         document.body.insertAdjacentHTML('beforeend', loadingHTML);
-    }
-
-    function hideLoadingScreen() {
-        const loadingScreen = document.getElementById("loadingScreen");
-        if (loadingScreen) {
-            loadingScreen.classList.add("hide");
-            setTimeout(() => loadingScreen.remove(), 500);
-        }
     }
 
     let lockoutTimeout = null;
@@ -185,24 +260,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    async function hasExistingConsent(email) {
-        try {
-            const body = new URLSearchParams({
-                email: email.trim().toLowerCase(),
-                consent_version: CURRENT_CONSENT_VERSION
-            });
-            const res = await fetch("app/api/consent_status.php", {
-                method: "POST",
-                body,
-                credentials: "include"
-            });
-            const data = await res.json();
-            return Boolean(data && data.success && data.consent_current);
-        } catch (_) {
-            return false;
-        }
-    }
-
     emailInput.addEventListener("input", function () {
         const current = this.value.trim().toLowerCase();
         if (current === "") {
@@ -211,13 +268,14 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         if (current !== lastEmail) {
             if (lastEmail !== "") resetServerAttempts();
-            if (loginBtn.disabled) {
-                loginBtn.disabled = false;
+            if (loginBtn.disabled && countdownInterval) {
                 loginBtn.textContent = "Login";
                 unlockInputs();
                 clearMessage();
                 if (countdownInterval) clearInterval(countdownInterval);
                 if (lockoutTimeout) clearTimeout(lockoutTimeout);
+                countdownInterval = null;
+                refreshLoginButton();
             }
             lastEmail = current;
         }
@@ -254,21 +312,21 @@ document.addEventListener("DOMContentLoaded", function () {
             } else {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
-                loginBtn.disabled = false;
                 loginBtn.textContent = "Login";
                 unlockInputs();
                 clearMessage();
                 resetServerAttempts();
+                refreshLoginButton();
             }
         }, 1000);
 
         lockoutTimeout = setTimeout(() => {
             if (countdownInterval) clearInterval(countdownInterval);
-            loginBtn.disabled = false;
             loginBtn.textContent = "Login";
             unlockInputs();
             clearMessage();
             resetServerAttempts();
+            refreshLoginButton();
         }, secondsLeft * 1000);
     }
 
@@ -276,14 +334,15 @@ document.addEventListener("DOMContentLoaded", function () {
         e.preventDefault();
         if (loginBtn.disabled) return;
 
-        // Consent checkbox is required only when DB shows no consent yet.
+        // Enforce the mandatory consent workflow before anything else.
+        if (!bothDocumentsOpened()) {
+            showMessage("Please open the Privacy Notice and Terms & Conditions first.", "error");
+            return;
+        }
         if (!privacyCheckbox.checked) {
-            const existingConsent = await hasExistingConsent(emailInput.value);
-            if (!existingConsent) {
-                showMessage("You must agree to the Privacy Notice and Terms & Conditions to continue.", "error");
-                privacyCheckbox.focus();
-                return;
-            }
+            showMessage("You must agree to the Privacy Notice and Terms & Conditions to continue.", "error");
+            privacyCheckbox.focus();
+            return;
         }
 
         // Basic input validation (friendly UX)
@@ -319,35 +378,31 @@ document.addEventListener("DOMContentLoaded", function () {
 
             try {
                 result = JSON.parse(text);
-            } catch (e) {
-                console.error("JSON parse error:", e, "Response:", text);
+            } catch (err) {
+                console.error("JSON parse error:", err, "Response:", text);
                 showMessage("Server error. Please try again.", "error");
-                loginBtn.disabled = false;
-                loginBtn.textContent = "Login";
                 unlockInputs();
+                refreshLoginButton();
                 return;
             }
 
             // NON-EXISTENT ACCOUNT
             if (result.account_missing) {
                 showMessage("An Account Not exist.", "error");
-                loginBtn.disabled = false;
-                loginBtn.textContent = "Login";
                 unlockInputs();
+                refreshLoginButton();
                 return;
             }
 
             if (result.disabled) {
                 showMessage(result.message || "Your account has been disabled. Please contact your administrator.", "error");
-                loginBtn.disabled = false;
-                loginBtn.textContent = "Login";
                 unlockInputs();
+                refreshLoginButton();
                 return;
             }
 
             // SUCCESS + ROLE-BASED REDIRECT
             if (result.success) {
-                // Role-based redirection
                 const role = (result.role || '').toLowerCase().trim();
                 let redirectUrl = "public/pages/dashboard.php"; // default
 
@@ -379,17 +434,20 @@ document.addEventListener("DOMContentLoaded", function () {
                     redirectUrl = "public/pages/president_dashboard.php";
                 }
 
-                showMessage("Login successful! Redirecting...", "success");
+                // Hide the login modal so only the loading screen shows.
+                const loginModalEl = document.getElementById("loginModal");
+                if (loginModalEl) loginModalEl.classList.remove("display-active");
+
                 showLoadingScreen("Logging in");
 
-                // Record time-in
                 fetch("app/api/time_in.php", { method: "POST", credentials: "include" })
                     .then(r => r.json())
                     .then(data => console.log("Time in recorded:", data))
                     .catch(err => console.error("Time in error:", err));
 
                 setTimeout(() => {
-                    window.location.href = redirectUrl;
+                    // Replace the login page in history so Back can't return to it.
+                    window.location.replace(redirectUrl);
                 }, 1500);
                 return;
             }
@@ -405,17 +463,18 @@ document.addEventListener("DOMContentLoaded", function () {
             const remaining = result.remaining !== undefined ? result.remaining : 0;
             if (remaining > 0) {
                 showMessage(`Wrong email or password. ${remaining} attempt(s) left.`, "error");
-                loginBtn.disabled = false;
                 loginBtn.textContent = "Login";
                 unlockInputs();
+                refreshLoginButton();
             } else {
                 startLockout(5);
             }
 
         } catch (err) {
             showMessage("Cannot connect to server. Check your internet connection.", "error");
-            loginBtn.disabled = false;
             loginBtn.textContent = "Login";
+            unlockInputs();
+            refreshLoginButton();
         }
     });
 });

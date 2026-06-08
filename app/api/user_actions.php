@@ -61,6 +61,35 @@ function logActivity($user_id, $activity_type, $description){
     $stmt->execute([$user_id,$activity_type,$description]);
 }
 
+function isValidContactNumber(string $contact): bool {
+    return (bool) preg_match('/^\d{11}$/', $contact);
+}
+
+function validateUserProfileFields(string $full_name, string $contact_number, string $email, ?string $role, $office_id): ?string {
+    if ($full_name === '') {
+        return 'Full Name is required';
+    }
+    if ($contact_number === '') {
+        return 'Contact Number is required';
+    }
+    if (!isValidContactNumber($contact_number)) {
+        return 'Contact Number must be exactly 11 digits';
+    }
+    if ($email === '') {
+        return 'Email Address is required';
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return 'Please enter a valid email address';
+    }
+    if (!$role) {
+        return 'Assigned Role is required';
+    }
+    if (!$office_id) {
+        return 'Office / Department is required';
+    }
+    return null;
+}
+
 // Get POST data
 $action = $_POST['action'] ?? 'save';
 $user_id = $_POST['user_id'] ?? null;
@@ -98,6 +127,12 @@ try {
     }
 
     if($user_id){ // Edit user
+        $profileError = validateUserProfileFields($full_name, $contact_number, $email, $role, $office_id);
+        if ($profileError !== null) {
+            echo json_encode(['success' => false, 'message' => $profileError]);
+            exit;
+        }
+
         $stmt = $db->prepare("SELECT Email, photo_url FROM user WHERE user_id=?");
         $stmt->execute([$user_id]);
         $oldUser = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -121,8 +156,13 @@ try {
         echo json_encode(['success'=>true,'message'=>'User updated']);
         exit;
     } else { // Add new user
-        if(!$password){
-            echo json_encode(['success'=>false,'message'=>'Password is required']);
+        $profileError = validateUserProfileFields($full_name, $contact_number, $email, $role, $office_id);
+        if ($profileError !== null) {
+            echo json_encode(['success' => false, 'message' => $profileError]);
+            exit;
+        }
+        if (!$password) {
+            echo json_encode(['success' => false, 'message' => 'Password is required']);
             exit;
         }
 

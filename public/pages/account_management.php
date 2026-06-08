@@ -17,11 +17,10 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Account Management - IMRMS</title>
-<link rel="stylesheet" href="../assets/css/dashboard.css">
-<link rel="stylesheet" href="../assets/css/account_management.css">
+<link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
+<link rel="stylesheet" href="../assets/css/account_management.css?v=wlc31">
 <link rel="stylesheet" href="../assets/css/loading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
     .password-requirements {
         font-size: 12px;
@@ -39,170 +38,194 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 </style>
 </head>
 <body>
-<!-- [Same sidebar and HTML as before] -->
-<aside class="sidebar" id="sidebar">
-    <?php require __DIR__ . '/partials/sidebar_brand_header.php'; ?>
-    <nav>
-        <ul class="sidebar-nav">
-            <li><a href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a></li>
-            <li><a href="requisition_management.php"><i class="fas fa-file-signature"></i> Requisition Management</a></li>
-            <li><a href="requisition_status.php"><i class="fas fa-bars-progress"></i> Status</a></li>
-            <li><a href="audit_trail.php"><i class="fas fa-shield-alt"></i> Audit Trail</a></li>
-            <li><a href="my_profile.php"><i class="fas fa-user"></i> My Profile</a></li>
-            <li><a href="account_management.php" class="active"><i class="fas fa-users-cog"></i> Account Management</a></li>
-            <li><a href="facility_management.php"><i class="fas fa-building"></i> Facility Management</a></li>
-            <li><a href="item_management.php"><i class="fas fa-box"></i> Item Management</a></li>
-            <li><a href="inventory_management.php"><i class="fas fa-cubes"></i> Inventory Management</a></li>
-            <li><a href="supplier_management.php"><i class="fas fa-truck"></i> Supplier Management</a></li>
-        </ul>
-    </nav>
-    <div class="sidebar-footer">
-        <div class="user-profile">
-            <div class="user-avatar">
-                <?php if (!empty($user['photo_url'])): ?>
-                    <img src="../<?php echo htmlspecialchars($user['photo_url']); ?>" alt="Profile Photo" class="user-avatar-img">
-                <?php else: ?>
-                    <div class="user-avatar-initials"><?php echo $initials; ?></div>
-                <?php endif; ?>
-            </div>
-            <div class="user-details">
-                <h4><?php echo htmlspecialchars((string)($user['full_name'] ?? '') !== '' ? (string)$user['full_name'] : explode('@', (string)$user['Email'])[0]); ?></h4>
-                <p><?php echo htmlspecialchars($user['role']); ?></p>
-            </div>
-        </div>
-    </div>
-</aside>
+<?php $imActivePage = 'account_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 
 <main class="main-content account-management-container">
-    <div class="page-header">
-        <h1>Account Management</h1>
-        <p>Manage users in the system. Add, edit, or remove users as needed.</p>
+    <div class="module-page-header">
+        <h1 class="module-page-header__title">Account Management</h1>
+        <p class="module-page-header__subtitle">Manage user accounts, roles, permissions, and system access securely.</p>
     </div>
 
-    <div class="filter-section">
-        <h3>Users List</h3>
-        <div class="filter-controls">
-            <div class="search-container">
-                <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" placeholder="Search by email, role, or office..." class="search-input">
+    <div class="users-list-card">
+        <div class="filter-section account-management-filter-bar">
+            <h2 class="users-list-card__heading">User List</h2>
+            <div class="filter-controls">
+                <div class="search-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Search" class="search-input" aria-label="Search users">
+                </div>
+                <button class="btn-filter" id="addUserBtn" type="button"><i class="fas fa-plus"></i> Add User</button>
             </div>
-            <select id="sortDropdown" class="sort-dropdown">
-                <option value="">Sort By</option>
-                <option value="email-asc">Email (A-Z)</option>
-                <option value="email-desc">Email (Z-A)</option>
-                <option value="role-asc">Role (A-Z)</option>
-                <option value="role-desc">Role (Z-A)</option>
-                <option value="office-asc">Office (A-Z)</option>
-                <option value="office-desc">Office (Z-A)</option>
-                <option value="date-asc">Date (Oldest First)</option>
-                <option value="date-desc">Date (Newest First)</option>
-            </select>
-            <button class="btn-filter" id="addUserBtn"><i class="fas fa-plus"></i> Add User</button>
         </div>
-    </div>
 
-    <div class="table-container">
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Photo</th>
-                        <th>Full Name</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Status</th>
-                        <th>Office</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="usersTableBody">
-                    <tr>
-                        <td colspan="8" style="text-align:center;padding:50px;color:#64748b;">Loading users...</td>
-                    </tr>
-                </tbody>
-            </table>
+        <div class="users-tables-split" id="usersTablesSplit">
+            <div class="users-table-panel users-table-panel--admin">
+                <h3 class="users-table-panel__title users-table-panel__title--admin">Administrative Users</h3>
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="users-management-table users-management-table--admin">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Photo</th>
+                                    <th>Full Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Office</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminUsersTableBody">
+                                <tr>
+                                    <td colspan="8" class="users-table-loading">Loading users...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="users-table-panel users-table-panel--dept">
+                <h3 class="users-table-panel__title users-table-panel__title--dept">Department Heads</h3>
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="users-management-table users-management-table--dept">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Photo</th>
+                                    <th>Full Name</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Office</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="deptUsersTableBody">
+                                <tr>
+                                    <td colspan="7" class="users-table-loading">Loading users...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- User Modal -->
     <div class="modal" id="userModal">
         <div class="modal-content">
-            <span class="close-modal" id="closeModal">&times;</span>
-            <h2 id="modalTitle">Add User</h2>
-            <form id="userForm" enctype="multipart/form-data">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add User</h2>
+                <button type="button" class="close-modal" id="closeModal" aria-label="Close modal">&times;</button>
+            </div>
+
+            <form id="userForm" enctype="multipart/form-data" class="modal-form">
                 <input type="hidden" name="user_id" id="user_id">
-                <div class="form-group">
-                    <label>Full Name</label>
-                    <input type="text" name="full_name" id="full_name" placeholder="e.g. Juan Dela Cruz">
-                </div>
-                <div class="form-group">
-                    <label>Contact Number</label>
-                    <input type="text" name="contact_number" id="contact_number" placeholder="+63...">
-                </div>
-                <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" name="email" id="email" required>
-                </div>
-                <div class="form-group">
-                    <label>Profile Photo</label>
-                    <div class="photo-upload-row">
-                        <div class="photo-preview">
-                            <img id="photoPreview" alt="Preview" />
-                            <div id="photoPlaceholder" class="photo-placeholder"><?php echo $initials; ?></div>
-                        </div>
-                        <input type="file" name="photo" id="photo" accept="image/*">
+
+                <div class="profile-avatar-section">
+                    <div class="avatar-preview-container">
+                        <img id="photoPreview" alt="Preview" style="display:none;">
+                        <div id="photoPlaceholder" class="photo-placeholder"><?php echo htmlspecialchars($initials); ?></div>
                     </div>
-                    <small style="font-size:12px;color:#64748b;">JPEG, PNG, GIF, or WEBP. Max ~2MB recommended.</small>
-                </div>
-                <div class="form-group password-group">
-                    <label>Password</label>
-                    <input type="password" name="password" id="password" placeholder="e.g. SecureP@ssw0rd2025" required>
-                    <i class="fas fa-eye toggle-password"></i>
-                </div>
-                <div class="password-requirements" id="passwordRequirements">
-                    <div><span id="length">• At least 8 characters</span></div>
-                    <div><span id="uppercase">• One uppercase letter</span></div>
-                    <div><span id="lowercase">• One lowercase letter</span></div>
-                    <div><span id="number">• One number</span></div>
-                    <div><span id="special">• One special char (@$!%*?&#-_.)</span></div>
-                </div>
-                <div class="password-strength" id="passwordStrength"></div>
-
-                <div class="form-group password-group">
-                    <label>Confirm Password</label>
-                    <input type="password" name="confirm_password" id="confirm_password" placeholder="Re-type password" required>
+                    <div class="avatar-action-container">
+                        <label for="photo" class="btn-upload-label">Choose Photo</label>
+                        <input type="file" name="photo" id="photo" accept="image/*" class="file-input-hidden">
+                        <small class="input-hint">JPEG, PNG, GIF, or WEBP. Max ~2MB.</small>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Role</label>
-                    <select name="role" id="role" required>
-                        <option value="">Select Role</option>
-                        <option value="Inventory Manager">Inventory Manager</option>
-                        <option value="Dean">Dean</option>
-                        <option value="Laboratory Manager">Laboratory Manager</option>
-                        <option value="Comptroller">Comptroller</option>
-                        <option value="President">President</option>
-                        <option value="GSD officer">GSD officer</option>
-                        <option value="Employee">Employee</option>
-                        <option value="User">User</option>
-                    </select>
+                <hr class="form-divider">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="full_name">Full Name</label>
+                        <input type="text" name="full_name" id="full_name" placeholder="e.g. Juan Dela Cruz" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contact_number">Contact Number</label>
+                        <input type="tel" name="contact_number" id="contact_number" placeholder="09XX XXX XXXX" inputmode="numeric" maxlength="11" pattern="\d{11}" title="Enter exactly 11 digits" required>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Office</label>
-                    <select name="office_id" id="office_id">
-                        <option value="">Loading offices...</option>
-                    </select>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" name="email" id="email" required placeholder="name@domain.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="account_status">Account Status</label>
+                        <select name="account_status" id="account_status" required>
+                            <option value="active">Active</option>
+                            <option value="disabled">Disabled</option>
+                            <option value="locked">Locked</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Account Status</label>
-                    <select name="account_status" id="account_status" required>
-                        <option value="active">Active</option>
-                        <option value="disabled">Disabled</option>
-                        <option value="locked">Locked</option>
-                    </select>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="role">Assigned Role</label>
+                        <select name="role" id="role" required>
+                            <option value="">Select Role</option>
+                            <option value="Dean">Dean</option>
+                            <option value="Laboratory Manager">Laboratory Manager</option>
+                            <option value="Comptroller">Comptroller</option>
+                            <option value="President">President</option>
+                            <option value="GSD officer">GSD officer</option>
+                            <option value="Canvasser">Canvasser</option>
+                            <option value="Employee">Employee</option>
+                            <option value="User">User</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="office_id">Office / Department</label>
+                        <select name="office_id" id="office_id" required>
+                            <option value="">Select Office</option>
+                        </select>
+                    </div>
                 </div>
-                <button type="submit" class="btn-save" id="saveBtn">Save</button>
+
+                <hr class="form-divider">
+
+                <h4 id="changePasswordHeading" class="change-password-heading" hidden>Change Password</h4>
+                <p id="changePasswordHint" class="change-password-hint" hidden>Leave blank to keep current password</p>
+
+                <div class="form-grid">
+                    <div class="form-group password-group">
+                        <label for="password">Password</label>
+                        <div class="input-icon-wrapper">
+                            <input type="password" name="password" id="password" placeholder="e.g. SecureP@ssw0rd2025" required>
+                            <i class="fas fa-eye toggle-password" aria-hidden="true"></i>
+                        </div>
+                    </div>
+                    <div class="form-group password-group">
+                        <label for="confirm_password">Confirm Password</label>
+                        <div class="input-icon-wrapper">
+                            <input type="password" name="confirm_password" id="confirm_password" placeholder="Re-type password" required>
+                            <i class="fas fa-eye toggle-password" aria-hidden="true"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="password-feedback-container">
+                    <div class="password-requirements" id="passwordRequirements">
+                        <div id="length" class="requirement-item">• At least 8 characters</div>
+                        <div id="uppercase" class="requirement-item">• One uppercase letter</div>
+                        <div id="lowercase" class="requirement-item">• One lowercase letter</div>
+                        <div id="number" class="requirement-item">• One number</div>
+                        <div id="special" class="requirement-item">• One special char (@$!%*?&#-_.)</div>
+                    </div>
+                    <div class="password-strength" id="passwordStrength"></div>
+                    <div class="password-match-status" id="passwordMatchStatus" aria-live="polite"></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" id="cancelModalBtn">Cancel</button>
+                    <button type="submit" class="btn-save" id="saveBtn">Save</button>
+                </div>
             </form>
         </div>
     </div>
@@ -219,18 +242,71 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
     <div class="view-user-backdrop" id="viewUserBackdrop"></div>
     <div class="view-user-card" role="dialog" aria-modal="true" aria-labelledby="viewUserTitle">
         <div class="view-user-header">
-            <h3 id="viewUserTitle">User Account Details</h3>
-            <button type="button" id="viewUserCloseBtn" class="view-user-close-btn">&times;</button>
+            <div class="view-user-header-text">
+                <i class="fas fa-user-circle" aria-hidden="true"></i>
+                <h3 id="viewUserTitle">User Account Details</h3>
+            </div>
+            <button type="button" id="viewUserCloseBtn" class="view-user-close-btn" aria-label="Close">&times;</button>
         </div>
-        <div class="view-user-grid">
-            <div><span class="view-user-label">Full Name</span><p id="view_full_name">—</p></div>
-            <div><span class="view-user-label">Email</span><p id="view_email">—</p></div>
-            <div><span class="view-user-label">Role</span><p id="view_role">—</p></div>
-            <div><span class="view-user-label">Status</span><p id="view_status">—</p></div>
-            <div><span class="view-user-label">Office</span><p id="view_office">—</p></div>
-            <div><span class="view-user-label">Consent</span><p id="view_consent">—</p></div>
-            <div><span class="view-user-label">Last Login</span><p id="view_last_login">—</p></div>
-            <div><span class="view-user-label">Created At</span><p id="view_created_at">—</p></div>
+
+        <div class="view-user-hero">
+            <div class="view-user-avatar">
+                <img id="view_photo" class="view-user-avatar-img" alt="" hidden>
+                <div id="view_photo_placeholder" class="view-user-avatar-placeholder">U</div>
+            </div>
+            <div class="view-user-hero-meta">
+                <p id="view_hero_name" class="view-user-hero-name">—</p>
+                <p id="view_hero_email" class="view-user-hero-email">—</p>
+                <span id="view_hero_role" class="view-user-role-badge">—</span>
+            </div>
+        </div>
+
+        <div class="view-user-body">
+            <section class="view-user-section">
+                <h4 class="view-user-section-title"><i class="fas fa-building" aria-hidden="true"></i> Organization</h4>
+                <div class="view-user-grid">
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-phone" aria-hidden="true"></i> Contact</span>
+                        <p id="view_contact_number" class="view-user-value">—</p>
+                    </div>
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Office</span>
+                        <p id="view_office" class="view-user-value">—</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="view-user-section">
+                <h4 class="view-user-section-title"><i class="fas fa-shield-alt" aria-hidden="true"></i> Account &amp; Access</h4>
+                <div class="view-user-grid">
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-toggle-on" aria-hidden="true"></i> Status</span>
+                        <p id="view_status" class="view-user-value view-user-value--status">—</p>
+                    </div>
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-file-signature" aria-hidden="true"></i> Consent</span>
+                        <p id="view_consent" class="view-user-value">—</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="view-user-section">
+                <h4 class="view-user-section-title"><i class="fas fa-clock" aria-hidden="true"></i> Activity</h4>
+                <div class="view-user-grid">
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-right-to-bracket" aria-hidden="true"></i> Last Login</span>
+                        <p id="view_last_login" class="view-user-value">—</p>
+                    </div>
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-calendar-plus" aria-hidden="true"></i> Created At</span>
+                        <p id="view_created_at" class="view-user-value">—</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="view-user-footer">
+            <button type="button" class="btn-cancel" id="viewUserCloseFooterBtn">Close</button>
         </div>
     </div>
 </div>
@@ -273,6 +349,58 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
     </div>
 </div>
 
+<!-- Enable account confirmation -->
+<div id="enableConfirmModal" class="delete-confirm-modal" aria-hidden="true">
+    <div class="delete-confirm-backdrop" id="enableConfirmBackdrop"></div>
+    <div class="delete-confirm-card" role="dialog" aria-modal="true" aria-labelledby="enableConfirmTitle" aria-describedby="enableConfirmDesc">
+        <div class="delete-confirm-icon delete-confirm-icon--enable" aria-hidden="true">
+            <i class="fas fa-user-check"></i>
+        </div>
+        <h3 id="enableConfirmTitle" class="delete-confirm-title">Enable this account?</h3>
+        <p id="enableConfirmDesc" class="delete-confirm-desc">The user will be able to sign in again.</p>
+        <p class="delete-confirm-email" id="enableConfirmEmail" hidden></p>
+        <div class="delete-confirm-actions">
+            <button type="button" class="delete-confirm-btn delete-confirm-btn-cancel" id="enableConfirmCancel">Cancel</button>
+            <button type="button" class="delete-confirm-btn delete-confirm-btn-save" id="enableConfirmOk">
+                <i class="fas fa-user-check"></i> Enable account
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Save edit confirmation -->
+<div id="saveConfirmModal" class="delete-confirm-modal" aria-hidden="true">
+    <div class="delete-confirm-backdrop" id="saveConfirmBackdrop"></div>
+    <div class="delete-confirm-card" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle" aria-describedby="saveConfirmDesc">
+        <div class="delete-confirm-icon delete-confirm-icon--save" aria-hidden="true">
+            <i class="fas fa-save"></i>
+        </div>
+        <h3 id="saveConfirmTitle" class="delete-confirm-title">Save changes?</h3>
+        <p id="saveConfirmDesc" class="delete-confirm-desc">Are you sure you want to apply these updates?</p>
+        <div class="delete-confirm-actions">
+            <button type="button" class="delete-confirm-btn delete-confirm-btn-cancel" id="saveConfirmCancel">Cancel</button>
+            <button type="button" class="delete-confirm-btn delete-confirm-btn-save" id="saveConfirmOk">
+                <i class="fas fa-check"></i> Continue
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Success popup -->
+<div id="accountSuccessModal" class="delete-confirm-modal" aria-hidden="true">
+    <div class="delete-confirm-backdrop" id="accountSuccessBackdrop"></div>
+    <div class="delete-confirm-card" role="dialog" aria-modal="true" aria-labelledby="accountSuccessTitle" aria-describedby="accountSuccessMessage">
+        <div class="delete-confirm-icon delete-confirm-icon--success" aria-hidden="true">
+            <i class="fas fa-check"></i>
+        </div>
+        <h3 id="accountSuccessTitle" class="delete-confirm-title">Success</h3>
+        <p id="accountSuccessMessage" class="delete-confirm-desc"></p>
+        <div class="delete-confirm-actions delete-confirm-actions--single">
+            <button type="button" class="delete-confirm-btn delete-confirm-btn-save" id="accountSuccessOk">OK</button>
+        </div>
+    </div>
+</div>
+
 <!-- Photo lightbox preview -->
 <div id="photoLightbox" class="photo-lightbox">
     <div class="photo-lightbox-content">
@@ -283,27 +411,8 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 </div>
 
 <script src="../assets/js/logout.js?v=wlc1"></script>
-<script src="../assets/js/account_management.js"></script>
+<script src="../assets/js/account_management.js?v=wlc31"></script>
 
-<script>
-// -------- Sidebar Scroll Position Preservation --------
-document.addEventListener('DOMContentLoaded', function() {
-    const sidebarNav = document.querySelector('.sidebar-nav');
-    const scrollPosKey = 'sidebarScrollPos';
-    
-    // Restore scroll position on page load
-    const savedScrollPos = sessionStorage.getItem(scrollPosKey);
-    if (savedScrollPos) {
-        sidebarNav.scrollTop = parseInt(savedScrollPos);
-    }
-    
-    // Save scroll position before navigation
-    document.querySelectorAll('.sidebar-nav a').forEach(link => {
-        link.addEventListener('click', function() {
-            sessionStorage.setItem(scrollPosKey, sidebarNav.scrollTop);
-        });
-    });
-});
-</script>
+<?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 </body>
 </html>

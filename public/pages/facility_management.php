@@ -14,13 +14,14 @@ $user = $stmt->fetch();
 $initials = strtoupper(substr($user['Email'], 0, 1));
 ?>
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Facility Management - IMRMS</title>
-<link rel="stylesheet" href="../assets/css/dashboard.css">
+<link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
 <link rel="stylesheet" href="../assets/css/facility_management.css">
 <link rel="stylesheet" href="../assets/css/loading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -28,40 +29,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 </head>
 <body>
 
-<aside class="sidebar" id="sidebar">
-    <?php require __DIR__ . '/partials/sidebar_brand_header.php'; ?>
-    <nav>
-        <ul class="sidebar-nav">
-            <li><a href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a></li>
-            <li><a href="requisition_management.php"><i class="fas fa-file-signature"></i> Requisition Management</a></li>
-            <li><a href="requisition_status.php"><i class="fas fa-bars-progress"></i> Status</a></li>
-            <li><a href="audit_trail.php"><i class="fas fa-shield-alt"></i> Audit Trail</a></li>
-            <li><a href="account_management.php"><i class="fas fa-users-cog"></i> Account Management</a></li>
-            <li><a href="facility_management.php" class="active"><i class="fas fa-building"></i> Facility Management</a></li>
-            <li><a href="item_management.php"><i class="fas fa-box"></i> Item Management</a></li>
-            <li><a href="inventory_management.php"><i class="fas fa-cubes"></i> Inventory Management</a></li>
-            <li><a href="supplier_management.php"><i class="fas fa-truck"></i> Supplier Management</a></li>
-        </ul>
-    </nav>
-    <div class="sidebar-footer">
-        <div class="user-profile">
-            <div class="user-avatar">
-                <?php if (!empty($user['photo_url'])): ?>
-                    <img src="../<?php echo htmlspecialchars($user['photo_url']); ?>" alt="Profile Photo" class="user-avatar-img">
-                <?php else: ?>
-                    <div class="user-avatar-initials"><?php echo $initials; ?></div>
-                <?php endif; ?>
-            </div>
-            <div class="user-details">
-                <h4><?php echo htmlspecialchars((string)($user['full_name'] ?? '') !== '' ? (string)$user['full_name'] : explode('@', (string)$user['Email'])[0]); ?></h4>
-                <p><?php echo htmlspecialchars($user['role']); ?></p>
-            </div>
-        </div>
-        <button id="logoutBtn" class="btn-logout-sidebar">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </button>
-    </div>
-</aside>
+<?php $imActivePage = 'facility_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 
 <main class="main-content facility-management-container">
     <div class="page-header">
@@ -301,29 +269,6 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <script src="../assets/js/logout.js?v=wlc1"></script>
 <script src="../assets/js/facility_management.js"></script>
 
-<script>
-// -------- Sidebar Scroll Position Preservation --------
-document.addEventListener('DOMContentLoaded', function() {
-    const sidebarNav = document.querySelector('.sidebar-nav');
-    const scrollPosKey = 'sidebarScrollPos';
-    
-    // Restore scroll position on page load
-    const savedScrollPos = sessionStorage.getItem(scrollPosKey);
-    if (savedScrollPos) {
-        sidebarNav.scrollTop = parseInt(savedScrollPos);
-    }
-    
-    // Save scroll position before navigation
-    document.querySelectorAll('.sidebar-nav a').forEach(link => {
-        link.addEventListener('click', function() {
-            sessionStorage.setItem(scrollPosKey, sidebarNav.scrollTop);
-        });
-    });
-});
-
-document.getElementById('mobileMenuBtn').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('open');
-});
-</script>
+<?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 </body>
 </html>
