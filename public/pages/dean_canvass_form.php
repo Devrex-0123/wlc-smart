@@ -791,6 +791,10 @@ $pageTitle = $rfRequestId > 0
         </div>
         <?php if ($showComptrollerPricingOverview): ?>
         <div id="cvComptrollerDeferredBanners" class="cv-comptroller-deferred-banners" hidden aria-live="polite"></div>
+        <button type="button" id="cvComptrollerDeferredBannersRestore" class="cv-comptroller-deferred-banners-restore" hidden>
+            <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+            <span class="cv-comptroller-deferred-banners-restore-label">Show deferred warnings</span>
+        </button>
         <?php endif; ?>
         <?php if ($isGsdCanvassReview): ?>
         <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar rf-form-actions">

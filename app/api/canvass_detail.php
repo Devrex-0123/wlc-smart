@@ -52,7 +52,7 @@ function saveCanvassQuotePhoto(array $file): string
 }
 
 /**
- * Preferred-supplier quoted prices (requester) stored as JSON on requisition_preferred_suppliers.
+ * Preferred-supplier quoted prices stored in requisition_preferred_supplier_item (junction).
  *
  * @return array<int, array<int, string>> supplier_id => [sort_order => price]
  */
@@ -60,32 +60,10 @@ function cwirmsPreferredSupplierPricesByRequest(PDO $db, int $requestId): array
 {
     $out = [];
     try {
-        ensureRequisitionPreferredQuoteColumns($db);
-        $stmt = $db->prepare(
-            'SELECT supplier_id, quoted_prices
-             FROM requisition_preferred_suppliers
-             WHERE request_id = ?'
-        );
-        $stmt->execute([$requestId]);
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $sid = (int) ($row['supplier_id'] ?? 0);
-            if ($sid <= 0 || !isset($row['quoted_prices']) || $row['quoted_prices'] === null || $row['quoted_prices'] === '') {
-                continue;
-            }
-            $decoded = json_decode((string) $row['quoted_prices'], true);
-            if (!is_array($decoded)) {
-                continue;
-            }
-            $prices = [];
-            foreach ($decoded as $idxStr => $priceRaw) {
-                $idx = (int) $idxStr;
-                if ($idx < 0 || $priceRaw === null || $priceRaw === '') {
-                    continue;
-                }
-                $prices[$idx] = (string) $priceRaw;
-            }
-            if ($prices !== []) {
-                $out[$sid] = $prices;
+        $maps = cwirmsLoadPreferredSupplierQuoteMapsForRequest($db, $requestId);
+        foreach ($maps as $sid => $entry) {
+            if (!empty($entry['prices'])) {
+                $out[(int) $sid] = $entry['prices'];
             }
         }
     } catch (Throwable $e) {
@@ -137,32 +115,10 @@ function cwirmsPreferredSupplierPhotosByRequest(PDO $db, int $requestId): array
 {
     $out = [];
     try {
-        ensureRequisitionPreferredQuoteColumns($db);
-        $stmt = $db->prepare(
-            'SELECT supplier_id, quote_photos
-             FROM requisition_preferred_suppliers
-             WHERE request_id = ?'
-        );
-        $stmt->execute([$requestId]);
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $sid = (int) ($row['supplier_id'] ?? 0);
-            if ($sid <= 0 || !isset($row['quote_photos']) || $row['quote_photos'] === null || $row['quote_photos'] === '') {
-                continue;
-            }
-            $decoded = json_decode((string) $row['quote_photos'], true);
-            if (!is_array($decoded)) {
-                continue;
-            }
-            $photos = [];
-            foreach ($decoded as $idxStr => $pathRaw) {
-                $idx = (int) $idxStr;
-                $path = trim((string) $pathRaw);
-                if ($idx >= 0 && $path !== '') {
-                    $photos[$idx] = substr($path, 0, 255);
-                }
-            }
-            if ($photos !== []) {
-                $out[$sid] = $photos;
+        $maps = cwirmsLoadPreferredSupplierQuoteMapsForRequest($db, $requestId);
+        foreach ($maps as $sid => $entry) {
+            if (!empty($entry['photos'])) {
+                $out[(int) $sid] = $entry['photos'];
             }
         }
     } catch (Throwable $e) {
@@ -189,98 +145,142 @@ function cwirmsUpdatePreferredSupplierQuotePhoto(
     int $itemIndex,
     ?string $photoPath
 ): void {
-    ensureRequisitionPreferredQuoteColumns($db);
+    ensurePreferredSupplierItemQuotesTable($db);
     if (!cwirmsPreferredSupplierLinkExists($db, $requestId, $supplierId)) {
         throw new RuntimeException('Preferred supplier not found for this request.');
     }
 
-    $sel = $db->prepare(
-        'SELECT quote_photos FROM requisition_preferred_suppliers WHERE request_id = ? AND supplier_id = ? LIMIT 1'
-    );
-    $sel->execute([$requestId, $supplierId]);
-    $raw = $sel->fetchColumn();
-    $photos = [];
-    if ($raw !== false && $raw !== null && $raw !== '') {
-        $decoded = json_decode((string) $raw, true);
-        if (is_array($decoded)) {
-            foreach ($decoded as $idxStr => $pathVal) {
-                $idx = (int) $idxStr;
-                $path = trim((string) $pathVal);
-                if ($idx >= 0 && $path !== '') {
-                    $photos[(string) $idx] = substr($path, 0, 255);
-                }
-            }
-        }
-    }
-
-    $key = (string) $itemIndex;
     if ($photoPath !== null && trim($photoPath) !== '') {
-        $photos[$key] = substr(trim($photoPath), 0, 255);
+        $photoVal = substr(trim($photoPath), 0, 255);
+        $upsert = $db->prepare(
+            'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, quote_photo)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE quote_photo = VALUES(quote_photo)'
+        );
+        $upsert->execute([$requestId, $supplierId, $itemIndex, $photoVal]);
     } else {
-        unset($photos[$key]);
+        $upd = $db->prepare(
+            'UPDATE requisition_preferred_supplier_item
+             SET quote_photo = NULL
+             WHERE request_id = ? AND supplier_id = ? AND sort_order = ?'
+        );
+        $upd->execute([$requestId, $supplierId, $itemIndex]);
     }
 
-    $encoded = $photos === [] ? null : json_encode($photos);
-    $upd = $db->prepare(
-        'UPDATE requisition_preferred_suppliers SET quote_photos = ? WHERE request_id = ? AND supplier_id = ?'
-    );
-    $upd->execute([$encoded, $requestId, $supplierId]);
+    cwirmsSyncPreferredSupplierQuoteJsonColumns($db, $requestId, $supplierId);
 }
 
 /**
- * @param list<array{supplier_id: int, prices?: array<int|string, mixed>, photos?: array<int|string, mixed>}> $preferredQuotes
+ * @param list<array{supplier_id: int, prices?: array<int|string, mixed>, photos?: array<int|string, mixed>, item_indices?: list<int>}> $preferredQuotes
  */
 function cwirmsPersistPreferredSupplierQuotes(PDO $db, int $requestId, array $preferredQuotes): void
 {
-    ensureRequisitionPreferredQuoteColumns($db);
-    $upd = $db->prepare(
-        'UPDATE requisition_preferred_suppliers
-         SET quoted_prices = ?, quote_photos = ?
-         WHERE request_id = ? AND supplier_id = ?'
-    );
-    foreach ($preferredQuotes as $pq) {
-        if (!is_array($pq)) {
-            continue;
-        }
-        $sid = (int) ($pq['supplier_id'] ?? 0);
-        if ($sid <= 0) {
-            continue;
-        }
-        $prices = $pq['prices'] ?? [];
-        if (!is_array($prices)) {
-            $prices = [];
-        }
-        $normalizedPrices = [];
-        foreach ($prices as $idxStr => $priceRaw) {
-            if ($priceRaw === null || $priceRaw === '') {
+    ensurePreferredSupplierItemQuotesTable($db);
+
+    $db->beginTransaction();
+    try {
+        $touchedSuppliers = [];
+
+        foreach ($preferredQuotes as $pq) {
+            if (!is_array($pq)) {
                 continue;
             }
-            if (!is_numeric($priceRaw)) {
-                throw new RuntimeException('Preferred supplier prices must be numbers.');
-            }
-            $p = round((float) $priceRaw, 2);
-            if ($p < 0) {
-                throw new RuntimeException('Preferred supplier price cannot be negative.');
-            }
-            $normalizedPrices[(string) (int) $idxStr] = (string) $p;
-        }
-
-        $photosIn = $pq['photos'] ?? [];
-        if (!is_array($photosIn)) {
-            $photosIn = [];
-        }
-        $normalizedPhotos = [];
-        foreach ($photosIn as $idxStr => $pathRaw) {
-            $path = trim((string) $pathRaw);
-            if ($path === '' || str_starts_with($path, 'blob:')) {
+            $sid = (int) ($pq['supplier_id'] ?? 0);
+            if ($sid <= 0 || !cwirmsPreferredSupplierLinkExists($db, $requestId, $sid)) {
                 continue;
             }
-            $normalizedPhotos[(string) (int) $idxStr] = substr($path, 0, 255);
+            $touchedSuppliers[$sid] = true;
+
+            $prices = $pq['prices'] ?? [];
+            if (!is_array($prices)) {
+                $prices = [];
+            }
+            $photosIn = $pq['photos'] ?? [];
+            if (!is_array($photosIn)) {
+                $photosIn = [];
+            }
+
+            $desiredSortOrders = [];
+            if (isset($pq['item_indices']) && is_array($pq['item_indices'])) {
+                foreach ($pq['item_indices'] as $idxRaw) {
+                    $idx = (int) $idxRaw;
+                    if ($idx >= 0) {
+                        $desiredSortOrders[$idx] = true;
+                    }
+                }
+            }
+            foreach (array_keys($prices) as $idxStr) {
+                $idx = (int) $idxStr;
+                if ($idx >= 0) {
+                    $desiredSortOrders[$idx] = true;
+                }
+            }
+            foreach (array_keys($photosIn) as $idxStr) {
+                $idx = (int) $idxStr;
+                if ($idx >= 0) {
+                    $desiredSortOrders[$idx] = true;
+                }
+            }
+
+            $existingStmt = $db->prepare(
+                'SELECT sort_order FROM requisition_preferred_supplier_item
+                 WHERE request_id = ? AND supplier_id = ?'
+            );
+            $existingStmt->execute([$requestId, $sid]);
+            $existingSortOrders = array_map('intval', $existingStmt->fetchAll(PDO::FETCH_COLUMN, 0));
+
+            foreach ($existingSortOrders as $existingSort) {
+                if (!isset($desiredSortOrders[$existingSort])) {
+                    $del = $db->prepare(
+                        'DELETE FROM requisition_preferred_supplier_item
+                         WHERE request_id = ? AND supplier_id = ? AND sort_order = ?'
+                    );
+                    $del->execute([$requestId, $sid, $existingSort]);
+                }
+            }
+
+            $upsert = $db->prepare(
+                'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, price, quote_photo)
+                 VALUES (?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE price = VALUES(price), quote_photo = VALUES(quote_photo)'
+            );
+
+            foreach (array_keys($desiredSortOrders) as $sortOrder) {
+                $sortOrder = (int) $sortOrder;
+                $priceRaw = $prices[$sortOrder] ?? $prices[(string) $sortOrder] ?? null;
+                $priceVal = null;
+                if ($priceRaw !== null && $priceRaw !== '') {
+                    if (!is_numeric($priceRaw)) {
+                        throw new RuntimeException('Preferred supplier prices must be numbers.');
+                    }
+                    $p = round((float) $priceRaw, 2);
+                    if ($p < 0) {
+                        throw new RuntimeException('Preferred supplier price cannot be negative.');
+                    }
+                    $priceVal = $p;
+                }
+
+                $photoRaw = $photosIn[$sortOrder] ?? $photosIn[(string) $sortOrder] ?? null;
+                $photoVal = null;
+                if ($photoRaw !== null) {
+                    $path = trim((string) $photoRaw);
+                    if ($path !== '' && !str_starts_with($path, 'blob:')) {
+                        $photoVal = substr($path, 0, 255);
+                    }
+                }
+
+                $upsert->execute([$requestId, $sid, $sortOrder, $priceVal, $photoVal]);
+            }
+
+            cwirmsSyncPreferredSupplierQuoteJsonColumns($db, $requestId, $sid);
         }
 
-        $encodedPrices = $normalizedPrices === [] ? null : json_encode($normalizedPrices);
-        $encodedPhotos = $normalizedPhotos === [] ? null : json_encode($normalizedPhotos);
-        $upd->execute([$encodedPrices, $encodedPhotos, $requestId, $sid]);
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
     }
 }
 
@@ -666,6 +666,7 @@ try {
     $db = Database::connect();
     ensureRequisitionCanvassSubmissionColumn($db);
     ensureRequisitionPreferredQuoteColumns($db);
+    ensurePreferredSupplierItemQuotesTable($db);
     dropRequisitionCanvassDetailPhotoColumns($db);
     $uid = (int) $_SESSION['user_id'];
     $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -983,23 +984,14 @@ try {
             );
             $stmt->execute([$requestId]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $quoteMaps = cwirmsLoadPreferredSupplierQuoteMapsForRequest($db, $requestId);
             $out = [];
             foreach ($rows as $r) {
                 $sid = isset($r['supplier_id']) ? (int) $r['supplier_id'] : 0;
-                $quotedPrices = [];
-                if (isset($r['quoted_prices']) && $r['quoted_prices'] !== null && $r['quoted_prices'] !== '') {
-                    $decodedPrices = json_decode((string) $r['quoted_prices'], true);
-                    if (is_array($decodedPrices)) {
-                        $quotedPrices = $decodedPrices;
-                    }
-                }
-                $quotePhotos = [];
-                if (isset($r['quote_photos']) && $r['quote_photos'] !== null && $r['quote_photos'] !== '') {
-                    $decodedPhotos = json_decode((string) $r['quote_photos'], true);
-                    if (is_array($decodedPhotos)) {
-                        $quotePhotos = $decodedPhotos;
-                    }
-                }
+                $quoteEntry = $quoteMaps[$sid] ?? ['sort_orders' => [], 'prices' => [], 'photos' => []];
+                $quotedPrices = $quoteEntry['prices'];
+                $quotePhotos = $quoteEntry['photos'];
+                $quotedItemIndices = $quoteEntry['sort_orders'];
                 $out[] = [
                     'supplier_id' => isset($r['supplier_id']) ? (int) $r['supplier_id'] : 0,
                     'supplier_name' => (string) ($r['supplier_name'] ?? ''),
@@ -1015,6 +1007,7 @@ try {
                     'supplier_image' => (string) ($r['supplier_image'] ?? ''),
                     'quoted_prices' => $quotedPrices,
                     'quote_photos' => $quotePhotos,
+                    'quoted_item_indices' => $quotedItemIndices,
                     'is_preferred' => isset($r['is_preferred']) ? (int) $r['is_preferred'] : 0,
                     'preferred_request_id' => isset($r['preferred_request_id']) ? (int) $r['preferred_request_id'] : null,
                 ];
@@ -1195,6 +1188,11 @@ try {
             if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
                 sendJson(['success' => false, 'message' => 'This request can no longer be edited.']);
             }
+            ensurePreferredSupplierItemQuotesTable($db);
+            $delItems = $db->prepare(
+                'DELETE FROM requisition_preferred_supplier_item WHERE request_id = ? AND supplier_id = ?'
+            );
+            $delItems->execute([$requestId, $supplierId]);
             $del = $db->prepare('DELETE FROM requisition_preferred_suppliers WHERE request_id = ? AND supplier_id = ?');
             $del->execute([$requestId, $supplierId]);
             sendJson(['success' => true, 'message' => 'Preferred supplier removed.']);
@@ -1437,6 +1435,7 @@ try {
         }
 
         ensureRequisitionPreferredQuoteColumns($db);
+        ensurePreferredSupplierItemQuotesTable($db);
         ensureCanvassSupplierQuoteSourceColumn($db);
         ensureCanvassSupplierNotesColumns($db);
         ensureCanvassSupplierDiscountsTable($db);
@@ -1520,8 +1519,11 @@ try {
                 }
                 $benefitsRaw = trim((string) ($sup['benefits'] ?? ''));
                 $benefitsVal = $benefitsRaw !== '' ? $benefitsRaw : null;
-                for ($idx = 0; $idx < $n; $idx++) {
-                    $priceRaw = $prices[$idx] ?? $prices[(string) $idx] ?? null;
+                foreach ($prices as $idxStr => $priceRaw) {
+                    $idx = (int) $idxStr;
+                    if ($idx < 0 || $idx >= $n) {
+                        throw new RuntimeException('Price column does not match items.');
+                    }
                     $p = null;
                     if ($priceRaw !== null && $priceRaw !== '') {
                         if (!is_numeric($priceRaw)) {

@@ -173,8 +173,9 @@ function loadValidatedPreferredSuggestedSupplierForDetail(PDO $db, int $requestI
     $sortStmt->execute([$requestId, $canvassDetailId]);
     $sortOrder = (int) ($sortStmt->fetchColumn() ?: 0);
 
+    require_once __DIR__ . '/../approval_tables.php';
     $prefStmt = $db->prepare(
-        'SELECT s.supplier_id, s.supplier_name, rps.quoted_prices
+        'SELECT s.supplier_id, s.supplier_name
          FROM requisition_preferred_suppliers rps
          INNER JOIN suppliers s ON s.supplier_id = rps.supplier_id
          WHERE rps.request_id = ? AND rps.supplier_id = ?
@@ -185,10 +186,7 @@ function loadValidatedPreferredSuggestedSupplierForDetail(PDO $db, int $requestI
     if (!$prefRow) {
         return [null, 'Selected supplier must come from the requester preferred supplier matrix.'];
     }
-    $quotedPrice = cwirmsPreferredQuotedPriceForItemIndex(
-        isset($prefRow['quoted_prices']) ? (string) $prefRow['quoted_prices'] : null,
-        $sortOrder
-    );
+    $quotedPrice = cwirmsPreferredQuotedPriceForSortOrder($db, $requestId, $supplierId, $sortOrder);
     if ($quotedPrice === null) {
         return [null, 'Selected preferred supplier must have a quoted price for this item.'];
     }

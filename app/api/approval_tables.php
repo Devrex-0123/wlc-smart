@@ -454,3 +454,203 @@ function ensurePurchaseOrderTables(PDO $db): void
         }
     }
 }
+
+function ensurePreferredSupplierItemQuotesTable(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    ensureRequisitionPreferredQuoteColumns($db);
+
+    $db->exec(
+        'CREATE TABLE IF NOT EXISTS requisition_preferred_supplier_item (
+            preferred_supplier_item_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            request_id INT NOT NULL,
+            supplier_id INT NOT NULL,
+            sort_order INT NOT NULL DEFAULT 0,
+            price DECIMAL(12,2) DEFAULT NULL,
+            quote_photo VARCHAR(255) DEFAULT NULL,
+            UNIQUE KEY uq_rpsi_request_supplier_sort (request_id, supplier_id, sort_order),
+            KEY idx_rpsi_supplier (supplier_id),
+            CONSTRAINT rpsi_fk_request FOREIGN KEY (request_id) REFERENCES requisition_item (request_id) ON DELETE CASCADE ON UPDATE CASCADE,
+            CONSTRAINT rpsi_fk_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers (supplier_id) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
+    cwirmsBackfillPreferredQuotesJsonToJunction($db);
+}
+
+function cwirmsBackfillPreferredQuotesJsonToJunction(PDO $db): void
+{
+    static $ran = false;
+    if ($ran) {
+        return;
+    }
+    $ran = true;
+
+    try {
+        $countStmt = $db->query('SELECT COUNT(*) FROM requisition_preferred_supplier_item');
+        if ($countStmt && (int) $countStmt->fetchColumn() > 0) {
+            return;
+        }
+
+        $stmt = $db->query(
+            'SELECT request_id, supplier_id, quoted_prices, quote_photos
+             FROM requisition_preferred_suppliers
+             WHERE (quoted_prices IS NOT NULL AND quoted_prices <> \'\')
+                OR (quote_photos IS NOT NULL AND quote_photos <> \'\')'
+        );
+        if (!$stmt) {
+            return;
+        }
+
+        $ins = $db->prepare(
+            'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, price, quote_photo)
+             VALUES (?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                price = COALESCE(VALUES(price), price),
+                quote_photo = COALESCE(VALUES(quote_photo), quote_photo)'
+        );
+
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $requestId = (int) ($row['request_id'] ?? 0);
+            $supplierId = (int) ($row['supplier_id'] ?? 0);
+            if ($requestId <= 0 || $supplierId <= 0) {
+                continue;
+            }
+
+            $prices = [];
+            if (isset($row['quoted_prices']) && $row['quoted_prices'] !== null && $row['quoted_prices'] !== '') {
+                $decoded = json_decode((string) $row['quoted_prices'], true);
+                if (is_array($decoded)) {
+                    $prices = $decoded;
+                }
+            }
+            $photos = [];
+            if (isset($row['quote_photos']) && $row['quote_photos'] !== null && $row['quote_photos'] !== '') {
+                $decoded = json_decode((string) $row['quote_photos'], true);
+                if (is_array($decoded)) {
+                    $photos = $decoded;
+                }
+            }
+
+            $sortOrders = [];
+            foreach (array_keys($prices) as $k) {
+                $sortOrders[(int) $k] = true;
+            }
+            foreach (array_keys($photos) as $k) {
+                $sortOrders[(int) $k] = true;
+            }
+
+            foreach (array_keys($sortOrders) as $sortOrder) {
+                $priceRaw = $prices[$sortOrder] ?? $prices[(string) $sortOrder] ?? null;
+                $photoRaw = $photos[$sortOrder] ?? $photos[(string) $sortOrder] ?? null;
+                $priceVal = null;
+                if ($priceRaw !== null && $priceRaw !== '' && is_numeric($priceRaw)) {
+                    $priceVal = round((float) $priceRaw, 2);
+                }
+                $photoVal = null;
+                if ($photoRaw !== null && trim((string) $photoRaw) !== '') {
+                    $photoVal = substr(trim((string) $photoRaw), 0, 255);
+                }
+                if ($priceVal === null && $photoVal === null) {
+                    continue;
+                }
+                $ins->execute([$requestId, $supplierId, (int) $sortOrder, $priceVal, $photoVal]);
+            }
+        }
+    } catch (Throwable $e) {
+        // ignore migration errors on older schemas
+    }
+}
+
+/**
+ * @return array<int, array{sort_orders: list<int>, prices: array<int, string>, photos: array<int, string>}>
+ */
+function cwirmsLoadPreferredSupplierQuoteMapsForRequest(PDO $db, int $requestId): array
+{
+    ensurePreferredSupplierItemQuotesTable($db);
+    $out = [];
+    $stmt = $db->prepare(
+        'SELECT supplier_id, sort_order, price, quote_photo
+         FROM requisition_preferred_supplier_item
+         WHERE request_id = ?
+         ORDER BY supplier_id ASC, sort_order ASC'
+    );
+    $stmt->execute([$requestId]);
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $sid = (int) ($row['supplier_id'] ?? 0);
+        $sortOrder = (int) ($row['sort_order'] ?? 0);
+        if ($sid <= 0 || $sortOrder < 0) {
+            continue;
+        }
+        if (!isset($out[$sid])) {
+            $out[$sid] = ['sort_orders' => [], 'prices' => [], 'photos' => []];
+        }
+        $out[$sid]['sort_orders'][] = $sortOrder;
+        if (isset($row['price']) && $row['price'] !== null && $row['price'] !== '') {
+            $out[$sid]['prices'][$sortOrder] = (string) $row['price'];
+        }
+        $photo = trim((string) ($row['quote_photo'] ?? ''));
+        if ($photo !== '') {
+            $out[$sid]['photos'][$sortOrder] = $photo;
+        }
+    }
+
+    return $out;
+}
+
+function cwirmsSyncPreferredSupplierQuoteJsonColumns(PDO $db, int $requestId, int $supplierId): void
+{
+    ensureRequisitionPreferredQuoteColumns($db);
+    $stmt = $db->prepare(
+        'SELECT sort_order, price, quote_photo
+         FROM requisition_preferred_supplier_item
+         WHERE request_id = ? AND supplier_id = ?
+         ORDER BY sort_order ASC'
+    );
+    $stmt->execute([$requestId, $supplierId]);
+    $prices = [];
+    $photos = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $sortOrder = (int) ($row['sort_order'] ?? 0);
+        if ($sortOrder < 0) {
+            continue;
+        }
+        if (isset($row['price']) && $row['price'] !== null && $row['price'] !== '') {
+            $prices[(string) $sortOrder] = (string) $row['price'];
+        }
+        $photo = trim((string) ($row['quote_photo'] ?? ''));
+        if ($photo !== '') {
+            $photos[(string) $sortOrder] = $photo;
+        }
+    }
+    $encodedPrices = $prices === [] ? null : json_encode($prices);
+    $encodedPhotos = $photos === [] ? null : json_encode($photos);
+    $upd = $db->prepare(
+        'UPDATE requisition_preferred_suppliers
+         SET quoted_prices = ?, quote_photos = ?
+         WHERE request_id = ? AND supplier_id = ?'
+    );
+    $upd->execute([$encodedPrices, $encodedPhotos, $requestId, $supplierId]);
+}
+
+function cwirmsPreferredQuotedPriceForSortOrder(PDO $db, int $requestId, int $supplierId, int $sortOrder): ?string
+{
+    ensurePreferredSupplierItemQuotesTable($db);
+    $stmt = $db->prepare(
+        'SELECT price FROM requisition_preferred_supplier_item
+         WHERE request_id = ? AND supplier_id = ? AND sort_order = ?
+         LIMIT 1'
+    );
+    $stmt->execute([$requestId, $supplierId, $sortOrder]);
+    $raw = $stmt->fetchColumn();
+    if ($raw === false || $raw === null || $raw === '' || !is_numeric($raw)) {
+        return null;
+    }
+
+    return (string) round((float) $raw, 2);
+}

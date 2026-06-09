@@ -10,6 +10,7 @@
     const progressEl = document.getElementById('cvComptrollerPricingProgress');
     const hintEl = document.getElementById('cvComptrollerPricingHint');
     const bannersEl = document.getElementById('cvComptrollerDeferredBanners');
+    const bannersRestoreEl = document.getElementById('cvComptrollerDeferredBannersRestore');
     const validationBannerEl = document.getElementById('cvComptrollerValidationBanner');
     const form = document.getElementById('comptrollerPricingForm');
 
@@ -924,6 +925,79 @@
         renderBanners(lines);
     }
 
+    function getBannersStorageKey() {
+        return `cwirms_cv_deferred_banners_hidden_${Number(cfg.requestId || 0)}`;
+    }
+
+    function isBannersDismissed() {
+        try {
+            return sessionStorage.getItem(getBannersStorageKey()) === '1';
+        } catch {
+            return false;
+        }
+    }
+
+    function setBannersDismissed(dismissed) {
+        try {
+            if (dismissed) {
+                sessionStorage.setItem(getBannersStorageKey(), '1');
+            } else {
+                sessionStorage.removeItem(getBannersStorageKey());
+            }
+        } catch {
+            /* ignore */
+        }
+    }
+
+    function countDeferredLines(activeLines) {
+        return activeLines.filter((line) => lineMetrics(line).deferredQty > 0).length;
+    }
+
+    function updateBannersVisibility(deferredCount) {
+        if (!bannersEl) {
+            return;
+        }
+        if (deferredCount <= 0) {
+            bannersEl.hidden = true;
+            if (bannersRestoreEl) {
+                bannersRestoreEl.hidden = true;
+            }
+            return;
+        }
+        const dismissed = isBannersDismissed();
+        bannersEl.hidden = dismissed;
+        if (bannersRestoreEl) {
+            bannersRestoreEl.hidden = !dismissed;
+            const labelEl = bannersRestoreEl.querySelector('.cv-comptroller-deferred-banners-restore-label');
+            if (labelEl) {
+                const noun = deferredCount === 1 ? 'warning' : 'warnings';
+                labelEl.textContent = `Show deferred ${noun} (${deferredCount})`;
+            }
+        }
+    }
+
+    function bindDeferredBannerControls() {
+        if (bannersEl && bannersEl.dataset.cvDismissBound !== '1') {
+            bannersEl.dataset.cvDismissBound = '1';
+            bannersEl.addEventListener('click', (e) => {
+                const dismissBtn = e.target.closest('.cv-comptroller-deferred-banners-dismiss');
+                if (!dismissBtn) {
+                    return;
+                }
+                e.preventDefault();
+                setBannersDismissed(true);
+                updateBannersVisibility(countDeferredLines(lines));
+            });
+        }
+        if (bannersRestoreEl && bannersRestoreEl.dataset.cvRestoreBound !== '1') {
+            bannersRestoreEl.dataset.cvRestoreBound = '1';
+            bannersRestoreEl.addEventListener('click', () => {
+                setBannersDismissed(false);
+                updateBannersVisibility(countDeferredLines(lines));
+            });
+        }
+    }
+
     function renderBanners(activeLines) {
         if (!bannersEl || !isInteractive) {
             return;
@@ -932,11 +1006,18 @@
         if (deferredLines.length === 0) {
             bannersEl.hidden = true;
             bannersEl.innerHTML = '';
+            if (bannersRestoreEl) {
+                bannersRestoreEl.hidden = true;
+            }
             return;
         }
 
-        bannersEl.hidden = false;
-        bannersEl.innerHTML = deferredLines
+        bannersEl.innerHTML = `<div class="cv-comptroller-deferred-banners-panel">
+            <div class="cv-comptroller-deferred-banners-head">
+                <span class="cv-comptroller-deferred-banners-title">Deferred quantity warnings</span>
+                <button type="button" class="cv-comptroller-deferred-banners-dismiss" aria-label="Hide deferred warnings">&times;</button>
+            </div>
+            <div class="cv-comptroller-deferred-banners-list">${deferredLines
             .map((line) => {
                 const metrics = lineMetrics(line);
                 const bannerClass = isZeroAcceptedDeferral(metrics)
@@ -947,7 +1028,10 @@
                     <span>${escapeHtml(deferredBannerMessage(metrics, line.item_name))}</span>
                 </div>`;
             })
-            .join('');
+            .join('')}</div>
+        </div>`;
+
+        updateBannersVisibility(deferredLines.length);
     }
 
     function findFirstIncompleteDeferredIndex() {
@@ -1026,4 +1110,5 @@
     renderTable();
     syncAcceptedQtyInputsFromLines();
     bindEditReasonTriggers();
+    bindDeferredBannerControls();
 })();
