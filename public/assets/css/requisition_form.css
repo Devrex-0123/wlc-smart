@@ -4118,6 +4118,56 @@ body.page-canvass-form {
     border-color: rgba(255, 255, 255, 0.45);
 }
 
+/* Canvassed matrix — visible close control on dark green header */
+.page-canvass-form #cvCanvassedCards .cv-pref-remove-btn.cv-canvas-remove-btn,
+.page-canvass-form .cv-canvas-card .cv-pref-remove-btn.cv-canvas-remove-btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.85rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: none;
+    transform: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.page-canvass-form #cvCanvassedCards .cv-pref-remove-btn.cv-canvas-remove-btn:hover,
+.page-canvass-form .cv-canvas-card .cv-pref-remove-btn.cv-canvas-remove-btn:hover {
+    background: rgba(255, 255, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.95);
+    transform: none;
+}
+
+.page-canvass-form #cvCanvassedCards .cv-pref-remove-btn.cv-canvas-remove-btn:focus-visible,
+.page-canvass-form .cv-canvas-card .cv-pref-remove-btn.cv-canvas-remove-btn:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+}
+
+.page-canvass-form #cvCanvassedCards .cv-pref-card-head,
+.page-canvass-form .cv-canvas-card .cv-pref-card-head {
+    position: relative;
+    padding-right: 2.75rem;
+}
+
+.page-canvass-form #cvCanvassedCards .cv-pref-card-actions,
+.page-canvass-form .cv-canvas-card .cv-pref-card-actions {
+    position: absolute;
+    top: 0.65rem;
+    right: 0.75rem;
+    z-index: 1;
+}
+
 /* Preferred matrix — header layout + remove control */
 .page-canvass-form #cvPreferredCards .cv-pref-card {
     min-width: 0;
@@ -4263,23 +4313,42 @@ body.page-canvass-form {
     padding: 0;
 }
 
-/* Canvassed matrix rows: col 1 = #, col 2 = item name, col 3 = price */
+/* Canvassed matrix rows: col 1 = item name, col 2 = price, col 3 = remove */
 .page-canvass-form .cv-canvas-card .cv-pref-items-table tbody td:first-child {
-    display: none;
-}
-
-.page-canvass-form .cv-canvas-card .cv-pref-items-table tbody td:nth-child(2) {
     margin-bottom: 0.35rem;
     font-weight: 600;
     font-size: 0.88rem;
     color: #111827;
+    display: block;
+}
+
+.page-canvass-form .cv-canvas-card .cv-pref-items-table tbody td:nth-child(2) {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    width: auto;
+    flex: 1 1 auto;
 }
 
 .page-canvass-form .cv-canvas-card .cv-pref-items-table tbody td:nth-child(3) {
     display: inline-flex;
     align-items: center;
-    vertical-align: middle;
     width: auto;
+}
+
+.page-canvass-form #cvCanvassedCards .cv-canvas-card .cv-pref-items-table tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.page-canvass-form #cvCanvassedCards .cv-canvas-card .cv-pref-items-table tbody td:first-child {
+    flex: 0 0 100%;
+}
+
+.page-canvass-form #cvCanvassedCards .cv-canvas-card .cv-pref-add-item-bar {
+    margin-bottom: 0.75rem;
 }
 
 .page-canvass-form .cv-pref-price-wrap,
@@ -4567,6 +4636,29 @@ body.page-canvass-form {
     border: none;
     color: #ffffff;
     box-shadow: none;
+}
+
+.page-canvass-form .rf-form-actions .comptroller-reject-btn:hover:not(:disabled),
+.page-canvass-form .rf-form-actions .comptroller-reject-btn.btn-secondary:hover:not(:disabled) {
+    background: #7a2222;
+    border: none;
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(122, 34, 34, 0.38);
+    transform: none;
+}
+
+.page-canvass-form .rf-form-actions .comptroller-reject-btn:focus-visible {
+    outline: 2px solid #7a2222;
+    outline-offset: 2px;
+}
+
+.page-canvass-form .verifier-decision-bar .comptroller-reject-btn:hover:not(:disabled),
+.page-canvass-form .verifier-decision-bar .comptroller-reject-btn.btn-secondary:hover:not(:disabled) {
+    background: #7a2222;
+    border: none;
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(122, 34, 34, 0.38);
+    transform: none;
 }
 
 .page-canvass-form .rf-form-actions .comptroller-undo-btn {

@@ -1519,8 +1519,11 @@ try {
                 }
                 $benefitsRaw = trim((string) ($sup['benefits'] ?? ''));
                 $benefitsVal = $benefitsRaw !== '' ? $benefitsRaw : null;
-                for ($idx = 0; $idx < $n; $idx++) {
-                    $priceRaw = $prices[$idx] ?? $prices[(string) $idx] ?? null;
+                foreach ($prices as $idxStr => $priceRaw) {
+                    $idx = (int) $idxStr;
+                    if ($idx < 0 || $idx >= $n) {
+                        throw new RuntimeException('Price column does not match items.');
+                    }
                     $p = null;
                     if ($priceRaw !== null && $priceRaw !== '') {
                         if (!is_numeric($priceRaw)) {

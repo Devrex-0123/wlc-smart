@@ -1,10 +1,21 @@
 <?php
 /**
- * Comptroller area sidebar. Expects: $user (array), $username (string), $initials (string),
+ * Comptroller area sidebar. Expects: $user (array), optional $username (string), $initials (string),
  * $comptrollerActive — one of: dashboard | requests | audit
  */
 $comptrollerActive = $comptrollerActive ?? '';
-$roleLabel = htmlspecialchars(ucfirst(trim((string) ($user['role'] ?? 'Comptroller'))));
+$sidebarUser = $user ?? [];
+if (!isset($username) || !is_string($username)) {
+    $username = trim((string)($sidebarUser['full_name'] ?? ''));
+    if ($username === '') {
+        $username = explode('@', (string)($sidebarUser['Email'] ?? ''))[0] ?? 'User';
+    }
+}
+if (!isset($initials) || !is_string($initials) || $initials === '') {
+    $initialSeed = $username !== '' ? $username : (string)($sidebarUser['Email'] ?? 'C');
+    $initials = strtoupper(substr($initialSeed, 0, 1));
+}
+$roleLabel = htmlspecialchars(ucfirst(trim((string) ($sidebarUser['role'] ?? 'Comptroller'))));
 ?>
 <aside class="sidebar" id="sidebar">
     <?php require __DIR__ . '/sidebar_brand_header.php'; ?>
@@ -30,8 +41,8 @@ $roleLabel = htmlspecialchars(ucfirst(trim((string) ($user['role'] ?? 'Comptroll
     <div class="sidebar-footer">
         <div class="user-profile">
             <div class="user-avatar">
-                <?php if (!empty($user['photo_url'])): ?>
-                    <img src="../<?php echo htmlspecialchars($user['photo_url']); ?>" alt="Profile Photo" class="user-avatar-img">
+                <?php if (!empty($sidebarUser['photo_url'])): ?>
+                    <img src="../<?php echo htmlspecialchars($sidebarUser['photo_url']); ?>" alt="Profile Photo" class="user-avatar-img">
                 <?php else: ?>
                     <div class="user-avatar-initials"><?php echo htmlspecialchars($initials); ?></div>
                 <?php endif; ?>

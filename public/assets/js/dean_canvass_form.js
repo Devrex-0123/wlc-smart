@@ -214,6 +214,84 @@
         scheduleRequesterAutosave();
     }
 
+    function getCanvassedSupplierItemIndices(supplierId) {
+        const sid = String(supplierId);
+        const stored = state.canvassedSupplierItems[sid];
+        if (Array.isArray(stored)) {
+            return [...stored].sort((a, b) => a - b);
+        }
+        return [];
+    }
+
+    function setCanvassedSupplierItemIndices(supplierId, indices) {
+        state.canvassedSupplierItems[String(supplierId)] = [...indices].sort((a, b) => a - b);
+    }
+
+    function addCanvassedSupplierItem(supplierId, itemIndex) {
+        const idx = Number(itemIndex);
+        const sid = String(supplierId);
+        if (Number.isNaN(idx) || idx < 0 || idx >= state.items.length || !state.items[idx]) {
+            showToast('Select a valid canvass item.', 'error');
+            return false;
+        }
+        const current = getCanvassedSupplierItemIndices(sid);
+        if (current.includes(idx)) {
+            return false;
+        }
+        setCanvassedSupplierItemIndices(supplierId, [...current, idx]);
+        const supplier = state.selectedSuppliers.find((s) => String(s.supplier_id) === sid);
+        if (supplier) {
+            if (!supplier.prices || typeof supplier.prices !== 'object') {
+                supplier.prices = {};
+            }
+            if (supplier.prices[idx] === undefined) {
+                supplier.prices[idx] = '';
+            }
+        }
+        state.hasUnsavedChanges = true;
+        scheduleRequesterAutosave();
+        return true;
+    }
+
+    function removeCanvassedSupplierItem(supplierId, itemIndex) {
+        const idx = Number(itemIndex);
+        const sid = String(supplierId);
+        setCanvassedSupplierItemIndices(
+            supplierId,
+            getCanvassedSupplierItemIndices(sid).filter((i) => i !== idx)
+        );
+        const supplier = state.selectedSuppliers.find((s) => String(s.supplier_id) === sid);
+        if (supplier && supplier.prices) {
+            delete supplier.prices[idx];
+            delete supplier.prices[String(idx)];
+        }
+        state.hasUnsavedChanges = true;
+        scheduleRequesterAutosave();
+    }
+
+    function hydrateCanvassedSupplierItemsFromSavedPrices() {
+        const items = {};
+        (state.selectedSuppliers || []).forEach((supplier) => {
+            const sid = String(supplier.supplier_id);
+            const indices = [];
+            const rawPrices = supplier.prices && typeof supplier.prices === 'object' ? supplier.prices : {};
+            Object.keys(rawPrices).forEach((k) => {
+                const idx = Number(k);
+                if (!Number.isNaN(idx) && idx >= 0 && idx < state.items.length && state.items[idx]) {
+                    indices.push(idx);
+                }
+            });
+            const tracked = getCanvassedSupplierItemIndices(supplier.supplier_id);
+            tracked.forEach((idx) => {
+                if (!indices.includes(idx)) {
+                    indices.push(idx);
+                }
+            });
+            items[sid] = [...new Set(indices)].sort((a, b) => a - b);
+        });
+        state.canvassedSupplierItems = items;
+    }
+
     function scheduleRequesterAutosave() {
         if (canvasserRegister || !requestId || state.items.length === 0) {
             return;
@@ -239,6 +317,11 @@
             clearTimeout(state.autoSaveTimer);
             state.autoSaveTimer = null;
         }
+    }
+
+    function markFormSaved() {
+        state.hasUnsavedChanges = false;
+        clearRequesterAutosaveTimer();
     }
 
     function flushRequesterAutosave() {
@@ -1178,24 +1261,20 @@
         }
         const full = state.availableSuppliers.find((x) => Number(x.supplier_id) === id);
         if (!full) { showToast('Supplier not found in catalog.', 'error'); return; }
-        const prices = {};
-        state.items.forEach((_, i) => { prices[i] = ''; });
         state.selectedSuppliers.push({
             supplier_id: full.supplier_id,
             supplier_name: full.supplier_name,
             supplier_image: full.supplier_image,
-            prices,
+            prices: {},
             benefits: '',
             discounts: [],
         });
+        setCanvassedSupplierItemIndices(full.supplier_id, []);
         renderSupplierTable();
         scheduleRequesterAutosave();
     }
 
     async function loadPreferredSuppliers() {
-        if (!cvPreferredCards) {
-            return;
-        }
         try {
             const prefApi = (window.CWIRMS_PREF_SUP && window.CWIRMS_PREF_SUP.api) || api;
             const res = await fetch(`${prefApi}?action=get_preferred&request_id=${encodeURIComponent(String(requestId))}`, { credentials: 'include' });
@@ -1238,8 +1317,14 @@
             state.preferredSupplierItems = {};
             state.preferredQuotePhotos = {};
         }
-        renderPreferredTable();
-        renderPreferredPicker();
+        if (cvPreferredCards) {
+            renderPreferredTable();
+            renderPreferredPicker();
+        }
+        hydrateCanvassedSupplierItemsFromSavedPrices();
+        if (cvCanvassedCards) {
+            renderSupplierTable();
+        }
     }
 
     async function uploadPendingPreferredPhotos() {
@@ -1409,6 +1494,7 @@
         preferredSearchFocused: false,
         preferredPriceDrafts: {},
         preferredSupplierItems: {},
+        canvassedSupplierItems: {},
         preferredSearchTimer: null,
         preferredQuotePhotos: {},
         canvassedSupplierCount: 0,
@@ -1416,6 +1502,7 @@
         requestedLines: [],
         autoSaveTimer: null,
         hasUnsavedChanges: false,
+        isHydrating: false,
     };
     const gsdSuggestedHiddenInput = document.getElementById('gsdSuggestedSupplierId');
     const canSelectSuggestedSupplierInTable = !!gsdSuggestedHiddenInput;
@@ -1673,10 +1760,19 @@
     function buildSuppliersPayloadForSave() {
         return (state.selectedSuppliers || [])
             .map((s) => {
+                const sid = Number(s.supplier_id || 0);
                 const benefits = String(s.benefits || '').trim();
+                const linkedIndices = getCanvassedSupplierItemIndices(sid);
+                const prices = {};
+                linkedIndices.forEach((idx) => {
+                    const raw = s.prices && (s.prices[idx] ?? s.prices[String(idx)]);
+                    if (raw !== undefined && raw !== null) {
+                        prices[idx] = raw;
+                    }
+                });
                 return {
                     supplier_id: s.supplier_id,
-                    prices: s.prices || {},
+                    prices,
                     photos: s.photos || {},
                     benefits: benefits !== '' ? benefits : null,
                     discounts: getCanvassDiscountsForSave(s.discounts),
@@ -1715,8 +1811,15 @@
         if (!supplier || !supplier.prices || typeof supplier.prices !== 'object') {
             return false;
         }
-        return Object.values(supplier.prices).some((raw) => {
-            if (raw === null || raw === '') return false;
+        const linkedIndices = getCanvassedSupplierItemIndices(supplier.supplier_id);
+        if (linkedIndices.length === 0) {
+            return false;
+        }
+        return linkedIndices.some((idx) => {
+            const raw = supplier.prices[idx] ?? supplier.prices[String(idx)];
+            if (raw === null || raw === '') {
+                return false;
+            }
             const n = Number(raw);
             return Number.isFinite(n) && n >= 0;
         });
@@ -2187,6 +2290,9 @@
     }
 
     function onSupplierTableChange() {
+        if (state.isHydrating) {
+            return;
+        }
         state.hasUnsavedChanges = true;
     }
 
@@ -2249,8 +2355,34 @@
                           supplier.supplier_name || ''
                       )}</button>`
                     : escapeHtml(supplier.supplier_name || '');
-                const itemRows = state.items
-                    .map((it, itemIndex) => {
+                const linkedIndices = getCanvassedSupplierItemIndices(sidNum);
+                const availableItems = state.items
+                    .map((item, index) => ({ item, index }))
+                    .filter(({ index }) => !linkedIndices.includes(index));
+                const addItemOptions = availableItems
+                    .map(
+                        ({ item, index }) =>
+                            `<option value="${index}">${escapeHtml(item.name || `Item ${index + 1}`)}</option>`
+                    )
+                    .join('');
+                const canAddItems = canvasserRegister && !hideStructureActions && !isRequesterView;
+                const addItemBar = canAddItems
+                    ? state.items.length === 0
+                        ? '<div class="cv-pref-add-item-bar"><span class="empty-state">Add canvass items first.</span></div>'
+                        : `<div class="cv-pref-add-item-bar">
+                        <select class="cv-pref-add-item-select cv-canvas-add-item-select" data-cv-supplier-id="${sidNum}" aria-label="Select item to quote"${availableItems.length === 0 ? ' disabled' : ''}>
+                            <option value="">Select item…</option>
+                            ${addItemOptions}
+                        </select>
+                        <button type="button" class="cv-pref-add-item-btn cv-canvas-add-item-btn" data-cv-supplier-id="${sidNum}"${availableItems.length === 0 ? ' disabled' : ''}>+ Add item</button>
+                    </div>`
+                    : '';
+                const itemRows = linkedIndices
+                    .map((itemIndex) => {
+                        const it = state.items[itemIndex];
+                        if (!it) {
+                            return '';
+                        }
                         const value = supplier.prices[itemIndex] ?? '';
                         const isSelectedForItem = isSuggestedForMatrix(itemIndex, sidNum, 'canvassed');
                         const pricePresent = value !== null && String(value).trim() !== '';
@@ -2275,8 +2407,11 @@
                             showGsdSuggestUi && isSelectedForItem
                                 ? `<button type="button" class="cv-suggested-clear-btn" data-item-index="${itemIndex}" data-canvass-detail-id="${Number(it.canvass_detail_id || 0)}" title="Clear suggested supplier">Clear</button>`
                                 : '';
+                        const removeItemBtn =
+                            canAddItems
+                                ? `<button type="button" class="cv-pref-remove-item-btn cv-canvas-remove-item-btn" data-cv-supplier-id="${sidNum}" data-cv-item-index="${itemIndex}" title="Remove item" aria-label="Remove item">×</button>`
+                                : '';
                         return `<tr class="${isSelectedForItem ? 'cv-gsd-suggested-row' : ''}">
-                            <td>${itemIndex + 1}</td>
                             <td>
                                 <div class="cv-canvass-item-name-cell">
                                     ${escapeHtml(it.name || `Item ${itemIndex + 1}`)}
@@ -2292,9 +2427,14 @@
                                     ${clearBtn}
                                 </div>
                             </td>
+                            <td class="cv-pref-item-action-cell">${removeItemBtn}</td>
                         </tr>`;
                     })
                     .join('');
+                const emptyItemsRow =
+                    linkedIndices.length === 0
+                        ? `<tr><td colspan="3" class="empty-state">${canAddItems ? 'No items added yet. Select an item above.' : 'No quoted items for this supplier.'}</td></tr>`
+                        : '';
                 return `<article class="cv-pref-card cv-canvas-card" data-cv-supplier-card-index="${supplierIndex}">
                     <div class="cv-pref-card-head">
                         <div class="cv-pref-card-id">
@@ -2310,14 +2450,15 @@
                             hideStructureActions
                                 ? ''
                                 : `<div class="cv-pref-card-actions">
-                            <button type="button" class="cv-pref-remove-btn cv-canvas-remove-btn" data-cv-supplier-index="${supplierIndex}" title="Remove supplier">×</button>
+                            <button type="button" class="cv-pref-remove-btn cv-canvas-remove-btn" data-cv-supplier-index="${supplierIndex}" title="Remove supplier" aria-label="Remove supplier"><i class="fas fa-times" aria-hidden="true"></i></button>
                         </div>`
                         }
                     </div>
                     <div class="cv-pref-card-body">
+                        ${addItemBar}
                         <table class="cv-pref-items-table" aria-label="Canvassed supplier quotes">
-                            <thead><tr><th>#</th><th>Item name</th><th>Quoted price</th></tr></thead>
-                            <tbody>${itemRows || '<tr><td colspan="3" class="empty-state">Add canvass items first.</td></tr>'}</tbody>
+                            <thead><tr><th>Item name</th><th>Quoted price</th><th></th></tr></thead>
+                            <tbody>${itemRows}${emptyItemsRow}</tbody>
                         </table>
                         ${buildCanvassedOptionalNotesSection(supplier, supplierIndex, notesReadonly)}
                     </div>
@@ -2406,6 +2547,7 @@
     }
 
     async function loadForm() {
+        state.isHydrating = true;
         try {
             const res = await fetch(`${api}?action=get&request_id=${encodeURIComponent(String(requestId))}`, {
                 credentials: 'include',
@@ -2498,13 +2640,13 @@
 
             setSupplierPickerHighlight(null);
             renderCvItems();
+            await loadPreferredSuppliers();
+            hydrateCanvassedSupplierItemsFromSavedPrices();
             renderSupplierTable();
             renderSupplierDropdown();
-            await loadPreferredSuppliers();
             state.canvassedSupplierCount = state.selectedSuppliers.length;
             applyCanvassApproval(data.approval);
             applyGsdReadonlyUi();
-            renderPreferredTable();
             if (typeof window.__imrmsCvReviewerAfterLoad === 'function') {
                 try {
                     window.__imrmsCvReviewerAfterLoad();
@@ -2514,6 +2656,8 @@
             }
         } catch {
             showToast('Network error.', 'error');
+        } finally {
+            state.isHydrating = false;
         }
     }
 
@@ -2626,7 +2770,7 @@
                 return;
             }
             showToast('✓ Draft saved successfully.');
-            state.hasUnsavedChanges = false;
+            markFormSaved();
             setTimeout(() => {
                 window.history.back();
             }, 800);
@@ -2680,7 +2824,9 @@
             }
             applyCanvassOptimisticFromApi(data);
             showToast(data.message || 'Canvassing complete.');
+            markFormSaved();
             await loadForm();
+            markFormSaved();
         } catch {
             showToast('Network error.', 'error');
         } finally {
@@ -2739,8 +2885,9 @@
                 return;
             }
             showToast('✓ Canvass form submitted');
-            state.hasUnsavedChanges = false;
+            markFormSaved();
             await loadForm();
+            markFormSaved();
         } catch {
             showToast('Network error.', 'error');
         } finally {
@@ -2896,25 +3043,29 @@
                 showToast('Supplier not found in catalog.', 'error');
                 return;
             }
-            const prices = {};
-            state.items.forEach((_, i) => {
-                prices[i] = '';
-            });
             state.selectedSuppliers.push({
                 supplier_id: full.supplier_id,
                 supplier_name: full.supplier_name,
                 supplier_image: full.supplier_image,
-                prices,
+                prices: {},
                 benefits: '',
                 discounts: [],
             });
+            setCanvassedSupplierItemIndices(full.supplier_id, []);
+            setSupplierPickerHighlight(null);
+            if (cvSupplierDropdown) {
+                cvSupplierDropdown.classList.remove('open');
+            }
             renderSupplierTable();
             scheduleRequesterAutosave();
         });
     }
 
     if (cvCanvassedCards) {
-        cvCanvassedCards.addEventListener('change', () => {
+        cvCanvassedCards.addEventListener('change', (e) => {
+            if (e.target.closest('.cv-canvas-add-item-select')) {
+                return;
+            }
             onSupplierTableChange();
         });
         cvCanvassedCards.addEventListener('click', (e) => {
@@ -2924,6 +3075,32 @@
                 if (sid) {
                     setSupplierPickerHighlight(sid);
                 }
+                return;
+            }
+            const addItemBtn = e.target.closest('.cv-canvas-add-item-btn');
+            if (addItemBtn) {
+                const sid = Number(addItemBtn.getAttribute('data-cv-supplier-id') || '0');
+                const card = addItemBtn.closest('.cv-pref-card');
+                const select = card ? card.querySelector('.cv-canvas-add-item-select') : null;
+                const itemIndex = select ? Number(select.value) : NaN;
+                if (!sid || Number.isNaN(itemIndex) || itemIndex < 0) {
+                    showToast('Select an item to add.', 'error');
+                    return;
+                }
+                if (addCanvassedSupplierItem(sid, itemIndex)) {
+                    renderSupplierTable();
+                }
+                return;
+            }
+            const removeItemBtn = e.target.closest('.cv-canvas-remove-item-btn');
+            if (removeItemBtn) {
+                const sid = Number(removeItemBtn.getAttribute('data-cv-supplier-id') || '0');
+                const itemIndex = Number(removeItemBtn.getAttribute('data-cv-item-index') || '0');
+                if (!sid || Number.isNaN(itemIndex)) {
+                    return;
+                }
+                removeCanvassedSupplierItem(sid, itemIndex);
+                renderSupplierTable();
                 return;
             }
             const btn = e.target.closest('.cv-canvas-remove-btn');
@@ -3118,7 +3295,7 @@
                         return;
                     }
                     showToast('✓ Changes saved as draft');
-                    state.hasUnsavedChanges = false;
+                    markFormSaved();
                 })
                 .catch(() => showToast('Network error.', 'error'))
                 .finally(() => { cvSaveDraftBtn.disabled = false; });
@@ -3483,7 +3660,7 @@
                                 return;
                             }
                             showToast('✓ Changes saved as draft');
-                            state.hasUnsavedChanges = false;
+                            markFormSaved();
                             setTimeout(() => {
                                 window.history.back();
                             }, 600);
