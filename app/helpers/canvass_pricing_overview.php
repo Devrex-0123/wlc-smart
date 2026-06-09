@@ -168,18 +168,11 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
         ];
     }
 
+    require_once __DIR__ . '/../api/approval_tables.php';
     $prefPrices = [];
-    $prefStmt = $db->prepare(
-        'SELECT supplier_id, quoted_prices FROM requisition_preferred_suppliers WHERE request_id = ?'
-    );
-    $prefStmt->execute([$requestId]);
-    while ($pref = $prefStmt->fetch(PDO::FETCH_ASSOC)) {
-        $sid = (int) ($pref['supplier_id'] ?? 0);
-        if ($sid <= 0) {
-            continue;
-        }
-        $decoded = json_decode((string) ($pref['quoted_prices'] ?? ''), true);
-        $prefPrices[$sid] = is_array($decoded) ? $decoded : [];
+    $quoteMaps = cwirmsLoadPreferredSupplierQuoteMapsForRequest($db, $requestId);
+    foreach ($quoteMaps as $sid => $entry) {
+        $prefPrices[(int) $sid] = $entry['prices'];
     }
 
     $lines = [];

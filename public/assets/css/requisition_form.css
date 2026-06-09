@@ -2211,6 +2211,7 @@ input[type="text"]:focus, input[type="number"]:focus {
     max-height: 240px;
     overflow-y: auto;
     z-index: 20;
+    margin-bottom: 10px;
 }
 
 .cv-pref-search-row {
@@ -2955,6 +2956,82 @@ input.cv-canvass-discount-pct-input[type='number']::-webkit-inner-spin-button {
 .cv-pref-remove-btn:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
+}
+
+.cv-pref-add-item-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.cv-pref-add-item-select {
+    flex: 1 1 12rem;
+    min-width: 10rem;
+    max-width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: #fff;
+}
+
+.cv-pref-add-item-btn {
+    appearance: none;
+    border: 1px solid #1d6b3a;
+    background: #1d6b3a;
+    color: #fff;
+    padding: 0.45rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.cv-pref-add-item-btn:hover:not(:disabled) {
+    background: #165a30;
+    border-color: #165a30;
+}
+
+.cv-pref-add-item-btn:disabled,
+.cv-pref-add-item-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.cv-pref-remove-item-btn {
+    appearance: none;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #a32d2d;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+}
+
+.cv-pref-remove-item-btn:hover {
+    background: #fee2e2;
+    border-color: #a32d2d;
+}
+
+.cv-pref-req-qty-cell {
+    white-space: nowrap;
+    color: #4b5563;
+    font-size: 0.875rem;
+}
+
+.cv-pref-item-action-cell {
+    width: 2.5rem;
+    text-align: center;
 }
 
 .supplier-table-name-cell {
@@ -4186,27 +4263,23 @@ body.page-canvass-form {
     padding: 0;
 }
 
-.page-canvass-form .cv-pref-items-table tbody td:first-child {
+/* Canvassed matrix rows: col 1 = #, col 2 = item name, col 3 = price */
+.page-canvass-form .cv-canvas-card .cv-pref-items-table tbody td:first-child {
     display: none;
 }
 
-.page-canvass-form .cv-pref-items-table tbody td:nth-child(2) {
+.page-canvass-form .cv-canvas-card .cv-pref-items-table tbody td:nth-child(2) {
     margin-bottom: 0.35rem;
     font-weight: 600;
     font-size: 0.88rem;
     color: #111827;
 }
 
-.page-canvass-form .cv-pref-items-table tbody td:nth-child(3),
-.page-canvass-form .cv-pref-items-table tbody td:nth-child(4) {
+.page-canvass-form .cv-canvas-card .cv-pref-items-table tbody td:nth-child(3) {
     display: inline-flex;
     align-items: center;
     vertical-align: middle;
     width: auto;
-}
-
-.page-canvass-form .cv-pref-items-table tbody td:nth-child(4) {
-    margin-left: 0.4rem;
 }
 
 .page-canvass-form .cv-pref-price-wrap,
@@ -4269,27 +4342,40 @@ body.page-canvass-form {
     display: none;
 }
 
-/* Preferred matrix — item name + single-line price/photo row */
-.page-canvass-form #cvPreferredCards .cv-pref-items-table tbody tr {
+/* Preferred matrix — col 1 = name, col 2 = req qty, col 3 = price, col 4 = photo, col 5 = remove */
+.page-canvass-form #cvPreferredCards .cv-pref-card:not(.cv-canvas-card) .cv-pref-items-table tbody tr {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.35rem;
 }
 
-.page-canvass-form #cvPreferredCards .cv-pref-items-table tbody td:nth-child(2) {
+.page-canvass-form #cvPreferredCards .cv-pref-card:not(.cv-canvas-card) .cv-pref-items-table tbody td:first-child {
     flex: 0 0 100%;
-    margin-bottom: 0.25rem;
+    display: block;
+    margin-bottom: 0.1rem;
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: #111827;
 }
 
-.page-canvass-form #cvPreferredCards .cv-pref-items-table tbody td:nth-child(3) {
+.page-canvass-form #cvPreferredCards .cv-pref-card:not(.cv-canvas-card) .cv-pref-items-table tbody td:nth-child(2) {
+    flex: 0 0 100%;
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 400;
+    font-size: 0.78rem;
+    color: #6b7280;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-card:not(.cv-canvas-card) .cv-pref-items-table tbody td:nth-child(3) {
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
     align-items: center;
 }
 
-.page-canvass-form #cvPreferredCards .cv-pref-items-table tbody td:nth-child(4) {
+.page-canvass-form #cvPreferredCards .cv-pref-card:not(.cv-canvas-card) .cv-pref-items-table tbody td:nth-child(4) {
     flex: 0 0 32px;
     width: 32px;
     margin-left: 0;
@@ -4298,13 +4384,19 @@ body.page-canvass-form {
     justify-content: flex-end;
 }
 
-.page-canvass-form #cvPreferredCards .cv-pref-price-wrap {
+.page-canvass-form #cvPreferredCards .cv-pref-card:not(.cv-canvas-card) .cv-pref-items-table tbody td:nth-child(5) {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+}
+
+.page-canvass-form #cvPreferredCards .cv-pref-card:not(.cv-canvas-card) .cv-pref-price-wrap {
     flex: 1;
     width: 100%;
     min-width: 0;
 }
 
-.page-canvass-form #cvPreferredCards .cv-preferred-price-input {
+.page-canvass-form #cvPreferredCards .cv-pref-card:not(.cv-canvas-card) .cv-preferred-price-input {
     flex: 1;
     width: auto;
     min-width: 0;

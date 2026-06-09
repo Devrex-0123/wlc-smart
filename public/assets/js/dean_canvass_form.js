@@ -166,6 +166,54 @@
         scheduleRequesterAutosave();
     }
 
+    function getPreferredSupplierItemIndices(supplierId) {
+        const sid = String(supplierId);
+        const stored = state.preferredSupplierItems[sid];
+        if (Array.isArray(stored)) {
+            return [...stored].sort((a, b) => a - b);
+        }
+        return [];
+    }
+
+    function setPreferredSupplierItemIndices(supplierId, indices) {
+        state.preferredSupplierItems[String(supplierId)] = [...indices].sort((a, b) => a - b);
+    }
+
+    function addPreferredSupplierItem(supplierId, itemIndex) {
+        const idx = Number(itemIndex);
+        const sid = String(supplierId);
+        if (Number.isNaN(idx) || idx < 0) {
+            return false;
+        }
+        const current = getPreferredSupplierItemIndices(sid);
+        if (current.includes(idx)) {
+            return false;
+        }
+        setPreferredSupplierItemIndices(sid, [...current, idx]);
+        state.hasUnsavedChanges = true;
+        scheduleRequesterAutosave();
+        return true;
+    }
+
+    function removePreferredSupplierItem(supplierId, itemIndex) {
+        const idx = Number(itemIndex);
+        const sid = String(supplierId);
+        const current = getPreferredSupplierItemIndices(sid).filter((i) => i !== idx);
+        setPreferredSupplierItemIndices(sid, current);
+        if (state.preferredPriceDrafts[sid]) {
+            delete state.preferredPriceDrafts[sid][idx];
+            delete state.preferredPriceDrafts[sid][String(idx)];
+        }
+        const photoKey = preferredPhotoKey(sid, idx);
+        const existing = state.preferredQuotePhotos[photoKey] || {};
+        if (existing.preview_url && String(existing.preview_url).startsWith('blob:')) {
+            URL.revokeObjectURL(existing.preview_url);
+        }
+        delete state.preferredQuotePhotos[photoKey];
+        state.hasUnsavedChanges = true;
+        scheduleRequesterAutosave();
+    }
+
     function scheduleRequesterAutosave() {
         if (canvasserRegister || !requestId || state.items.length === 0) {
             return;
@@ -237,7 +285,7 @@
             });
         }
         const supplierRow = state.selectedSuppliers.find((s) => Number(s.supplier_id) === sidNum);
-        state.items.forEach((_, itemIndex) => {
+        getPreferredSupplierItemIndices(sidNum).forEach((itemIndex) => {
             const draftVal = drafts[itemIndex];
             if (draftVal !== undefined && draftVal !== '') {
                 hasValue = true;
@@ -762,10 +810,35 @@
                 const isNew = Number(s.is_preferred || 0) === 1;
                 const locationLine = formatSupplierLocation(s);
                 const avatarSrc = escapeHtml(getSupplierImageUrl(s.supplier_image));
-                const itemRows = state.items
-                    .map((item, index) => {
+                const linkedIndices = getPreferredSupplierItemIndices(sid);
+                const availableItems = state.items
+                    .map((item, index) => ({ item, index }))
+                    .filter(({ index }) => !linkedIndices.includes(index));
+                const addItemOptions = availableItems
+                    .map(
+                        ({ item, index }) =>
+                            `<option value="${index}">${escapeHtml(item.name || `Item ${index + 1}`)}</option>`
+                    )
+                    .join('');
+                const noCanvassItems = state.items.length === 0;
+                const addItemBar = editable
+                    ? noCanvassItems
+                        ? '<div class="cv-pref-add-item-bar"><span class="empty-state">Add canvass items first.</span></div>'
+                        : `<div class="cv-pref-add-item-bar">
+                        <select class="cv-pref-add-item-select" data-pref-supplier-id="${sid}" aria-label="Select canvass item to quote"${availableItems.length === 0 ? ' disabled' : ''}>
+                            <option value="">Select item…</option>
+                            ${addItemOptions}
+                        </select>
+                        <button type="button" class="cv-pref-add-item-btn" data-pref-supplier-id="${sid}"${availableItems.length === 0 ? ' disabled' : ''}>+ Add item</button>
+                    </div>`
+                    : '';
+                const itemRows = linkedIndices
+                    .map((index) => {
+                        const item = state.items[index];
+                        if (!item) {
+                            return '';
+                        }
                         const val = getPreferredDraftPrice(sid, index);
-                        const key = preferredPhotoKey(sid, index);
                         const previewRaw = getPreferredPhotoUrl(sid, index);
                         const preview = previewRaw ? resolvePublicUploadUrl(previewRaw) : '';
                         let photoCell = '<span class="cv-pref-photo-empty">—</span>';
@@ -805,14 +878,19 @@
                             showGsdSuggestUi && isSelectedForItem
                                 ? `<button type="button" class="cv-suggested-clear-btn" data-item-index="${index}" data-canvass-detail-id="${Number(item.canvass_detail_id || 0)}" title="Clear suggested supplier">Clear</button>`
                                 : '';
+                        const qtyMeta = getItemQuantityMeta(index);
+                        const reqQty = Math.max(1, Number(qtyMeta.quantity) || 1);
+                        const unitLabel = pluralizeUnitType(qtyMeta.unit_type, reqQty);
+                        const removeItemBtn = editable
+                            ? `<button type="button" class="cv-pref-remove-item-btn" data-pref-supplier-id="${sid}" data-cv-item-index="${index}" title="Remove item from this supplier" aria-label="Remove item">×</button>`
+                            : '';
                         return `<tr class="${isSelectedForItem ? 'cv-gsd-suggested-row' : ''}">
-                            <td>${index + 1}</td>
                             <td>
                                 <div class="cv-canvass-item-name-cell">
                                     ${escapeHtml(item.name || `Item ${index + 1}`)}
-                                    ${formatRequisitionQtyHint(getItemQuantityMeta(index))}
                                 </div>
                             </td>
+                            <td class="cv-pref-req-qty-cell">Req. qty: ${reqQty} ${escapeHtml(unitLabel)}</td>
                             <td>
                                 <div class="cv-pref-price-wrap">
                                     ${radioHtml}
@@ -823,9 +901,14 @@
                                 </div>
                             </td>
                             <td>${photoCell}</td>
+                            <td class="cv-pref-item-action-cell">${removeItemBtn}</td>
                         </tr>`;
                     })
                     .join('');
+                const emptyItemsRow =
+                    linkedIndices.length === 0
+                        ? `<tr><td colspan="5" class="empty-state">${editable ? 'No items added yet. Select an item above.' : 'No quoted items for this supplier.'}</td></tr>`
+                        : '';
                 return `<article class="cv-pref-card">
                     <div class="cv-pref-card-head">
                         <div class="cv-pref-card-id">
@@ -843,9 +926,10 @@
                         </div>
                     </div>
                     <div class="cv-pref-card-body">
+                        ${addItemBar}
                         <table class="cv-pref-items-table" aria-label="Supplier quotes">
-                            <thead><tr><th>#</th><th>Item name</th><th>Quoted price</th><th>Quotation photo</th></tr></thead>
-                            <tbody>${itemRows || '<tr><td colspan="4" class="empty-state">Add canvass items first.</td></tr>'}</tbody>
+                            <thead><tr><th>Item name</th><th>Requisition qty</th><th>Quoted price</th><th>Quotation photo</th><th></th></tr></thead>
+                            <tbody>${itemRows}${emptyItemsRow}</tbody>
                         </table>
                     </div>
                 </article>`;
@@ -1135,19 +1219,23 @@
                     supplier_image: s.supplier_image || '',
                     quoted_prices: s.quoted_prices || {},
                     quote_photos: s.quote_photos || {},
+                    quoted_item_indices: Array.isArray(s.quoted_item_indices) ? s.quoted_item_indices : [],
                     is_preferred: Number(s.is_preferred || 0),
                 }));
+                hydratePreferredSupplierItemsFromApi();
                 hydratePreferredPriceDraftsFromApi();
                 hydratePreferredPhotoDraftsFromApi();
             } else {
                 state.preferredSuppliers = [];
                 state.preferredPriceDrafts = {};
+                state.preferredSupplierItems = {};
                 state.preferredQuotePhotos = {};
             }
         } catch {
             showToast('Unable to load preferred suppliers.', 'error');
             state.preferredSuppliers = [];
             state.preferredPriceDrafts = {};
+            state.preferredSupplierItems = {};
             state.preferredQuotePhotos = {};
         }
         renderPreferredTable();
@@ -1320,6 +1408,7 @@
         preferredSearchSelection: null,
         preferredSearchFocused: false,
         preferredPriceDrafts: {},
+        preferredSupplierItems: {},
         preferredSearchTimer: null,
         preferredQuotePhotos: {},
         canvassedSupplierCount: 0,
@@ -1499,6 +1588,35 @@
         return out;
     }
 
+    function hydratePreferredSupplierItemsFromApi() {
+        const items = {};
+        (state.preferredSuppliers || []).forEach((s) => {
+            const sid = String(s.supplier_id || '');
+            if (!sid) {
+                return;
+            }
+            let indices = [];
+            if (Array.isArray(s.quoted_item_indices) && s.quoted_item_indices.length > 0) {
+                indices = s.quoted_item_indices
+                    .map((n) => Number(n))
+                    .filter((n) => !Number.isNaN(n) && n >= 0);
+            } else {
+                const priceKeys =
+                    s.quoted_prices && typeof s.quoted_prices === 'object' ? Object.keys(s.quoted_prices) : [];
+                const photoKeys =
+                    s.quote_photos && typeof s.quote_photos === 'object' ? Object.keys(s.quote_photos) : [];
+                const merged = new Set(
+                    [...priceKeys, ...photoKeys]
+                        .map((k) => Number(k))
+                        .filter((n) => !Number.isNaN(n) && n >= 0)
+                );
+                indices = [...merged];
+            }
+            items[sid] = indices.sort((a, b) => a - b);
+        });
+        state.preferredSupplierItems = items;
+    }
+
     function hydratePreferredPriceDraftsFromApi() {
         const drafts = {};
         (state.preferredSuppliers || []).forEach((s) => {
@@ -1575,21 +1693,20 @@
                     return null;
                 }
                 const drafts = state.preferredPriceDrafts[String(sid)] || {};
+                const itemIndices = getPreferredSupplierItemIndices(sid);
                 const prices = {};
-                state.items.forEach((_, idx) => {
+                const photos = {};
+                itemIndices.forEach((idx) => {
                     const val = drafts[idx];
                     if (val !== null && val !== undefined && String(val).trim() !== '') {
                         prices[idx] = String(val).trim();
                     }
-                });
-                const photos = {};
-                state.items.forEach((_, idx) => {
                     const url = getPreferredPhotoUrl(sid, idx);
                     if (url && !String(url).startsWith('blob:')) {
                         photos[idx] = url;
                     }
                 });
-                return { supplier_id: sid, prices, photos };
+                return { supplier_id: sid, prices, photos, item_indices: itemIndices };
             })
             .filter(Boolean);
     }
@@ -3232,6 +3349,32 @@
                     scheduleRequesterAutosave();
                 });
                 cvPreferredCards.addEventListener('click', (e) => {
+                    const addItemBtn = e.target.closest('.cv-pref-add-item-btn');
+                    if (addItemBtn) {
+                        const sid = Number(addItemBtn.getAttribute('data-pref-supplier-id') || '0');
+                        const card = addItemBtn.closest('.cv-pref-card');
+                        const select = card ? card.querySelector('.cv-pref-add-item-select') : null;
+                        const itemIndex = select ? Number(select.value) : NaN;
+                        if (!sid || Number.isNaN(itemIndex) || itemIndex < 0) {
+                            showToast('Select an item to add.', 'error');
+                            return;
+                        }
+                        if (addPreferredSupplierItem(sid, itemIndex)) {
+                            renderPreferredTable();
+                        }
+                        return;
+                    }
+                    const removeItemBtn = e.target.closest('.cv-pref-remove-item-btn');
+                    if (removeItemBtn) {
+                        const sid = Number(removeItemBtn.getAttribute('data-pref-supplier-id') || '0');
+                        const itemIndex = Number(removeItemBtn.getAttribute('data-cv-item-index') || '0');
+                        if (!sid || Number.isNaN(itemIndex)) {
+                            return;
+                        }
+                        removePreferredSupplierItem(sid, itemIndex);
+                        renderPreferredTable();
+                        return;
+                    }
                     const removePhotoBtn = e.target.closest('.cv-pref-photo-remove');
                     if (!removePhotoBtn) return;
                     const sid = Number(removePhotoBtn.getAttribute('data-pref-supplier-id') || '0');
