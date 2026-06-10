@@ -27,7 +27,7 @@ $initials = strtoupper(substr($initialSeed, 0, 1));
   <title>Audit Trail - WLC-SMART</title>
   <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
   <link rel="stylesheet" href="../assets/css/loading.css">
-  <link rel="stylesheet" href="../assets/css/audit_trail.css?v=wlc38">
+  <link rel="stylesheet" href="../assets/css/audit_trail.css?v=wlc47">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
@@ -122,8 +122,8 @@ if ($roleLc === 'comptroller') {
   </div>
 
   <div class="audit-trail-data-card">
-      <div class="filter-section">
-        <div class="filter-controls audit-trail-filter-bar">
+    <div class="filter-section">
+      <div class="filter-controls audit-trail-filter-bar">
           <div class="view-toggle-stack">
             <button type="button" id="showActivityBtn" class="view-toggle active"><i class="fas fa-list"></i> Activity History</button>
             <button type="button" id="showLoggedBtn" class="view-toggle"><i class="fas fa-history"></i> Logged History</button>
@@ -149,10 +149,10 @@ if ($roleLc === 'comptroller') {
           </div>
           <button type="button" id="clearDateBtn" class="clear-filter-btn"><i class="fas fa-rotate-right"></i> Clear Dates</button>
           </div>
-        </div>
       </div>
+    </div>
 
-      <div class="audit-trail-table-body">
+    <div class="audit-trail-table-body">
         <div class="audit-trail-table-panel" id="loggedPanel" style="display:none;">
           <div class="table-container">
             <div class="table-wrapper">
@@ -209,8 +209,8 @@ if ($roleLc === 'comptroller') {
             <button type="button" class="pagination-btn pagination-btn--next" id="nextActivityBtn">Next <i class="fas fa-chevron-right"></i></button>
           </div>
         </div>
-      </div>
     </div>
+  </div>
 </main>
 
 <button class="mobile-menu-btn" id="mobileMenuBtn" style="display:none;"><i class="fas fa-bars"></i></button>
