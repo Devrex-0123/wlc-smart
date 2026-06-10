@@ -2,9 +2,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==================== DOM Elements ====================
     const supplierTableBody = document.getElementById('supplierTableBody');
     
-    // Search and sort inputs
     const supplierSearchInput = document.getElementById('supplierSearchInput');
-    const supplierSortDropdown = document.getElementById('supplierSortDropdown');
+    const prevSupplierBtn = document.getElementById('prevSupplierBtn');
+    const nextSupplierBtn = document.getElementById('nextSupplierBtn');
+    const supplierPageInfo = document.getElementById('supplierPageInfo');
+
+    const ITEMS_PER_PAGE = 10;
     
     // Modal elements
     const supplierModal = document.getElementById('supplierModal');
@@ -26,16 +29,48 @@ document.addEventListener('DOMContentLoaded', () => {
     const tinInput = document.getElementById('supplier_tin');
     const statusInput = document.getElementById('supplier_status');
     const supplierImageInput = document.getElementById('supplier_image');
-    const imagePreview = document.getElementById('imagePreview');
+    const supplierImagePreview = document.getElementById('supplierImagePreview');
+    const supplierImagePlaceholder = document.getElementById('supplierImagePlaceholder');
     
     // Delete modal
     const deleteConfirmModal = document.getElementById('deleteConfirmModal');
+    const deleteConfirmBackdrop = document.getElementById('deleteConfirmBackdrop');
+    const closeDeleteModal = document.getElementById('closeDeleteModal');
     const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
     const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
     const deleteSupplierName = document.getElementById('deleteSupplierName');
+
+    const supplierSuccessModal = document.getElementById('supplierSuccessModal');
+    const supplierSuccessBackdrop = document.getElementById('supplierSuccessBackdrop');
+    const supplierSuccessTitle = document.getElementById('supplierSuccessTitle');
+    const supplierSuccessMessage = document.getElementById('supplierSuccessMessage');
+    const supplierSuccessOk = document.getElementById('supplierSuccessOk');
     
     let currentDeleteId = null;
     let allSuppliers = [];
+    let filteredSuppliers = [];
+    let currentPage = 1;
+
+    // ==================== SUCCESS MODAL ====================
+    function openSupplierSuccessModal(title, message) {
+        if (supplierSuccessTitle) {
+            supplierSuccessTitle.textContent = title;
+        }
+        if (supplierSuccessMessage) {
+            supplierSuccessMessage.textContent = message;
+        }
+        supplierSuccessModal?.classList.add('is-open');
+        supplierSuccessModal?.setAttribute('aria-hidden', 'false');
+        supplierSuccessOk?.focus();
+    }
+
+    function closeSupplierSuccessModal() {
+        supplierSuccessModal?.classList.remove('is-open');
+        supplierSuccessModal?.setAttribute('aria-hidden', 'true');
+    }
+
+    supplierSuccessBackdrop?.addEventListener('click', closeSupplierSuccessModal);
+    supplierSuccessOk?.addEventListener('click', closeSupplierSuccessModal);
 
     // ==================== TOAST NOTIFICATION ====================
     function showToast(msg, type = 'success') {
@@ -54,6 +89,58 @@ document.addEventListener('DOMContentLoaded', () => {
             parts.push(digits.slice(i, i + 3));
         }
         return parts.join('-');
+    }
+
+    function normalizePhoneInputValue(raw) {
+        return String(raw || '').replace(/\D/g, '').slice(0, 11);
+    }
+
+    function isValidSupplierEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function validateSupplierForm() {
+        const supplierName = supplierNameInput.value.trim();
+        const contactPerson = contactPersonInput.value.trim();
+        const email = emailInput.value.trim();
+        const phone = normalizePhoneInputValue(phoneNumberInput.value);
+        const address = addressInput.value.trim();
+        const city = cityInput.value.trim();
+        const country = countryInput.value.trim();
+        const status = statusInput.value.trim();
+
+        if (!supplierName) {
+            return 'Supplier name is required';
+        }
+        if (!status || !['Active', 'Inactive'].includes(status)) {
+            return 'Status is required';
+        }
+        if (!contactPerson) {
+            return 'Contact person is required';
+        }
+        if (!email) {
+            return 'Email is required';
+        }
+        if (!isValidSupplierEmail(email)) {
+            return 'Enter a valid email address (e.g. supplier@example.com)';
+        }
+        if (!phone) {
+            return 'Phone number is required';
+        }
+        if (!/^\d{11}$/.test(phone)) {
+            return 'Phone number must contain exactly 11 digits (e.g. 09123456789)';
+        }
+        if (!address) {
+            return 'Street address is required';
+        }
+        if (!city) {
+            return 'City is required';
+        }
+        if (!country) {
+            return 'Country is required';
+        }
+
+        return null;
     }
 
     // ==================== ESCAPE HTML ====================
@@ -82,7 +169,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.success) {
                 allSuppliers = data.suppliers;
-                renderSuppliers(allSuppliers);
+                filteredSuppliers = allSuppliers;
+                currentPage = 1;
+                applySupplierView();
             } else {
                 supplierTableBody.innerHTML = '<tr><td colspan="9" class="loading-cell">Failed to load suppliers</td></tr>';
                 showToast('Failed to load suppliers', 'error');
@@ -94,23 +183,59 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ==================== RENDER SUPPLIERS ====================
-    function renderSuppliers(suppliers) {
-        supplierTableBody.innerHTML = '';
-        
-        if (suppliers.length === 0) {
-            supplierTableBody.innerHTML = '<tr><td colspan="9" class="loading-cell">No supplier added yet</td></tr>';
+    function updatePaginationUI(totalRecords, totalPages) {
+        if (!supplierPageInfo || !prevSupplierBtn || !nextSupplierBtn) return;
+
+        if (totalRecords === 0) {
+            supplierPageInfo.textContent = 'Page 1 of 1 (0 records)';
+            prevSupplierBtn.disabled = true;
+            nextSupplierBtn.disabled = true;
             return;
         }
 
+        supplierPageInfo.textContent = `Page ${currentPage} of ${totalPages} (${totalRecords} records)`;
+        prevSupplierBtn.disabled = currentPage <= 1;
+        nextSupplierBtn.disabled = currentPage >= totalPages;
+    }
+
+    function applySupplierView() {
+        const totalRecords = filteredSuppliers.length;
+        const totalPages = Math.max(1, Math.ceil(totalRecords / ITEMS_PER_PAGE));
+        currentPage = Math.min(Math.max(currentPage, 1), totalPages);
+
+        if (totalRecords === 0) {
+            supplierTableBody.innerHTML = '<tr><td colspan="9" class="loading-cell">No supplier added yet</td></tr>';
+            updatePaginationUI(0, 1);
+            return;
+        }
+
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        const pageItems = filteredSuppliers.slice(start, start + ITEMS_PER_PAGE);
+        renderSuppliers(pageItems, start);
+        updatePaginationUI(totalRecords, totalPages);
+    }
+
+    // ==================== RENDER SUPPLIERS ====================
+    function renderSuppliers(suppliers, recordOffset = 0) {
+        supplierTableBody.innerHTML = '';
+
         suppliers.forEach((supplier, index) => {
             const tr = document.createElement('tr');
+            const recordNum = recordOffset + index + 1;
+            const stripeMod = recordNum % 3;
+
+            if (stripeMod === 2) {
+                tr.classList.add('supplier-row-stripe--alt');
+            } else if (stripeMod === 0) {
+                tr.classList.add('supplier-row-stripe--green');
+            }
+
             const imageHtml = supplier.supplier_image 
                 ? `<img src="../${escapeHtml(supplier.supplier_image)}" alt="${escapeHtml(supplier.supplier_name)}" class="table-image">`
                 : '<div class="table-image-placeholder"><i class="fas fa-image"></i></div>';
             
             tr.innerHTML = `
-                <td>${index + 1}</td>
+                <td>${recordOffset + index + 1}</td>
                 <td class="col-image">
                     <div class="image-cell">
                         ${imageHtml}
@@ -142,70 +267,72 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.action-btn.delete').forEach(btn => {
             btn.addEventListener('click', () => showDeleteConfirm(btn.dataset.id));
         });
+
+        const spacerCount = ITEMS_PER_PAGE - suppliers.length;
+        for (let i = 0; i < spacerCount; i++) {
+            const spacerRow = document.createElement('tr');
+            spacerRow.className = 'supplier-row-spacer';
+            spacerRow.setAttribute('aria-hidden', 'true');
+            spacerRow.innerHTML = '<td colspan="9"></td>';
+            supplierTableBody.appendChild(spacerRow);
+        }
     }
 
-    // ==================== SEARCH AND SORT FUNCTIONALITY ====================
+    // ==================== SEARCH FUNCTIONALITY ====================
     function searchAndFilterSuppliers() {
         const searchTerm = (supplierSearchInput.value || '').toLowerCase().trim();
-        const sortOption = supplierSortDropdown.value;
 
-        // If both search and sort are empty, show all suppliers
-        if (!searchTerm && !sortOption) {
-            renderSuppliers(allSuppliers);
-            return;
+        if (!searchTerm) {
+            filteredSuppliers = allSuppliers;
+        } else {
+            filteredSuppliers = allSuppliers.filter(supplier => {
+                const name = (supplier.supplier_name || '').toLowerCase();
+                const email = (supplier.email || '').toLowerCase();
+                const city = (supplier.city || '').toLowerCase();
+
+                return name.includes(searchTerm) || email.includes(searchTerm) || city.includes(searchTerm);
+            });
         }
 
-        // Filter by search term
-        let filteredSuppliers = allSuppliers.filter(supplier => {
-            if (!searchTerm) return true;
-            const name = (supplier.supplier_name || '').toLowerCase();
-            const email = (supplier.email || '').toLowerCase();
-            const city = (supplier.city || '').toLowerCase();
-            
-            return name.includes(searchTerm) || email.includes(searchTerm) || city.includes(searchTerm);
-        });
-
-        // Apply sorting
-        if (sortOption) {
-            filteredSuppliers = sortSuppliers(filteredSuppliers, sortOption);
-        }
-
-        renderSuppliers(filteredSuppliers);
+        currentPage = 1;
+        applySupplierView();
     }
 
-    function sortSuppliers(suppliers, sortOption) {
-        const supCopy = [...suppliers];
-
-        switch(sortOption) {
-            case 'name-asc':
-                return supCopy.sort((a, b) => (a.supplier_name || '').localeCompare(b.supplier_name || ''));
-            case 'name-desc':
-                return supCopy.sort((a, b) => (b.supplier_name || '').localeCompare(a.supplier_name || ''));
-            case 'email-asc':
-                return supCopy.sort((a, b) => (a.email || '').localeCompare(b.email || ''));
-            case 'email-desc':
-                return supCopy.sort((a, b) => (b.email || '').localeCompare(a.email || ''));
-            case 'city-asc':
-                return supCopy.sort((a, b) => (a.city || '').localeCompare(b.city || ''));
-            case 'city-desc':
-                return supCopy.sort((a, b) => (b.city || '').localeCompare(a.city || ''));
-            case 'status-asc':
-                return supCopy.sort((a, b) => (a.status || '').localeCompare(b.status || ''));
-            case 'status-desc':
-                return supCopy.sort((a, b) => (b.status || '').localeCompare(a.status || ''));
-            default:
-                return supCopy;
-        }
-    }
-
-    // ==================== EVENT LISTENERS FOR SEARCH AND SORT ====================
     supplierSearchInput?.addEventListener('input', searchAndFilterSuppliers);
-    supplierSortDropdown?.addEventListener('change', searchAndFilterSuppliers);
+
+    prevSupplierBtn?.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage -= 1;
+            applySupplierView();
+        }
+    });
+
+    nextSupplierBtn?.addEventListener('click', () => {
+        const totalPages = Math.max(1, Math.ceil(filteredSuppliers.length / ITEMS_PER_PAGE));
+        if (currentPage < totalPages) {
+            currentPage += 1;
+            applySupplierView();
+        }
+    });
+
+    function setSupplierImagePreview(src) {
+        if (!supplierImagePreview || !supplierImagePlaceholder) return;
+
+        if (src) {
+            supplierImagePreview.src = src;
+            supplierImagePreview.hidden = false;
+            supplierImagePlaceholder.hidden = true;
+        } else {
+            supplierImagePreview.removeAttribute('src');
+            supplierImagePreview.hidden = true;
+            supplierImagePlaceholder.hidden = false;
+        }
+    }
 
     // ==================== MODAL HANDLING ====================
     addSupplierBtn.addEventListener('click', () => {
         resetForm();
-        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-plus-circle"></i> Add Supplier';
+        document.getElementById('modalTitle').textContent = 'Add Supplier';
         supplierModal.classList.add('show');
     });
 
@@ -221,16 +348,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === supplierModal) {
             supplierModal.classList.remove('show');
         }
-        if (e.target === deleteConfirmModal) {
-            deleteConfirmModal.classList.remove('show');
-        }
     });
+
+    function closeDeleteConfirmModal() {
+        deleteConfirmModal?.classList.remove('is-open');
+        deleteConfirmModal?.setAttribute('aria-hidden', 'true');
+        currentDeleteId = null;
+        if (confirmDeleteBtn) {
+            confirmDeleteBtn.disabled = false;
+        }
+    }
 
     // ==================== FORM RESET ====================
     function resetForm() {
         supplierForm.reset();
         supplierIdInput.value = '';
-        imagePreview.innerHTML = '<i class="fas fa-image"></i><p>No image selected</p>';
+        setSupplierImagePreview(null);
     }
 
     tinInput?.addEventListener('input', () => {
@@ -240,16 +373,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    phoneNumberInput?.addEventListener('input', () => {
+        const normalized = normalizePhoneInputValue(phoneNumberInput.value);
+        if (phoneNumberInput.value !== normalized) {
+            phoneNumberInput.value = normalized;
+        }
+    });
+
     // ==================== IMAGE PREVIEW ====================
     supplierImageInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                imagePreview.innerHTML = `<img src="${event.target.result}" alt="Preview">`;
-            };
-            reader.readAsDataURL(file);
+        if (!file) {
+            setSupplierImagePreview(null);
+            return;
         }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            setSupplierImagePreview(event.target.result);
+        };
+        reader.readAsDataURL(file);
     });
 
     // ==================== ADD/EDIT SUPPLIER ====================
@@ -257,14 +400,15 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         
         const isEdit = !!supplierIdInput.value;
-        
-        // Validate required fields
-        if (!supplierNameInput.value.trim()) {
-            showToast('Supplier name is required', 'error');
+
+        const validationError = validateSupplierForm();
+        if (validationError) {
+            showToast(validationError, 'error');
             return;
         }
 
         const form = new FormData(supplierForm);
+        form.set('phone_number', normalizePhoneInputValue(phoneNumberInput.value));
         form.append('action', isEdit ? 'edit_supplier' : 'add_supplier');
         if (isEdit) {
             form.append('supplier_id', supplierIdInput.value);
@@ -280,9 +424,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
 
             if (data.success) {
-                showToast(data.message, 'success');
                 supplierModal.classList.remove('show');
                 loadSuppliers();
+                openSupplierSuccessModal(
+                    isEdit ? 'Supplier Updated' : 'Supplier Added',
+                    data.message || (isEdit ? 'Supplier updated successfully.' : 'Supplier added successfully.')
+                );
             } else {
                 showToast(data.message, 'error');
             }
@@ -314,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 supplierIdInput.value = supplier.supplier_id;
                 supplierNameInput.value = supplier.supplier_name || '';
                 contactPersonInput.value = supplier.contact_person || '';
-                phoneNumberInput.value = supplier.phone_number || '';
+                phoneNumberInput.value = normalizePhoneInputValue(supplier.phone_number || '');
                 emailInput.value = supplier.email || '';
                 addressInput.value = supplier.address || '';
                 cityInput.value = supplier.city || '';
@@ -325,14 +472,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 statusInput.value = supplier.status || 'Active';
 
-                // Handle image preview
-                if (supplier.supplier_image) {
-                    imagePreview.innerHTML = `<img src="../${escapeHtml(supplier.supplier_image)}" alt="Preview">`;
-                } else {
-                    imagePreview.innerHTML = '<i class="fas fa-image"></i><p>No image selected</p>';
-                }
+                setSupplierImagePreview(
+                    supplier.supplier_image ? `../${supplier.supplier_image}` : null
+                );
 
-                document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Supplier';
+                document.getElementById('modalTitle').textContent = 'Edit Supplier';
                 supplierModal.classList.add('show');
             } else {
                 showToast('Failed to load supplier', 'error');
@@ -346,21 +490,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==================== DELETE CONFIRMATION ====================
     function showDeleteConfirm(supplierId) {
         const supplier = allSuppliers.find(s => s.supplier_id == supplierId);
-        if (supplier) {
-            currentDeleteId = supplierId;
-            deleteSupplierName.textContent = escapeHtml(supplier.supplier_name);
-            deleteConfirmModal.classList.add('show');
-        }
+        if (!supplier) return;
+
+        currentDeleteId = supplierId;
+        deleteSupplierName.textContent = supplier.supplier_name || 'this supplier';
+        deleteConfirmModal?.classList.add('is-open');
+        deleteConfirmModal?.setAttribute('aria-hidden', 'false');
+        cancelDeleteBtn?.focus();
     }
 
-    cancelDeleteBtn.addEventListener('click', () => {
-        deleteConfirmModal.classList.remove('show');
-        currentDeleteId = null;
+    deleteConfirmBackdrop?.addEventListener('click', closeDeleteConfirmModal);
+    closeDeleteModal?.addEventListener('click', closeDeleteConfirmModal);
+    cancelDeleteBtn?.addEventListener('click', closeDeleteConfirmModal);
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && deleteConfirmModal?.classList.contains('is-open')) {
+            closeDeleteConfirmModal();
+        }
+        if (e.key === 'Escape' && supplierSuccessModal?.classList.contains('is-open')) {
+            closeSupplierSuccessModal();
+        }
     });
 
     // ==================== DELETE SUPPLIER ====================
-    confirmDeleteBtn.addEventListener('click', async () => {
+    confirmDeleteBtn?.addEventListener('click', async () => {
         if (!currentDeleteId) return;
+
+        confirmDeleteBtn.disabled = true;
 
         try {
             const form = new FormData();
@@ -376,16 +532,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
 
             if (data.success) {
-                showToast(data.message, 'success');
-                deleteConfirmModal.classList.remove('show');
-                currentDeleteId = null;
+                closeDeleteConfirmModal();
                 loadSuppliers();
+                openSupplierSuccessModal(
+                    'Supplier Deleted',
+                    data.message || 'Supplier deleted successfully.'
+                );
             } else {
                 showToast(data.message, 'error');
+                confirmDeleteBtn.disabled = false;
             }
         } catch (err) {
             console.error(err);
             showToast('Error deleting supplier', 'error');
+            confirmDeleteBtn.disabled = false;
         }
     });
 
