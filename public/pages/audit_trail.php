@@ -27,7 +27,7 @@ $initials = strtoupper(substr($initialSeed, 0, 1));
   <title>Audit Trail - WLC-SMART</title>
   <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
   <link rel="stylesheet" href="../assets/css/loading.css">
-  <link rel="stylesheet" href="../assets/css/audit_trail.css?v=wlc38">
+  <link rel="stylesheet" href="../assets/css/audit_trail.css?v=wlc40">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
