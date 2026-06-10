@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const nextSupplierBtn = document.getElementById('nextSupplierBtn');
     const supplierPageInfo = document.getElementById('supplierPageInfo');
 
-    const ITEMS_PER_PAGE = 8;
+    const ITEMS_PER_PAGE = 10;
     
     // Modal elements
     const supplierModal = document.getElementById('supplierModal');
@@ -221,6 +221,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         suppliers.forEach((supplier, index) => {
             const tr = document.createElement('tr');
+            const recordNum = recordOffset + index + 1;
+            const stripeMod = recordNum % 3;
+
+            if (stripeMod === 2) {
+                tr.classList.add('supplier-row-stripe--alt');
+            } else if (stripeMod === 0) {
+                tr.classList.add('supplier-row-stripe--green');
+            }
+
             const imageHtml = supplier.supplier_image 
                 ? `<img src="../${escapeHtml(supplier.supplier_image)}" alt="${escapeHtml(supplier.supplier_name)}" class="table-image">`
                 : '<div class="table-image-placeholder"><i class="fas fa-image"></i></div>';
@@ -258,6 +267,15 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.action-btn.delete').forEach(btn => {
             btn.addEventListener('click', () => showDeleteConfirm(btn.dataset.id));
         });
+
+        const spacerCount = ITEMS_PER_PAGE - suppliers.length;
+        for (let i = 0; i < spacerCount; i++) {
+            const spacerRow = document.createElement('tr');
+            spacerRow.className = 'supplier-row-spacer';
+            spacerRow.setAttribute('aria-hidden', 'true');
+            spacerRow.innerHTML = '<td colspan="9"></td>';
+            supplierTableBody.appendChild(spacerRow);
+        }
     }
 
     // ==================== SEARCH FUNCTIONALITY ====================

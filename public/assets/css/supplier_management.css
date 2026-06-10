@@ -49,8 +49,7 @@
 }
 
 .suppliers-list-card {
-    /* 8 rows + header + horizontal scrollbar — no extra gap below row 8 */
-    --supplier-table-height: 472px;
+    --supplier-data-row-height: 51px;
     background: #fff;
     border-radius: 16px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
@@ -174,9 +173,6 @@
     width: 100%;
     margin: 0;
     padding: 0;
-    min-height: var(--supplier-table-height);
-    height: var(--supplier-table-height);
-    max-height: var(--supplier-table-height);
 }
 
 .suppliers-list-card .table-wrapper {
@@ -187,10 +183,7 @@
     margin: 0;
     padding: 0;
     width: 100%;
-    flex: 1 1 auto;
-    min-height: 0;
-    height: 100%;
-    max-height: 100%;
+    flex: 0 0 auto;
     overflow-x: hidden;
     overflow-y: hidden;
     box-sizing: border-box;
@@ -229,18 +222,20 @@
     justify-content: center;
     align-items: center;
     flex-wrap: wrap;
-    gap: 1.35rem;
-    padding: 0.85rem 1.25rem;
+    gap: 1.15rem;
+    padding: 0.85rem 1.25rem 0.95rem;
     border-top: 1px solid #e2e8f0;
     background: #fff;
     flex-shrink: 0;
+    margin-top: 0;
+    min-height: 64px;
 }
 
 .suppliers-list-card .pagination-btn {
-    min-width: 108px;
-    height: 36px;
-    padding: 0 1.1rem;
-    font-size: 0.875rem;
+    min-width: 118px;
+    height: 42px;
+    padding: 0 1.25rem;
+    font-size: 0.9rem;
     font-weight: 600;
     border-radius: 8px;
     cursor: pointer;
@@ -288,12 +283,13 @@
 }
 
 .suppliers-list-card .page-info {
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     font-weight: 500;
     color: #334155;
     white-space: nowrap;
     text-align: center;
-    min-width: 190px;
+    min-width: 200px;
+    line-height: 1.4;
 }
 
 /* Supplier table header — solid green bar (Audit Trail style) */
@@ -305,8 +301,8 @@
     background: #106b44 !important;
     color: #ffffff;
     font-weight: 700;
-    font-size: 0.7rem;
-    padding: 0.5rem 0.6rem;
+    font-size: 0.72rem;
+    padding: 0.55rem 0.55rem;
     white-space: nowrap;
     text-align: center;
     text-transform: uppercase;
@@ -333,8 +329,8 @@
 }
 
 .supplier-management-container .table-wrapper thead th:nth-child(1) {
-    padding: 0.5rem 0.6rem;
-    font-size: 0.7rem;
+    padding: 0.55rem 0.2rem;
+    font-size: 0.72rem;
     color: #ffffff;
 }
 
@@ -488,6 +484,7 @@
 .supplier-management-container .table-container {
     animation: fadeInUp 0.6s ease;
     display: flex;
+    flex-direction: column;
     justify-content: flex-start;
     align-items: stretch;
     width: 100%;
@@ -525,10 +522,10 @@
 }
 
 .table-wrapper td {
-    padding: 0.3rem 0.35rem;
+    padding: 0.26rem 0.35rem;
     text-align: center;
-    border-bottom: 1px solid #e2e8f0;
-    font-size: 0.85rem;
+    border-bottom: none;
+    font-size: 0.84rem;
 }
 
 /* Row # — fixed narrow column so it never clips or squeezes the image */
@@ -537,8 +534,6 @@
     width: 2.0rem;
     min-width: 2.25rem;
     max-width: 2.75rem;
-    padding: 0.3rem 0.2rem;
-    font-size: 0.75rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     overflow: visible;
@@ -547,10 +542,14 @@
 }
 
 .table-wrapper thead th:nth-child(1) {
+    padding: 0.55rem 0.2rem;
+    font-size: 0.72rem;
     color: #ffffff;
 }
 
 .table-wrapper tbody td:nth-child(1) {
+    padding: 0.26rem 0.2rem;
+    font-size: 0.74rem;
     color: #475569;
 }
 
@@ -562,9 +561,9 @@
 
 /* Column widths (row # is column 1; image is column 2) */
 .col-image {
-    width: 52px;
-    min-width: 52px;
-    max-width: 52px;
+    width: 50px;
+    min-width: 50px;
+    max-width: 50px;
     text-align: center;
     vertical-align: middle;
 }
@@ -576,17 +575,38 @@
 .col-status { width: 8%; min-width: 3.5rem; text-align: center; }
 .col-action { width: 9%; min-width: 4.5rem; text-align: center; }
 
-.table-wrapper tbody tr {
-    transition: background-color 0.2s ease;
-}
-
-.table-wrapper tbody tr:hover {
-    background-color: #f8fafc;
-}
-
-.suppliers-list-card .table-wrapper tbody tr:last-child,
-.suppliers-list-card .table-wrapper tbody tr:last-child td {
+.suppliers-list-card .table-wrapper tbody tr {
     border-bottom: none;
+    background: #ffffff;
+    transition: background-color 0.15s ease;
+}
+
+.suppliers-list-card .table-wrapper tbody tr.supplier-row-stripe--alt {
+    background: #f8fafc;
+}
+
+.suppliers-list-card .table-wrapper tbody tr.supplier-row-stripe--green {
+    background: #f0fdf4;
+}
+
+.suppliers-list-card .table-wrapper tbody tr.supplier-row-spacer {
+    background: #ffffff;
+}
+
+.suppliers-list-card .table-wrapper tbody tr:not(.supplier-row-spacer):hover {
+    background: #ecfdf5 !important;
+    transform: none;
+}
+
+.suppliers-list-card .table-wrapper tbody tr.supplier-row-spacer td {
+    height: var(--supplier-data-row-height);
+    min-height: var(--supplier-data-row-height);
+    padding: 0;
+    border-bottom: none;
+    line-height: 0;
+    font-size: 0;
+    pointer-events: none;
+    user-select: none;
 }
 
 .col-name,
@@ -627,9 +647,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
     border-radius: 6px;
     background: #f8fafc;
     overflow: hidden;
@@ -645,7 +665,7 @@
 }
 
 .table-image-placeholder {
-    font-size: 1.1rem;
+    font-size: 1rem;
     color: #cbd5e1;
     display: flex;
     align-items: center;
@@ -655,13 +675,13 @@
 /* Modal */
 
 .action-btn {
-    padding: 0.28rem 0.45rem;
+    padding: 0.25rem 0.4rem;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     margin: 0 2px;
     transition: 0.25s ease;
-    font-size: 0.7rem;
+    font-size: 0.67rem;
     font-weight: 500;
     display: inline-flex;
     align-items: center;
@@ -1261,7 +1281,7 @@
 
 @media (max-width: 768px) {
     .suppliers-list-card {
-        --supplier-table-height: 472px;
+        --supplier-data-row-height: 48px;
     }
 
     .filter-section {
@@ -1345,7 +1365,7 @@
 
 @media (max-width: 480px) {
     .suppliers-list-card {
-        --supplier-table-height: 472px;
+        --supplier-data-row-height: 44px;
     }
 
     .col-image { width: 44px; min-width: 44px; max-width: 44px; }
