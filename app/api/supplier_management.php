@@ -52,9 +52,20 @@ try {
         $postal_code = trim($_POST['postal_code'] ?? '');
         $status = $_POST['status'] ?? 'Active';
         $tin = cwirmsNormalizeSupplierTin($_POST['tin'] ?? null);
+        $phone_number = cwirmsNormalizeSupplierPhone($phone_number);
 
-        if (!$supplier_name) {
-            echo json_encode(['success' => false, 'message' => 'Supplier name is required']);
+        $validationError = cwirmsValidateSupplierFormData([
+            'supplier_name' => $supplier_name,
+            'contact_person' => $contact_person,
+            'email' => $email,
+            'phone_number' => $phone_number,
+            'address' => $address,
+            'city' => $city,
+            'country' => $country,
+            'status' => $status,
+        ]);
+        if ($validationError !== null) {
+            echo json_encode(['success' => false, 'message' => $validationError]);
             exit;
         }
 
@@ -120,9 +131,25 @@ try {
         $postal_code = trim($_POST['postal_code'] ?? '');
         $status = $_POST['status'] ?? 'Active';
         $tin = cwirmsNormalizeSupplierTin($_POST['tin'] ?? null);
+        $phone_number = cwirmsNormalizeSupplierPhone($phone_number);
 
-        if (!$supplier_id || !$supplier_name) {
-            echo json_encode(['success' => false, 'message' => 'Invalid data']);
+        if (!$supplier_id) {
+            echo json_encode(['success' => false, 'message' => 'Invalid supplier ID']);
+            exit;
+        }
+
+        $validationError = cwirmsValidateSupplierFormData([
+            'supplier_name' => $supplier_name,
+            'contact_person' => $contact_person,
+            'email' => $email,
+            'phone_number' => $phone_number,
+            'address' => $address,
+            'city' => $city,
+            'country' => $country,
+            'status' => $status,
+        ]);
+        if ($validationError !== null) {
+            echo json_encode(['success' => false, 'message' => $validationError]);
             exit;
         }
 
