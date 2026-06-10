@@ -1,7 +1,6 @@
-const itemNameInput = document.getElementById('itemName');
-const itemQuantityInput = document.getElementById('itemQuantity');
 const itemNameSuggestions = document.getElementById('itemNameSuggestions');
-const addItemBtn = document.getElementById('addItemBtn');
+const requestedItemsBody = document.getElementById('requestedItemsBody');
+const rfAddItemBtn = document.getElementById('rfAddItemBtn');
 const addSupplierBtn = document.getElementById('addSupplierBtn');
 const supplierDropdown = document.getElementById('supplierDropdown');
 const supplierDropdownBtn = document.getElementById('supplierDropdownBtn');
@@ -9,15 +8,21 @@ const supplierDropdownList = document.getElementById('supplierDropdownList');
 const supplierSelectedText = document.getElementById('supplierSelectedText');
 const supplierDropdownPreview = document.getElementById('supplierDropdownPreview');
 const supplierTable = document.getElementById('supplierTable');
-const itemChips = document.getElementById('itemChips');
 const submitRequisitionBtn = document.getElementById('submitRequisitionBtn');
+const rfFormFooterBar = document.getElementById('rfFormFooterBar');
+
+function setSubmitRequisitionBtnLabel(label) {
+    if (!submitRequisitionBtn) {
+        return;
+    }
+    submitRequisitionBtn.innerHTML = `<i class="fas fa-paper-plane" aria-hidden="true"></i> ${label}`;
+}
 const formToast = document.getElementById('formToast');
 const officeSelect = document.getElementById('officeSelect');
 const facilitySelect = document.getElementById('facilitySelect');
 const requestDateInput = document.getElementById('requestDate');
 const requestMessageInput = document.getElementById('requestMessage');
 const requestPurposeInput = document.getElementById('requestPurpose');
-const itemUnitTypeInput = document.getElementById('itemUnitType');
 const requesterNameInput = document.getElementById('requesterName');
 const facultyRoleInput = document.getElementById('facultyRole');
 const canvasSection = document.getElementById('canvasSection');
@@ -71,11 +76,28 @@ function normalizeSupplierPrices(prices) {
     return out;
 }
 
+const RF_DEFAULT_ITEM_ROWS = 4;
+
+function createEmptyRequestedItem() {
+    return {
+        item_id: null,
+        name: '',
+        brand: '',
+        category: '',
+        quantity: 1,
+        unit_type: 'piece',
+    };
+}
+
+function createDefaultRequestedItems(count = RF_DEFAULT_ITEM_ROWS) {
+    return Array.from({ length: count }, () => createEmptyRequestedItem());
+}
+
 const state = {
     availableItems: [],
     availableSuppliers: [],
     facilities: [],
-    requestedItems: [],
+    requestedItems: createDefaultRequestedItems(),
     selectedSuppliers: [],
     selectedSupplierId: null,
     defaultOfficeId: '',
@@ -1318,12 +1340,10 @@ function applyViewOnlyMode() {
     if (facultyRoleInput) {
         facultyRoleInput.disabled = true;
     }
-    itemNameInput.disabled = true;
-    itemQuantityInput.disabled = true;
-    if (itemUnitTypeInput) {
-        itemUnitTypeInput.disabled = true;
+    if (rfAddItemBtn) {
+        rfAddItemBtn.style.display = 'none';
     }
-    addItemBtn.style.display = 'none';
+    renderItems();
     if (formPageConfig.isCanvasserView) {
         state.canvasserMatrixLocked = false;
         if (addSupplierBtn) {
@@ -1340,7 +1360,12 @@ function applyViewOnlyMode() {
             supplierDropdownBtn.disabled = true;
         }
     }
-    submitRequisitionBtn.style.display = 'none';
+    if (submitRequisitionBtn) {
+        submitRequisitionBtn.style.display = 'none';
+    }
+    if (rfFormFooterBar) {
+        rfFormFooterBar.style.display = 'none';
+    }
 }
 
 function showToast(message, type = 'success') {
@@ -1396,8 +1421,6 @@ function showConfirmModal(message) {
 }
 
 function resetFormToDefault() {
-    itemNameInput.value = '';
-    itemQuantityInput.value = '1';
     setSupplierPickerHighlight(null);
     if (supplierDropdown) {
         supplierDropdown.classList.remove('open');
@@ -1408,7 +1431,7 @@ function resetFormToDefault() {
     }
     requestDateInput.value = state.defaultDate;
 
-    state.requestedItems = [];
+    state.requestedItems = createDefaultRequestedItems();
     state.selectedSuppliers = [];
     officeSelect.value = state.defaultOfficeId;
     renderFacilitiesByOffice();
@@ -1420,33 +1443,147 @@ function resetFormToDefault() {
 }
 
 function fillDatalist(element, values) {
+    if (!element) {
+        return;
+    }
     const unique = Array.from(new Set(values.filter(Boolean)));
-    element.innerHTML = unique.map((value) => `<option value="${value}"></option>`).join('');
+    element.innerHTML = unique.map((value) => `<option value="${escapeHtml(value)}"></option>`).join('');
+}
+
+function normalizeRequestedItem(raw = {}) {
+    return {
+        item_id: raw.item_id != null ? Number(raw.item_id) : null,
+        name: String(raw.name || ''),
+        brand: String(raw.brand || ''),
+        category: String(raw.category || ''),
+        quantity: Math.max(1, Number(raw.quantity) || 1),
+        unit_type: String(raw.unit_type || 'piece'),
+    };
+}
+
+function serializeRequestedItemsForApi() {
+    return state.requestedItems
+        .map((item) => normalizeRequestedItem(item))
+        .filter((item) => item.name.trim() !== '')
+        .map((item) => ({
+            item_id: item.item_id,
+            name: item.name.trim(),
+            brand: item.brand,
+            category: item.category,
+            quantity: item.quantity,
+            unit_type: item.unit_type,
+        }));
+}
+
+function buildUnitSelect(index, selectedValue, disabled) {
+    const current = String(selectedValue || 'piece');
+    const units = [
+        { value: 'piece', label: 'Piece' },
+        { value: 'unit', label: 'Unit' },
+        { value: 'set', label: 'Set' },
+    ];
+    const options = units
+        .map((unit) => {
+            const selected = unit.value === current ? ' selected' : '';
+            return `<option value="${unit.value}"${selected}>${unit.label}</option>`;
+        })
+        .join('');
+    return `<select class="rf-item-field rf-item-field--unit" data-item-field="unit_type" data-item-index="${index}"${disabled ? ' disabled' : ''}>${options}</select>`;
 }
 
 function renderItems() {
-    if (state.requestedItems.length === 0) {
-        itemChips.innerHTML = '<p class="item-chips-empty">No requested items yet.</p>';
+    if (!requestedItemsBody) {
         return;
     }
 
-    itemChips.innerHTML = state.requestedItems
-        .map((item, index) => {
-            const removeBtn = state.viewOnly
-                ? ''
-                : `<button type="button" class="remove-item-btn" data-item-index="${index}" title="Remove item">
-                    <i class="fas fa-times"></i>
-                </button>`;
-            return `
-            <div class="item-chip">
-                <div class="item-chip-number">Item ${index + 1}</div>
-                <div class="item-chip-name">${escapeHtml(item.name)}</div>
-                <div class="item-chip-qty">Qty: ${escapeHtml(String(item.quantity))} ${escapeHtml(String(item.unit_type || 'unit'))}</div>
-                ${removeBtn}
-            </div>
+    if (state.requestedItems.length === 0) {
+        requestedItemsBody.innerHTML = `
+            <div class="rf-items-row rf-items-row--empty">No requested items yet.</div>
         `;
+        return;
+    }
+
+    requestedItemsBody.innerHTML = state.requestedItems
+        .map((item, index) => {
+            const normalized = normalizeRequestedItem(item);
+            const disabled = state.viewOnly;
+
+            if (disabled) {
+                return `
+                <div class="rf-items-row">
+                    <span class="rf-items-row__index">${index + 1}</span>
+                    <span class="rf-items-row__desc-text">${escapeHtml(normalized.name)}</span>
+                    <div class="rf-items-row__controls">
+                        <span class="rf-items-row__unit">${escapeHtml(normalized.unit_type)}</span>
+                        <span class="rf-items-row__qty">${escapeHtml(String(normalized.quantity))}</span>
+                    </div>
+                </div>
+                `;
+            }
+
+            return `
+            <div class="rf-items-row">
+                <span class="rf-items-row__index">${index + 1}</span>
+                <input type="text" class="rf-item-field rf-items-row__desc" data-item-field="name" data-item-index="${index}"
+                    value="${escapeHtml(normalized.name)}" list="itemNameSuggestions" placeholder="e.g. Whiteboard marker" autocomplete="off">
+                <div class="rf-items-row__controls">
+                    ${buildUnitSelect(index, normalized.unit_type, false)}
+                    <input type="number" class="rf-item-field rf-item-field--qty" data-item-field="quantity" data-item-index="${index}"
+                        min="1" step="1" value="${escapeHtml(String(normalized.quantity))}">
+                    <button type="button" class="rf-item-remove-btn" data-item-index="${index}" title="Remove item" aria-label="Remove item">
+                        <i class="fas fa-trash-can" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+            `;
         })
         .join('');
+}
+
+function addRequestedItemRow() {
+    state.requestedItems.push(normalizeRequestedItem(createEmptyRequestedItem()));
+    state.hasUnsavedChanges = true;
+    renderItems();
+    renderSupplierTable();
+
+    const lastIndex = state.requestedItems.length - 1;
+    const nameInput = requestedItemsBody?.querySelector(`input[data-item-field="name"][data-item-index="${lastIndex}"]`);
+    if (nameInput) {
+        nameInput.focus();
+    }
+}
+
+function syncRequestedItemFromField(index, field, rawValue) {
+    if (!state.requestedItems[index]) {
+        return;
+    }
+    const item = normalizeRequestedItem(state.requestedItems[index]);
+
+    if (field === 'name') {
+        const name = String(rawValue || '').trim();
+        item.name = name;
+        const matchedItem = state.availableItems.find(
+            (catalogItem) => catalogItem.item_name.toLowerCase() === name.toLowerCase()
+        );
+        if (matchedItem) {
+            item.item_id = Number(matchedItem.item_id) || null;
+            if (!item.category && matchedItem.category) {
+                item.category = String(matchedItem.category);
+            }
+            if (!item.brand && matchedItem.brand) {
+                item.brand = String(matchedItem.brand);
+            }
+        } else if (!name) {
+            item.item_id = null;
+        }
+    } else if (field === 'unit_type') {
+        item.unit_type = String(rawValue || 'unit');
+    } else if (field === 'quantity') {
+        item.quantity = Math.max(1, Number(rawValue) || 1);
+    }
+
+    state.requestedItems[index] = item;
+    state.hasUnsavedChanges = true;
 }
 
 function getSupplierImageUrl(supplierImage) {
@@ -1850,12 +1987,7 @@ async function loadRequestForEdit(requestId) {
         requestPurposeInput.value = data.purpose || '';
     }
 
-    state.requestedItems = asObjectArray(data.items).map((it) => ({
-        item_id: it.item_id != null ? Number(it.item_id) : null,
-        name: it.name || '',
-        quantity: Math.max(1, Number(it.quantity || 1)),
-        unit_type: String(it.unit_type || 'unit')
-    }));
+    state.requestedItems = asObjectArray(data.items).map((it) => normalizeRequestedItem(it));
 
     state.selectedSuppliers = asObjectArray(data.suppliers).map((s) => {
         const full = state.availableSuppliers.find((x) => Number(x.supplier_id) === Number(s.supplier_id));
@@ -1872,7 +2004,7 @@ async function loadRequestForEdit(requestId) {
     if (formTitle) {
         formTitle.textContent = 'REQUISITION FORM';
     }
-    submitRequisitionBtn.textContent = 'Update & Submit →';
+    setSubmitRequisitionBtnLabel('Update & Submit Request');
 
     state.requisitionStatus = String((data.approval && data.approval.requisition_status) || 'pending').trim().toLowerCase();
     applyApprovalFromPayload({
@@ -1934,12 +2066,7 @@ async function loadRequestForView(requestId) {
         facultyRoleInput.value = data.requester_role;
     }
 
-    state.requestedItems = asObjectArray(data.items).map((it) => ({
-        item_id: it.item_id != null ? Number(it.item_id) : null,
-        name: it.name || '',
-        quantity: Math.max(1, Number(it.quantity || 1)),
-        unit_type: String(it.unit_type || 'unit'),
-    }));
+    state.requestedItems = asObjectArray(data.items).map((it) => normalizeRequestedItem(it));
 
     state.selectedSuppliers = asObjectArray(data.suppliers).map((s) => {
         const full = state.availableSuppliers.find((x) => Number(x.supplier_id) === Number(s.supplier_id));
@@ -2002,40 +2129,84 @@ officeSelect.addEventListener('change', () => {
     }
 });
 
-addItemBtn.addEventListener('click', (event) => {
-    event.preventDefault();
-    const name = itemNameInput.value.trim();
-    const quantity = Math.max(1, Number(itemQuantityInput.value || 1));
-    const unitType = String((itemUnitTypeInput && itemUnitTypeInput.value) || 'unit');
-
-    if (!name) {
-        showToast('Please enter item name.', 'error');
-        return;
-    }
-
-    const matchedItem = state.availableItems.find(
-        (item) =>
-            item.item_name.toLowerCase() === name.toLowerCase()
-    );
-
-    state.requestedItems.push({
-        item_id: matchedItem ? Number(matchedItem.item_id) : null,
-        name,
-        quantity,
-        unit_type: unitType
+if (rfAddItemBtn) {
+    rfAddItemBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (state.viewOnly) {
+            return;
+        }
+        addRequestedItemRow();
     });
-    state.hasUnsavedChanges = true;
+}
 
-    itemNameInput.value = '';
-    itemQuantityInput.value = '1';
-    if (itemUnitTypeInput) {
-        itemUnitTypeInput.value = 'unit';
-    }
+if (requestedItemsBody) {
+    requestedItemsBody.addEventListener('input', (event) => {
+        const field = event.target.closest('.rf-item-field');
+        if (!field || state.viewOnly) {
+            return;
+        }
+        const index = Number(field.dataset.itemIndex);
+        const fieldName = field.dataset.itemField;
+        if (Number.isNaN(index) || !fieldName) {
+            return;
+        }
+        if (fieldName === 'name') {
+            if (state.requestedItems[index]) {
+                state.requestedItems[index].name = String(field.value || '');
+                state.hasUnsavedChanges = true;
+            }
+            return;
+        }
+        syncRequestedItemFromField(index, fieldName, field.value);
+        if (fieldName === 'quantity') {
+            renderSupplierTable();
+        }
+    });
 
-    renderItems();
-    renderSupplierTable();
-    showToast('Item added.');
-});
+    requestedItemsBody.addEventListener('change', (event) => {
+        const field = event.target.closest('.rf-item-field');
+        if (!field || state.viewOnly) {
+            return;
+        }
+        const index = Number(field.dataset.itemIndex);
+        const fieldName = field.dataset.itemField;
+        if (Number.isNaN(index) || !fieldName) {
+            return;
+        }
+        const previousItem = normalizeRequestedItem(state.requestedItems[index] || {});
+        syncRequestedItemFromField(index, fieldName, field.value);
+        if (fieldName === 'name') {
+            const updatedItem = normalizeRequestedItem(state.requestedItems[index] || {});
+            if (updatedItem.item_id !== previousItem.item_id) {
+                renderItems();
+                renderSupplierTable();
+                return;
+            }
+        }
+        if (fieldName === 'unit_type') {
+            renderSupplierTable();
+        }
+    });
+
+    requestedItemsBody.addEventListener('click', async (event) => {
+        const removeBtn = event.target.closest('.rf-item-remove-btn');
+        if (!removeBtn || state.viewOnly) {
+            return;
+        }
+        const itemIndex = Number(removeBtn.dataset.itemIndex);
+        if (Number.isNaN(itemIndex)) {
+            return;
+        }
+        const confirmed = await showConfirmModal('Remove this item from the request?');
+        if (!confirmed) {
+            return;
+        }
+        removeItemAt(itemIndex);
+        renderItems();
+        renderSupplierTable();
+        showToast('Item removed.');
+    });
+}
 
 if (addSupplierBtn) {
     addSupplierBtn.addEventListener('click', (event) => {
@@ -2069,26 +2240,6 @@ if (addSupplierBtn) {
         showToast('Supplier added.');
     });
 }
-
-itemChips.addEventListener('click', async (event) => {
-    const removeBtn = event.target.closest('.remove-item-btn');
-    if (!removeBtn) {
-        return;
-    }
-    const itemIndex = Number(removeBtn.dataset.itemIndex);
-    if (Number.isNaN(itemIndex)) {
-        return;
-    }
-    const confirmed = await showConfirmModal('Remove this item from the request?');
-    if (!confirmed) {
-        return;
-    }
-    removeItemAt(itemIndex);
-    state.hasUnsavedChanges = true;
-    renderItems();
-    renderSupplierTable();
-    showToast('Item removed.');
-});
 
 if (supplierDropdownBtn && supplierDropdown) {
     supplierDropdownBtn.addEventListener('click', () => {
@@ -2192,8 +2343,9 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
         showToast('Please set office, location, and date.', 'error');
         return;
     }
-    if (state.requestedItems.length === 0) {
-        showToast('Please add at least one requested item.', 'error');
+    const itemsToSubmit = serializeRequestedItemsForApi();
+    if (itemsToSubmit.length === 0) {
+        showToast('Please add at least one requested item with a description.', 'error');
         return;
     }
     if (!requestPurposeInput || !requestPurposeInput.value.trim()) {
@@ -2222,7 +2374,7 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
     payload.append('message', requestMessageInput.value.trim());
     payload.append('purpose', requestPurposeInput.value.trim());
     payload.append('urgent_note', '');
-    payload.append('items', JSON.stringify(state.requestedItems));
+    payload.append('items', JSON.stringify(itemsToSubmit));
     payload.append('suppliers', JSON.stringify(state.selectedSuppliers));
 
     try {
@@ -2246,26 +2398,21 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
 });
 }
 
-// Save as Draft handler
-const saveDraftBtn = document.getElementById('saveDraftBtn');
-if (saveDraftBtn) {
-saveDraftBtn.addEventListener('click', async (event) => {
-    event.preventDefault();
-
+async function saveRequisitionDraft() {
     if (formPageConfig.isComptrollerView || formPageConfig.isCanvasserView || formPageConfig.isInventoryManagerView || formPageConfig.isGsdView) {
         showToast('You cannot save draft from this view.', 'error');
-        return;
+        return false;
     }
 
     if (state.viewOnly) {
-        return;
+        return false;
     }
 
     if (!officeSelect.value || !facilitySelect.value || !requestDateInput.value) {
         showToast('Please set office, location, and date before saving.', 'error');
-        return;
+        return false;
     }
-    
+
     const isEdit = state.editRequestId != null;
     const payload = new URLSearchParams();
     payload.append('action', 'save_draft');
@@ -2278,7 +2425,7 @@ saveDraftBtn.addEventListener('click', async (event) => {
     payload.append('message', requestMessageInput.value.trim());
     payload.append('purpose', requestPurposeInput.value.trim());
     payload.append('urgent_note', '');
-    payload.append('items', JSON.stringify(state.requestedItems));
+    payload.append('items', JSON.stringify(serializeRequestedItemsForApi()));
     payload.append('suppliers', JSON.stringify(state.selectedSuppliers));
 
     try {
@@ -2291,43 +2438,43 @@ saveDraftBtn.addEventListener('click', async (event) => {
         const result = await response.json();
         if (!result.success) {
             showToast(result.message || 'Failed to save draft.', 'error');
-            return;
+            return false;
         }
         showToast('Form saved as draft. You can edit it later.');
         if (result.request_id) {
             state.editRequestId = result.request_id;
-            submitRequisitionBtn.textContent = 'Update & Submit →';
+            setSubmitRequisitionBtnLabel('Update & Submit Request');
         }
-        // Clear unsaved changes flag after successful save
         state.hasUnsavedChanges = false;
+        return true;
     } catch (error) {
         showToast('Save draft error. Please try again.', 'error');
+        return false;
     }
-});
 }
 
-// Close button confirmation dialog
-const closeBtn = document.querySelector('.requisition-close-btn');
-if (closeBtn) {
-closeBtn.addEventListener('click', async (event) => {
-    // Only show confirmation if there are actual unsaved changes and not in view-only mode
+// Close / cancel navigation with optional draft save
+async function handleRequisitionFormExit(event) {
     if (!state.viewOnly && state.hasUnsavedChanges) {
         event.preventDefault();
         const confirmed = await showConfirmModal('Do you want to save the changes as draft?\n\nYes: Save as draft\nNo: Discard changes');
         if (confirmed) {
-            // Save as draft before leaving
-            event.preventDefault();
-            saveDraftBtn.click();
-            // Wait a moment for save to complete, then navigate
-            setTimeout(() => {
-                window.history.back();
-            }, 800);
+            const saved = await saveRequisitionDraft();
+            if (saved) {
+                if (event.currentTarget && event.currentTarget.href) {
+                    window.location.href = event.currentTarget.href;
+                } else {
+                    window.history.back();
+                }
+            }
             return;
         }
     }
-    // Otherwise allow normal navigation
-});
 }
+
+document.querySelectorAll('.requisition-close-btn, .rf-form-cancel-link').forEach((btn) => {
+    btn.addEventListener('click', handleRequisitionFormExit);
+});
 
 renderItems();
 renderSupplierTable();

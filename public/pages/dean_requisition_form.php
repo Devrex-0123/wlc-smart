@@ -17,6 +17,8 @@ $displayName = trim((string)($user['full_name'] ?? ''));
 if ($displayName === '') {
     $displayName = explode('@', (string)($user['Email'] ?? ''))[0] ?? 'Unknown';
 }
+$userEmail = trim((string)($user['Email'] ?? ''));
+$userContact = trim((string)($user['contact_number'] ?? ''));
 $from = $_GET['from'] ?? '';
 $progressFrom = trim((string) ($_GET['progress_from'] ?? ''));
 $viewOnly = isset($_GET['view']) && (string)$_GET['view'] === '1';
@@ -155,13 +157,12 @@ if ($viewingRequest && $viewRequestId > 0) {
                 </div>
             </div>
             <div class="requisition-title">
-                <h1>Western Leyte College of Ormoc City Inc.</h1>
+                <h1>WESTERN LEYTE COLLEGE OF ORMOC CITY INC.</h1>
                 <div class="requisition-subtitle">
                     <p>A. Bonifacio St., Ormoc City, Leyte, Philippines</p>
-                    <p>Tel Nos.: (053) 561 - 5310 / 255 8549</p>
                     <p>E-mail Address: westernleytecollege@yahoo.com</p>
+                    <p>Tel Nos.: (053) 561 - 5310 / 255 8549</p>
                 </div>
-                <p class="requisition-section" id="requisitionFormTitle">REQUISITION FORM</p>
             </div>
             <div class="logo-right">
                 <img src="../assets/images/western-letye-logo.jpg" alt="College Logo" class="requisition-logo" />
@@ -194,36 +195,48 @@ if ($viewingRequest && $viewRequestId > 0) {
             </div>
         </div>
         <?php endif; ?>
-        <div class="requisition-info requisition-meta-grid">
-            <div class="field-group">
-                <label for="requesterName">Requester Name</label>
-                <input type="text" id="requesterName" value="<?php echo htmlspecialchars($displayName); ?>" disabled>
+        <section class="rf-form-card rf-form-card--meta" aria-label="Request details">
+            <p class="rf-form-title" id="requisitionFormTitle">REQUISITION FORM</p>
+            <h2 class="rf-form-card__title">Requester Information</h2>
+            <div class="requisition-info requisition-meta-grid">
+                <div class="field-group">
+                    <label for="requesterName">Requester name</label>
+                    <input type="text" id="requesterName" value="<?php echo htmlspecialchars($displayName); ?>" disabled>
+                </div>
+                <div class="field-group">
+                    <label for="facultyRole">Faculty / staff role</label>
+                    <input type="text" id="facultyRole" value="<?php echo htmlspecialchars($user['role'] ?? ''); ?>" disabled>
+                </div>
+                <div class="field-group field-group--facility">
+                    <label for="facilitySelect">Office / facility location</label>
+                    <select id="facilitySelect">
+                        <option value="">Select location</option>
+                    </select>
+                </div>
+                <div class="field-group field-group--department">
+                    <label for="officeSelect">Department</label>
+                    <select id="officeSelect">
+                        <option value="">Select department</option>
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label for="requesterEmail">Email address</label>
+                    <input type="email" id="requesterEmail" value="<?php echo htmlspecialchars($userEmail); ?>" disabled>
+                </div>
+                <div class="field-group">
+                    <label for="requesterContact">Contact number</label>
+                    <input type="text" id="requesterContact" value="<?php echo htmlspecialchars($userContact); ?>" placeholder="0917 123 4567" disabled>
+                </div>
+                <div class="field-group field-group--date">
+                    <label for="requestDate">Date needed</label>
+                    <input type="date" id="requestDate" value="<?php echo date('Y-m-d'); ?>">
+                </div>
+                <div class="field-group field-group--purpose">
+                    <label for="requestPurpose">Purpose / description</label>
+                    <textarea id="requestPurpose" rows="2" placeholder=""></textarea>
+                </div>
             </div>
-            <div class="field-group">
-                <label for="officeSelect">Office</label>
-                <select id="officeSelect">
-                    <option value="">Select Office</option>
-                </select>
-            </div>
-            <div class="field-group">
-                <label for="requestDate">Requested Date</label>
-                <input type="date" id="requestDate" value="<?php echo date('Y-m-d'); ?>">
-            </div>
-            <div class="field-group">
-                <label for="facilitySelect">Location / Facility</label>
-                <select id="facilitySelect">
-                    <option value="">Select Location</option>
-                </select>
-            </div>
-            <div class="field-group">
-                <label for="facultyRole">Faculty Role</label>
-                <input type="text" id="facultyRole" value="<?php echo htmlspecialchars($user['role'] ?? ''); ?>" disabled>
-            </div>
-            <div class="field-group">
-                <label for="requestPurpose">Purpose of Request</label>
-                <input type="text" id="requestPurpose" placeholder="For new laboratory, replacement item, etc.">
-            </div>
-        </div>
+        </section>
 
         <?php if ($canvassBannerEligible): ?>
         <div id="canvassContinueBanner" class="canvass-continue-banner" role="status" aria-live="polite" hidden>
@@ -235,42 +248,45 @@ if ($viewingRequest && $viewRequestId > 0) {
         </div>
         <?php endif; ?>
 
-        <section class="rf-section rf-section-items">
+        <section class="rf-form-card rf-section rf-section-items" aria-label="Requested items and note">
             <h2 class="rf-section-heading">Requested Items</h2>
-            <div class="table-section">
-            <div class="form-grid">
-                <input type="text" id="itemName" placeholder="Item Name" list="itemNameSuggestions" autocomplete="off">
+            <div class="table-section rf-items-list-wrap">
                 <datalist id="itemNameSuggestions"></datalist>
-                <input type="number" id="itemQuantity" min="1" value="1" placeholder="Qty">
-                <select id="itemUnitType">
-                    <option value="unit">Unit</option>
-                    <option value="set">Set</option>
-                    <option value="piece">Piece</option>
-                </select>
-                <button id="addItemBtn" class="btn-add-small"><i class="fas fa-plus"></i> Add Item</button>
-            </div>
-            <div id="itemChips" class="item-chips"><p class="item-chips-empty">No requested items yet.</p></div>
+                <div class="rf-items-list" id="requestedItemsTable" aria-label="Requested items">
+                    <div class="rf-items-list__header">
+                        <span class="rf-items-list__head-index">#</span>
+                        <span class="rf-items-list__head-desc">Item description</span>
+                        <div class="rf-items-row__controls rf-items-list__head-controls">
+                            <span class="rf-items-list__head-unit">Unit</span>
+                            <span class="rf-items-list__head-qty">Quantity</span>
+                            <span class="rf-items-list__head-action">Action</span>
+                        </div>
+                    </div>
+                    <div id="requestedItemsBody" class="rf-items-list__body"></div>
+                </div>
+                <div class="rf-items-list-footer">
+                    <button type="button" id="rfAddItemBtn" class="rf-items-add-btn">
+                        <i class="fas fa-plus" aria-hidden="true"></i> Add item
+                    </button>
+                </div>
 
-            <?php if ($isCanvasserActiveReview): ?>
-            <div class="note-group" style="margin-top:0.6rem;">
-                <p style="margin:0;font-size:0.9rem;color:#475569;line-height:1.45;">
-                    Supplier and quoted price entries are handled on the <strong>Abstract of quotation</strong> page only.
-                    This requisition form is read-only for canvassers to avoid duplicate supplier entries.
-                </p>
-            </div>
-            <?php endif; ?>
+                <?php if ($isCanvasserActiveReview): ?>
+                <div class="note-group rf-items-canvasser-note">
+                    <p>Supplier and quoted price entries are handled on the <strong>Abstract of quotation</strong> page only.
+                    This requisition form is read-only for canvassers to avoid duplicate supplier entries.</p>
+                </div>
+                <?php endif; ?>
 
+                <div class="rf-section-note-block">
+                    <div class="field-group field-group--note">
+                        <label for="requestMessage">Note / Message</label>
+                        <textarea id="requestMessage" rows="3" placeholder="Add note or message here... (use this for urgent/immediate requests)"></textarea>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <section class="rf-section rf-section-note">
-            <h2 class="rf-section-heading">Note / Message</h2>
-            <div class="note-group">
-                <label for="requestMessage" class="note-label sr-only">Note / Message</label>
-                <textarea id="requestMessage" rows="3" placeholder="Add note or message here... (use this for urgent/immediate requests)"></textarea>
-            </div>
-        </section>
-
+        <?php if ($isGsdCanvasAssigneeUi || $isCanvasserActiveReview): ?>
         <div class="approval-section rf-verifier-summary">
             <div class="approval-card">
               <div class="approval-role<?php echo $isGsdCanvasAssigneeUi ? ' approval-role-gsd-assignee' : ''; ?>">
@@ -285,22 +301,27 @@ if ($viewingRequest && $viewRequestId > 0) {
                             <ul id="gsdCanvasAssigneeSuggestions" class="gsd-canvas-assignee-suggestions" role="listbox" hidden></ul>
                             <p class="gsd-canvas-assignee-hint">Suggestions are limited to your office. Required before <strong>Verify</strong>.</p>
                         </div>
-                        <?php elseif ($isCanvasserActiveReview): ?>
-                        <div class="approval-sub" id="canvasAssigneeNameDisplay">—</div>
                         <?php else: ?>
-                        <div class="approval-sub" id="requisitionReviewedByDisplay">INVENTORY MANAGER</div>
+                        <div class="approval-sub" id="canvasAssigneeNameDisplay">—</div>
                         <?php endif; ?>
                     </div>
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <?php if (!$isCanvasserActiveReview): ?>
-        <div class="btn-submit-wrapper rf-form-actions">
-            <button id="saveDraftBtn" class="btn-secondary" title="Save form as draft - you can edit it later">
-                <i class="fas fa-floppy-disk"></i> Save as Draft
-            </button>
-            <button id="submitRequisitionBtn" class="btn-submit">Submit →</button>
+        <div class="rf-form-footer-bar" id="rfFormFooterBar">
+            <div class="rf-form-footer-bar__message">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                <span>Please review all details before submitting your requisition request.</span>
+            </div>
+            <div class="rf-form-footer-bar__actions">
+                <a href="<?php echo htmlspecialchars($backUrl); ?>" id="rfFormCancelBtn" class="rf-form-footer-bar__btn rf-form-footer-bar__btn--cancel rf-form-cancel-link">Cancel</a>
+                <button type="button" id="submitRequisitionBtn" class="rf-form-footer-bar__btn rf-form-footer-bar__btn--submit">
+                    <i class="fas fa-paper-plane" aria-hidden="true"></i> Submit Request
+                </button>
+            </div>
         </div>
         <?php endif; ?>
         <?php if ($isInventoryManagerActiveReview || $isComptrollerActiveReview || $isGsdActiveReview || $isPresidentActiveReview): ?>

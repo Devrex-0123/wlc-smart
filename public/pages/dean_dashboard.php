@@ -22,157 +22,164 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dean Dashboard - IMRMS</title>
-<link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
+<link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc34">
+<link rel="stylesheet" href="../assets/css/dean_dashboard.css?v=12">
 <link rel="stylesheet" href="../assets/css/loading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-.card-value { font-variant-numeric: tabular-nums; }
-.status-badge.active { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
-.status-badge.inactive { background: #fee2e2; color: #991b1b; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
-</style>
 </head>
 <body>
 
-<!-- Sidebar - EXACT same as your dashboard.php -->
-<aside class="sidebar" id="sidebar">
-    <?php require __DIR__ . '/partials/sidebar_brand_header.php'; ?>
-    <nav>
-        <ul class="sidebar-nav">
-            <li><a href="dean_dashboard.php" class="active"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-            <li><a href="dean_requisition_management.php" data-notification-key="inventory_review"><i class="fas fa-file-signature"></i> <span>Requisition Management</span></a></li>
-            <li><a href="dean_requisition_status.php" data-notification-key="requester_attention"><i class="fas fa-bars-progress"></i> <span>Status</span></a></li>
-            <li><a href="dean_inventory.php"><i class="fas fa-cubes"></i> <span>Inventory</span></a></li>
-            <li><a href="dean_account_management.php"><i class="fas fa-users-cog"></i> <span>Account Management</span></a></li>
-        </ul>
-    </nav>
-    <div class="sidebar-footer">
-        <div class="user-profile">
-            <div class="user-avatar">
-                <?php if (!empty($user['photo_url'])): ?>
-                    <img src="../<?php echo htmlspecialchars($user['photo_url']); ?>" alt="Profile Photo" class="user-avatar-img">
-                <?php else: ?>
-                    <div class="user-avatar-initials"><?php echo $initials; ?></div>
-                <?php endif; ?>
-            </div>
-            <div class="user-details">
-                <h4><?php echo htmlspecialchars($username); ?></h4>
-                <p>Dean</p>
-            </div>
-        </div>
-    </div>
-</aside>
+<?php require __DIR__ . '/partials/dean_sidebar.php'; ?>
 
 <!-- Main Content -->
-<main class="main-content">
-    <div class="page-header" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
-        <div>
-            <h1>Dean Dashboard</h1>
-            <p>Welcome back, Dean <?php echo htmlspecialchars($username); ?>! Here's your office overview.</p>
-        </div>
-        <button id="requestItemBtn" class="btn-add" style="padding: 0.65rem 1rem; font-size: 1rem; border: none; border-radius: 6px; background-color: #16a34a; color: #fff; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.15);" onclick="window.location.href='dean_requisition_form.php?from=dashboard';">
-            <i class="fas fa-plus" style="margin-right: 0.35rem;"></i> Request Item
-        </button>
-    </div>
+<main class="main-content dean-dashboard-home">
+    <section class="dashboard-welcome">
+        <h1 class="dashboard-welcome__title">Welcome back!</h1>
+        <p class="dashboard-welcome__subtitle">Manage and request resources for your department.</p>
+    </section>
 
-    <?php require __DIR__ . '/partials/dashboard_overview_charts.php'; ?>
+    <section class="dean-summary-grid" aria-label="Request summary">
+        <article class="dean-summary-card dean-summary-card--total">
+            <div class="dean-summary-card__head">
+                <span class="dean-summary-card__icon" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
+                <p class="dean-summary-card__label">Total requests</p>
+            </div>
+            <p class="dean-summary-card__value" id="deanTotalRequests">0</p>
+            <p class="dean-summary-card__meta">All requisitions you've submitted</p>
+        </article>
+        <article class="dean-summary-card dean-summary-card--progress">
+            <div class="dean-summary-card__head">
+                <span class="dean-summary-card__icon" aria-hidden="true"><i class="fas fa-spinner"></i></span>
+                <p class="dean-summary-card__label">In progress</p>
+            </div>
+            <p class="dean-summary-card__value" id="deanInProgressCount">0</p>
+            <p class="dean-summary-card__meta">Pending approval or processing</p>
+        </article>
+        <article class="dean-summary-card dean-summary-card--completed">
+            <div class="dean-summary-card__head">
+                <span class="dean-summary-card__icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+                <p class="dean-summary-card__label">Completed</p>
+            </div>
+            <p class="dean-summary-card__value" id="deanCompletedCount">0</p>
+            <p class="dean-summary-card__meta">Successfully fulfilled requests</p>
+        </article>
+        <article class="dean-summary-card dean-summary-card--rejected">
+            <div class="dean-summary-card__head">
+                <span class="dean-summary-card__icon" aria-hidden="true"><i class="fas fa-circle-xmark"></i></span>
+                <p class="dean-summary-card__label">Rejected</p>
+            </div>
+            <p class="dean-summary-card__value" id="deanRejectedCount">0</p>
+            <p class="dean-summary-card__meta">Returned for revision</p>
+        </article>
+    </section>
 
-    <!-- Statistics Cards - Hardcoded Beautiful Numbers -->
-    <div class="dashboard-grid">
-        <div class="dashboard-card">
-            <div class="card-header">
-                <div>
-                    <p class="card-title">Pending Requests</p>
-                    <h3 class="card-value">18</h3>
+    <div class="dean-dashboard-panels" aria-label="Requests and pipeline">
+        <section class="dashboard-panel dashboard-panel--recent dean-recent-panel" aria-label="Recent requests">
+            <header class="dashboard-panel__head dashboard-panel__head--split dean-recent-panel__head">
+                <h2 class="dashboard-panel__title"><i class="fas fa-clock" aria-hidden="true"></i> Recent Requests</h2>
+                <button id="requestItemBtn" class="dean-request-btn" type="button" onclick="window.location.href='dean_requisition_form.php?from=dashboard';">
+                    <i class="fas fa-plus" aria-hidden="true"></i> Request Item
+                </button>
+            </header>
+        </section>
+
+        <section class="dashboard-panel dashboard-panel--pipeline dean-pipeline-panel" aria-label="Procurement pipeline">
+            <header class="dashboard-panel__head">
+                <h2 class="dashboard-panel__title"><i class="fas fa-diagram-project" aria-hidden="true"></i> Procurement Pipeline</h2>
+                <div class="dashboard-panel__legend" aria-hidden="true">
+                    <span class="dashboard-panel__legend-item"><span class="dashboard-panel__legend-dot dashboard-panel__legend-dot--submitted"></span> Submitted</span>
+                    <span class="dashboard-panel__legend-item"><span class="dashboard-panel__legend-dot dashboard-panel__legend-dot--awaiting"></span> Awaiting validation</span>
                 </div>
-                <div class="card-icon"><i class="fas fa-clock"></i></div>
-            </div>
-            <div class="card-footer">
-                <i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i>
-                <span>Requires your approval</span>
-            </div>
-        </div>
+            </header>
 
-        <div class="dashboard-card">
-            <div class="card-header">
-                <div>
-                    <p class="card-title">Total Inventory Items</p>
-                    <h3 class="card-value">342</h3>
-                </div>
-                <div class="card-icon"><i class="fas fa-boxes"></i></div>
-            </div>
-            <div class="card-footer">
-                <i class="fas fa-layer-group"></i>
-                <span>Available in your office</span>
-            </div>
-        </div>
+            <div class="dashboard-pipeline__stages">
+                <article class="pipeline-stage pipeline-stage--request">
+                    <div class="pipeline-stage__head">
+                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-file-circle-plus"></i></span>
+                        <span class="pipeline-stage__label">Request</span>
+                    </div>
+                    <div class="pipeline-stage__metrics">
+                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
+                            <span class="pipeline-stage__metric-value" id="deanPipelineRequestSubmitted">0</span>
+                            <span class="pipeline-stage__metric-label">submitted</span>
+                        </div>
+                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
+                            <span class="pipeline-stage__metric-value" id="deanPipelineRequestAwaiting">0</span>
+                            <span class="pipeline-stage__metric-label">awaiting validation</span>
+                        </div>
+                    </div>
+                </article>
 
-        <div class="dashboard-card">
-            <div class="card-header">
-                <div>
-                    <p class="card-title">Active Borrowers</p>
-                    <h3 class="card-value">47</h3>
-                </div>
-                <div class="card-icon"><i class="fas fa-users"></i></div>
-            </div>
-            <div class="card-footer">
-                <i class="fas fa-user-check" style="color:#22c55e;"></i>
-                <span>Currently using items</span>
-            </div>
-        </div>
+                <article class="pipeline-stage pipeline-stage--canvass">
+                    <div class="pipeline-stage__head">
+                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-table-list"></i></span>
+                        <span class="pipeline-stage__label">Canvass</span>
+                    </div>
+                    <div class="pipeline-stage__metrics">
+                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
+                            <span class="pipeline-stage__metric-value" id="deanPipelineCanvassSubmitted">0</span>
+                            <span class="pipeline-stage__metric-label">submitted</span>
+                        </div>
+                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
+                            <span class="pipeline-stage__metric-value" id="deanPipelineCanvassAwaiting">0</span>
+                            <span class="pipeline-stage__metric-label">awaiting validation</span>
+                        </div>
+                    </div>
+                </article>
 
-        <div class="dashboard-card">
-            <div class="card-header">
-                <div>
-                    <p class="card-title">Your Authority</p>
-                    <h3 class="card-value" style="font-size:1.5rem;text-transform:capitalize;">Dean</h3>
-                </div>
-                <div class="card-icon"><i class="fas fa-crown"></i></div>
-            </div>
-            <div class="card-footer">
-                <i class="fas fa-shield-alt" style="color:#8b5cf6;"></i>
-                <span>Full office control</span>
-            </div>
-        </div>
-    </div>
+                <article class="pipeline-stage pipeline-stage--pr">
+                    <div class="pipeline-stage__head">
+                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-file-lines"></i></span>
+                        <span class="pipeline-stage__label">PR</span>
+                    </div>
+                    <div class="pipeline-stage__metrics">
+                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
+                            <span class="pipeline-stage__metric-value" id="deanPipelinePrSubmitted">0</span>
+                            <span class="pipeline-stage__metric-label">submitted</span>
+                        </div>
+                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
+                            <span class="pipeline-stage__metric-value" id="deanPipelinePrAwaiting">0</span>
+                            <span class="pipeline-stage__metric-label">awaiting validation</span>
+                        </div>
+                    </div>
+                </article>
 
-    <!-- Optional: Recent Activity (Hardcoded Preview) -->
-    <div class="table-container" style="margin-top: 2rem;">
-        <div class="table-header">
-            <h2>Recent Requests</h2>
-        </div>
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>User</th>
-                        <th>Item</th>
-                        <th>Requested</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>j.doe</td>
-                        <td>MacBook Pro 16"</td>
-                        <td>2 hours ago</td>
-                        <td><span class="status-badge active">Pending</span></td>
-                    </tr>
-                    <tr>
-                        <td>m.santos</td>
-                        <td>Projector HD</td>
-                        <td>5 hours ago</td>
-                        <td><span class="status-badge active">Pending</span></td>
-                    </tr>
-                    <tr>
-                        <td>a.reyes</td>
-                        <td>Microphone Set</td>
-                        <td>1 day ago</td>
-                        <td><span class="status-badge" style="background:#dbeafe;color:#1d4ed8;">Approved</span></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                <article class="pipeline-stage pipeline-stage--po">
+                    <div class="pipeline-stage__head">
+                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-cart-shopping"></i></span>
+                        <span class="pipeline-stage__label">PO</span>
+                    </div>
+                    <div class="pipeline-stage__metrics">
+                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
+                            <span class="pipeline-stage__metric-value" id="deanPipelinePoSubmitted">0</span>
+                            <span class="pipeline-stage__metric-label">submitted</span>
+                        </div>
+                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
+                            <span class="pipeline-stage__metric-value" id="deanPipelinePoAwaiting">0</span>
+                            <span class="pipeline-stage__metric-label">awaiting validation</span>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="pipeline-stage pipeline-stage--delivery">
+                    <div class="pipeline-stage__head">
+                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-truck"></i></span>
+                        <span class="pipeline-stage__label">Delivery</span>
+                    </div>
+                    <div class="pipeline-stage__metrics">
+                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
+                            <span class="pipeline-stage__metric-value" id="deanPipelineDeliveryTransit">0</span>
+                            <span class="pipeline-stage__metric-label">in transit</span>
+                        </div>
+                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
+                            <span class="pipeline-stage__metric-value" id="deanPipelineDeliveryReceiving">0</span>
+                            <span class="pipeline-stage__metric-label">pending receiving</span>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
     </div>
 </main>
 
@@ -184,27 +191,10 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <!-- Toast Container -->
 <div id="toastContainer"></div>
 
-<!-- Mobile Menu Script (Same as your dashboard.php) -->
-<script>
-const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-const sidebar = document.getElementById('sidebar');
-
-mobileMenuBtn.addEventListener('click', e => { 
-    e.stopPropagation(); 
-    sidebar.classList.toggle('open'); 
-});
-
-document.addEventListener('click', e => {
-    if (window.innerWidth <= 768 && 
-        sidebar.classList.contains('open') && 
-        !sidebar.contains(e.target) && 
-        !mobileMenuBtn.contains(e.target)) {
-        sidebar.classList.remove('open');
-    }
-});
-</script>
+<?php require __DIR__ . '/partials/dean_sidebar_scripts.php'; ?>
 
 <!-- Logout Script -->
 <script src="../assets/js/logout.js?v=wlc1"></script>
+<script src="../assets/js/dean_dashboard.js?v=4"></script>
 </body>
 </html>

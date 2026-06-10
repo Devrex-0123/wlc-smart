@@ -1,0 +1,339 @@
+.main-content.dean-dashboard-home {
+    min-height: auto;
+    padding-bottom: 1rem;
+}
+
+.dean-dashboard-panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(170px, 240px);
+    gap: 1rem;
+    align-items: start;
+    margin-top: 0;
+}
+
+.dean-recent-panel,
+.dean-pipeline-panel {
+    width: 100%;
+    min-width: 0;
+}
+
+.dean-recent-panel__head {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.dean-recent-panel__head .dashboard-panel__title {
+    font-size: 0.92rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.dean-recent-panel__head .dashboard-panel__title i {
+    font-size: 0.82rem;
+}
+
+.dean-recent-panel__head .dean-request-btn {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+@media (max-width: 900px) {
+    .dean-dashboard-panels {
+        grid-template-columns: 1fr;
+    }
+}
+
+.dean-request-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.84rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 999px;
+    background-color: #16a34a;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    white-space: nowrap;
+}
+
+.dean-request-btn:hover {
+    background-color: #15803d;
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
+    transform: translateY(-1px);
+}
+
+.dean-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0 0.75rem;
+}
+
+.dean-summary-card {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.85rem 1rem;
+    padding-left: calc(1rem + 4px);
+    border-radius: 14px;
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    background: linear-gradient(155deg, #ffffff 0%, #f8fafc 55%, #ffffff 100%);
+    box-shadow:
+        0 4px 18px rgba(15, 23, 42, 0.06),
+        0 0 0 1px rgba(255, 255, 255, 0.85) inset;
+    transition:
+        transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 0.32s ease,
+        border-color 0.32s ease;
+    animation: deanSummaryEnter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dean-summary-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+    pointer-events: none;
+}
+
+.dean-summary-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 55%;
+    height: 100%;
+    background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.8) 48%, transparent 100%);
+    transform: skewX(-18deg);
+    pointer-events: none;
+    transition: left 0.65s ease;
+}
+
+.dean-summary-card:nth-child(1) { animation-delay: 0.05s; }
+.dean-summary-card:nth-child(2) { animation-delay: 0.12s; }
+.dean-summary-card:nth-child(3) { animation-delay: 0.19s; }
+.dean-summary-card:nth-child(4) { animation-delay: 0.26s; }
+
+.dean-summary-card:hover {
+    transform: translateY(-5px);
+    border-color: #cbd5e1;
+    box-shadow:
+        0 14px 32px rgba(15, 23, 42, 0.1),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+.dean-summary-card:hover::after {
+    left: 130%;
+}
+
+.dean-summary-card__head {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.dean-summary-card__icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    flex-shrink: 0;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dean-summary-card:hover .dean-summary-card__icon {
+    transform: scale(1.08) rotate(-4deg);
+}
+
+.dean-summary-card__label {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #64748b;
+    line-height: 1.25;
+}
+
+.dean-summary-card__value {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+}
+
+.dean-summary-card__meta {
+    position: relative;
+    z-index: 1;
+    margin: 0.15rem 0 0;
+    font-size: 0.74rem;
+    font-weight: 500;
+    color: #94a3b8;
+    line-height: 1.35;
+}
+
+.dean-summary-card--total::before {
+    background: linear-gradient(180deg, #64748b 0%, #94a3b8 100%);
+}
+
+.dean-summary-card--total .dean-summary-card__icon {
+    color: #334155;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 12px rgba(100, 116, 139, 0.12);
+}
+
+.dean-summary-card--total:hover .dean-summary-card__icon {
+    box-shadow: 0 6px 16px rgba(100, 116, 139, 0.2);
+}
+
+.dean-summary-card--total .dean-summary-card__value {
+    color: #0f172a;
+}
+
+.dean-summary-card--total:hover {
+    border-color: #cbd5e1;
+    box-shadow:
+        0 14px 32px rgba(100, 116, 139, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+.dean-summary-card--progress::before {
+    background: linear-gradient(180deg, #2563eb 0%, #3b82f6 100%);
+}
+
+.dean-summary-card--progress .dean-summary-card__icon {
+    color: #1d4ed8;
+    background: #dbeafe;
+    border: 1px solid #bfdbfe;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.14);
+}
+
+.dean-summary-card--progress:hover .dean-summary-card__icon {
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
+}
+
+.dean-summary-card--progress .dean-summary-card__value {
+    color: #2563eb;
+}
+
+.dean-summary-card--progress:hover {
+    border-color: #bfdbfe;
+    box-shadow:
+        0 14px 32px rgba(37, 99, 235, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+.dean-summary-card--completed::before {
+    background: linear-gradient(180deg, #16a34a 0%, #22c55e 100%);
+}
+
+.dean-summary-card--completed .dean-summary-card__icon {
+    color: #15803d;
+    background: #dcfce7;
+    border: 1px solid #bbf7d0;
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.14);
+}
+
+.dean-summary-card--completed:hover .dean-summary-card__icon {
+    box-shadow: 0 6px 16px rgba(22, 163, 74, 0.22);
+}
+
+.dean-summary-card--completed .dean-summary-card__value {
+    color: #16a34a;
+}
+
+.dean-summary-card--completed:hover {
+    border-color: #bbf7d0;
+    box-shadow:
+        0 14px 32px rgba(22, 163, 74, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+.dean-summary-card--rejected::before {
+    background: linear-gradient(180deg, #dc2626 0%, #ef4444 100%);
+}
+
+.dean-summary-card--rejected .dean-summary-card__icon {
+    color: #b91c1c;
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.14);
+}
+
+.dean-summary-card--rejected:hover .dean-summary-card__icon {
+    box-shadow: 0 6px 16px rgba(220, 38, 38, 0.22);
+}
+
+.dean-summary-card--rejected .dean-summary-card__value {
+    color: #dc2626;
+}
+
+.dean-summary-card--rejected:hover {
+    border-color: #fecaca;
+    box-shadow:
+        0 14px 32px rgba(220, 38, 38, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+@keyframes deanSummaryEnter {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 900px) {
+    .dean-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 520px) {
+    .dean-summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dean-summary-card__value {
+        font-size: 1.65rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dean-summary-card {
+        animation: none;
+        transition: none;
+    }
+
+    .dean-summary-card::after {
+        display: none;
+    }
+
+    .dean-summary-card:hover {
+        transform: none;
+    }
+
+    .dean-summary-card:hover .dean-summary-card__icon {
+        transform: none;
+    }
+}
