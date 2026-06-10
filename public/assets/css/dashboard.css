@@ -251,18 +251,35 @@ optgroup {
     transition: transform 0.3s ease;
 }
 
-.sidebar-nav a:hover,
+.sidebar-nav a:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateX(4px);
+}
+
 .sidebar-nav a.active {
-    background: rgba(255, 255, 255, 0.15);
-    transform: translateX(5px);
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    transform: translateX(0);
 }
 
 .sidebar-nav a.active::before {
     transform: scaleY(0);
 }
 
-.sidebar-nav a.active {
-    border-radius: 7px;
+.sidebar-nav a.active:hover {
+    background: rgba(255, 255, 255, 0.24);
+    transform: translateX(0);
+}
+
+.sidebar-nav a:active {
+    opacity: 0.88;
+    transform: scale(0.98);
+}
+
+.sidebar-nav a.active:active {
+    transform: scale(0.98);
 }
 
 .sidebar-nav a i {

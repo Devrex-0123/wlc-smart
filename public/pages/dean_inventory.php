@@ -46,7 +46,7 @@ $initials = strtoupper(substr($currentUser['Email'] ?? 'D', 0, 1));
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventory — Dean</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc34">
     <link rel="stylesheet" href="../assets/css/dean_requisition_management.css">
     <link rel="stylesheet" href="../assets/css/dean_inventory.css">
     <link rel="stylesheet" href="../assets/css/loading.css">
@@ -55,36 +55,7 @@ $initials = strtoupper(substr($currentUser['Email'] ?? 'D', 0, 1));
 </head>
 <body>
 
-<aside class="sidebar" id="sidebar">
-    <?php require __DIR__ . '/partials/sidebar_brand_header.php'; ?>
-    <nav>
-        <ul class="sidebar-nav">
-            <li><a href="dean_dashboard.php"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-            <li><a href="dean_requisition_management.php"><i class="fas fa-file-signature"></i> <span>Requisition Management</span></a></li>
-            <li><a href="dean_requisition_status.php"><i class="fas fa-bars-progress"></i> <span>Status</span></a></li>
-            <li><a href="dean_inventory.php" class="active"><i class="fas fa-cubes"></i> <span>Inventory</span></a></li>
-            <li><a href="dean_account_management.php"><i class="fas fa-users-cog"></i> <span>Account Management</span></a></li>
-        </ul>
-    </nav>
-    <div class="sidebar-footer">
-        <div class="user-profile">
-            <div class="user-avatar">
-                <?php if (!empty($currentUser['photo_url'])): ?>
-                    <img src="../<?php echo htmlspecialchars($currentUser['photo_url']); ?>" alt="Profile Photo" class="user-avatar-img">
-                <?php else: ?>
-                    <div class="user-avatar-initials"><?php echo htmlspecialchars($initials); ?></div>
-                <?php endif; ?>
-            </div>
-            <div class="user-details">
-                <h4><?php echo htmlspecialchars($username); ?></h4>
-                <p>Dean</p>
-            </div>
-        </div>
-        <button id="logoutBtn" class="btn-logout-sidebar" type="button">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </button>
-    </div>
-</aside>
+<?php require __DIR__ . '/partials/dean_sidebar.php'; ?>
 
 <main class="main-content dean-inventory-page">
     <div class="page-header management-header">
@@ -281,20 +252,7 @@ $initials = strtoupper(substr($currentUser['Email'] ?? 'D', 0, 1));
 
 <button class="mobile-menu-btn" id="mobileMenuBtn" type="button"><i class="fas fa-bars"></i></button>
 
-<script>
-const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-const sidebar = document.getElementById('sidebar');
-mobileMenuBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    sidebar?.classList.toggle('open');
-});
-document.addEventListener('click', (e) => {
-    if (window.innerWidth <= 768 && sidebar?.classList.contains('open') &&
-        !sidebar.contains(e.target) && !mobileMenuBtn?.contains(e.target)) {
-        sidebar.classList.remove('open');
-    }
-});
-</script>
+<?php require __DIR__ . '/partials/dean_sidebar_scripts.php'; ?>
 <script>
 window.DEAN_INVENTORY_CONFIG = <?php echo json_encode([
     'api' => '../../app/api/dean_inventory.php',
