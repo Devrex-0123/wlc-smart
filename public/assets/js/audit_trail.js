@@ -60,6 +60,18 @@ function getFilters() {
   };
 }
 
+function updateAuditPagination({ paginationId, prevId, nextId, currentPage, totalPages, totalRecords }) {
+  const pagination = document.getElementById(paginationId);
+  const prev = document.getElementById(prevId);
+  const next = document.getElementById(nextId);
+  if (!prev || !next) return;
+
+  const showPagination = totalRecords > itemsPerPage;
+  if (pagination) pagination.hidden = !showPagination;
+  prev.disabled = !showPagination || currentPage <= 1;
+  next.disabled = !showPagination || currentPage >= totalPages || totalRecords === 0;
+}
+
 function renderLogged() {
   const tbody = document.getElementById("loggedBody");
   const { search, from, to } = getFilters();
@@ -89,9 +101,14 @@ function renderLogged() {
     tbody.appendChild(tr);
   });
 
-  document.getElementById("loggedPageInfo").textContent = `Page ${loggedPage} of ${totalPages} (${filtered.length} records)`;
-  document.getElementById("prevLoggedBtn").disabled = loggedPage === 1;
-  document.getElementById("nextLoggedBtn").disabled = loggedPage === totalPages;
+  updateAuditPagination({
+    paginationId: "loggedPagination",
+    prevId: "prevLoggedBtn",
+    nextId: "nextLoggedBtn",
+    currentPage: loggedPage,
+    totalPages,
+    totalRecords: filtered.length
+  });
 }
 
 function renderActivity() {
@@ -122,9 +139,14 @@ function renderActivity() {
     tbody.appendChild(tr);
   });
 
-  document.getElementById("activityPageInfo").textContent = `Page ${activityPage} of ${totalPages} (${filtered.length} records)`;
-  document.getElementById("prevActivityBtn").disabled = activityPage === 1;
-  document.getElementById("nextActivityBtn").disabled = activityPage === totalPages;
+  updateAuditPagination({
+    paginationId: "activityPagination",
+    prevId: "prevActivityBtn",
+    nextId: "nextActivityBtn",
+    currentPage: activityPage,
+    totalPages,
+    totalRecords: filtered.length
+  });
 }
 
 function renderSummary(summary = {}) {

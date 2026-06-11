@@ -32,233 +32,352 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <?php $imActivePage = 'facility_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 
 <main class="main-content facility-management-container">
-    <div class="page-header">
-        <h1>Facility Management</h1>
-        <p>Manage offices and their facilities (rooms, labs). The office list is paginated five per page.</p>
+    <div class="module-page-header">
+        <h1 class="module-page-header__title">Facility Management</h1>
+        <p class="module-page-header__subtitle">Manage facilities, monitor locations, and maintain organized campus spaces.</p>
+        <section class="facility-summary-stats" aria-label="Facility summary">
+            <article class="facility-summary-card facility-summary-card--offices">
+                <div class="facility-summary-card__head">
+                    <span class="facility-summary-card__badge" aria-hidden="true"><i class="fas fa-building"></i></span>
+                    <span class="facility-summary-card__label">Departments</span>
+                </div>
+                <p class="facility-summary-card__value" id="facilitySummaryOffices">0</p>
+                <p class="facility-summary-card__meta" id="facilitySummaryOfficesMeta">—</p>
+            </article>
+            <article class="facility-summary-card facility-summary-card--labs">
+                <div class="facility-summary-card__head">
+                    <span class="facility-summary-card__badge" aria-hidden="true"><i class="fas fa-flask"></i></span>
+                    <span class="facility-summary-card__label">Labs</span>
+                </div>
+                <p class="facility-summary-card__value" id="facilitySummaryLabs">0</p>
+                <p class="facility-summary-card__meta">Across all offices</p>
+            </article>
+            <article class="facility-summary-card facility-summary-card--rooms">
+                <div class="facility-summary-card__head">
+                    <span class="facility-summary-card__badge" aria-hidden="true"><i class="fas fa-door-open"></i></span>
+                    <span class="facility-summary-card__label">Rooms</span>
+                </div>
+                <p class="facility-summary-card__value" id="facilitySummaryRooms">0</p>
+                <p class="facility-summary-card__meta">Across all offices</p>
+            </article>
+            <article class="facility-summary-card facility-summary-card--total">
+                <div class="facility-summary-card__head">
+                    <span class="facility-summary-card__badge" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
+                    <span class="facility-summary-card__label">Total facilities</span>
+                </div>
+                <p class="facility-summary-card__value" id="facilitySummaryTotal">0</p>
+                <p class="facility-summary-card__meta">Labs and Rooms</p>
+            </article>
+        </section>
     </div>
 
-    <!-- Breadcrumb Navigation -->
-    <div class="breadcrumb-nav" id="breadcrumb">
-        <div class="breadcrumb-item active" id="breadcrumb-home">
-            <i class="fas fa-home"></i> Offices
-        </div>
-        <div class="breadcrumb-item hidden" id="breadcrumb-facility">
-            <i class="fas fa-chevron-right"></i> <span id="breadcrumb-facility-text">Facilities</span>
-        </div>
-    </div>
-
+    <div class="facility-card-swap" id="facilityCardSwap" data-view="list">
     <!-- Offices View -->
-    <div id="officesView">
-        <div class="filter-section">
-            <div class="filter-section-lead">
-                <h3>Offices</h3>
-                <p class="office-list-hint">Five offices per page; use Previous and Next below the list.</p>
-            </div>
-            <div class="filter-controls">
-                <div class="search-container">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="officeSearchInput" placeholder="Search offices..." class="search-input">
+    <div id="officesView" class="facility-card-swap__panel facility-card-swap__panel--list">
+        <div class="offices-list-card">
+            <div class="filter-section offices-filter-bar">
+                <nav class="office-type-tabs" id="officeTypeTabs" role="tablist" aria-label="Department type">
+                    <button type="button" class="office-type-tab is-active" role="tab" id="officeTabAcademic" data-office-tab="academic" aria-selected="true" aria-controls="officeTablePanel">
+                        <i class="fas fa-graduation-cap" aria-hidden="true"></i>
+                        <span>Academic Departments</span>
+                    </button>
+                    <button type="button" class="office-type-tab" role="tab" id="officeTabAdministrative" data-office-tab="administrative" aria-selected="false" aria-controls="officeTablePanel">
+                        <i class="fas fa-building" aria-hidden="true"></i>
+                        <span>Administrative Offices</span>
+                    </button>
+                    <button type="button" class="office-type-tab" role="tab" id="officeTabExecutive" data-office-tab="executive" aria-selected="false" aria-controls="officeTablePanel">
+                        <i class="fas fa-crown" aria-hidden="true"></i>
+                        <span>Executive Offices</span>
+                    </button>
+                </nav>
+                <div class="filter-controls">
+                    <div class="search-container">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="officeSearchInput" placeholder="Search offices..." class="search-input">
+                    </div>
+                    <button class="btn-filter" id="addOfficeBtn" type="button"><i class="fas fa-plus"></i> Add Office</button>
                 </div>
-                <select id="officeSortDropdown" class="sort-dropdown">
-                    <option value="">Sort By</option>
-                    <option value="name-asc">Name (A-Z)</option>
-                    <option value="name-desc">Name (Z-A)</option>
-                    <option value="labs-asc">Labs (Low to High)</option>
-                    <option value="labs-desc">Labs (High to Low)</option>
-                    <option value="rooms-asc">Rooms (Low to High)</option>
-                    <option value="rooms-desc">Rooms (High to Low)</option>
-                    <option value="total-asc">Total (Low to High)</option>
-                    <option value="total-desc">Total (High to Low)</option>
-                </select>
-                <button type="button" id="deptLayoutToggleBtn" class="dept-layout-toggle" title="Show offices as card grid" aria-label="Switch to grid layout" data-tooltip="Show offices as card grid">
-                    <i class="fas fa-th-large dept-layout-toggle-icon" aria-hidden="true"></i>
-                </button>
-                <button class="btn-filter" id="addOfficeBtn"><i class="fas fa-plus"></i> Add Office</button>
             </div>
-        </div>
 
-        <div id="officeGrid" class="office-grid hidden">
-            <div class="office-grid-loading">Loading Offices...</div>
-        </div>
+            <div class="offices-list-card__body">
+                <div id="officeGrid" class="office-grid hidden">
+                    <div class="office-grid-loading">Loading Offices...</div>
+                </div>
 
-        <div id="officeTablePanel" class="table-container office-table-panel">
-            <div class="table-wrapper">
-                <table class="facility-data-table facility-data-table--offices">
-                    <colgroup>
-                        <col class="facility-col-entry-num" style="width:1.75%" />
-                        <col style="width:10%" />
-                        <col style="width:14%" />
-                        <col style="width:5%" />
-                        <col style="width:5%" />
-                        <col style="width:5%" />
-                        <col style="width:10%" />
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th scope="col">#</th>
-                            <th>Office</th>
-                            <th>Type</th>
-                            <th>Total Labs</th>
-                            <th>Total Rooms</th>
-                            <th>TOTAL</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="officeTableBody">
-                        <tr>
-                            <td colspan="7" class="loading-cell">Loading Offices...</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div id="officeTablePanel" class="table-container office-table-panel">
+                    <div class="table-wrapper">
+                        <table class="facility-data-table facility-data-table--offices">
+                            <colgroup>
+                                <col class="facility-col-entry-num" style="width:10%" />
+                                <col style="width:24%" />
+                                <col style="width:15%" />
+                                <col style="width:13%" />
+                                <col style="width:13%" />
+                                <col style="width:12%" />
+                                <col style="width:13%" />
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th scope="col">#</th>
+                                    <th>Department</th>
+                                    <th>Type</th>
+                                    <th>Total Labs</th>
+                                    <th>Total Rooms</th>
+                                    <th>TOTAL</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="officeTableBody">
+                                <tr>
+                                    <td colspan="7" class="loading-cell">Loading Offices...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="pagination-controls office-pagination" id="officePagination" aria-label="Department list pages" hidden>
+                    <button type="button" id="officePrevPageBtn" class="facility-pagination-arrow" disabled aria-label="Previous page">
+                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" id="officeNextPageBtn" class="facility-pagination-arrow" disabled aria-label="Next page">
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
-        </div>
-
-        <div class="pagination-controls office-pagination" id="officePagination" aria-label="Office list pages">
-            <button type="button" id="officePrevPageBtn" class="pagination-btn" disabled>
-                <i class="fas fa-chevron-left"></i> Previous
-            </button>
-            <span id="officePageInfo" class="page-info">Page 1</span>
-            <button type="button" id="officeNextPageBtn" class="pagination-btn" disabled>
-                Next <i class="fas fa-chevron-right"></i>
-            </button>
         </div>
     </div>
 
-    <!-- Facilities View -->
-    <div id="facilitiesView" class="hidden">
-        <div class="filter-section">
-            <h3 id="facilityViewTitle">Facilities</h3>
-            <div class="filter-controls">
-                <div class="search-container">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="facilitySearchInput" placeholder="Search by building, code, lab, or room..." class="search-input">
+    <!-- Office Detail (card swap on View) -->
+    <div id="facilitiesView" class="facility-card-swap__panel facility-card-swap__panel--detail office-detail-view" aria-hidden="true" hidden>
+        <div class="office-detail-card">
+            <div class="office-detail-header">
+                <div class="office-detail-brand">
+                    <div class="office-detail-logo" id="officeDetailLogoWrap">
+                        <img id="officeDetailLogoImg" class="office-detail-logo-img" alt="" hidden>
+                        <span id="officeDetailLogoInitials" class="office-detail-logo-initials">—</span>
+                    </div>
+                    <div class="office-detail-meta">
+                        <h2 id="facilityViewTitle" class="office-detail-title">Department</h2>
+                        <div class="office-detail-tags">
+                            <span id="officeDetailTypeBadge"></span>
+                        </div>
+                    </div>
                 </div>
-                <select id="facilitySortDropdown" class="sort-dropdown">
-                    <option value="">Sort By</option>
-                    <option value="building-asc">Building (A-Z)</option>
-                    <option value="building-desc">Building (Z-A)</option>
-                    <option value="code-asc">Code (A-Z)</option>
-                    <option value="code-desc">Code (Z-A)</option>
-                    <option value="lab-asc">Laboratory (A-Z)</option>
-                    <option value="lab-desc">Laboratory (Z-A)</option>
-                    <option value="room-asc">Room (A-Z)</option>
-                    <option value="room-desc">Room (Z-A)</option>
-                    <option value="type-asc">Type (A-Z)</option>
-                    <option value="type-desc">Type (Z-A)</option>
-                </select>
-                <button class="btn-filter" id="addFacilityBtn"><i class="fas fa-plus"></i> Add Facility</button>
+                <button type="button" id="backToOfficesBtn" class="office-detail-back">
+                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                    <span>Back to offices</span>
+                </button>
+            </div>
+
+            <div class="office-detail-stats" aria-label="Facility summary">
+                <div class="office-detail-stat office-detail-stat--labs">
+                    <span class="office-detail-stat__value" id="officeDetailLabs">0</span>
+                    <span class="office-detail-stat__label">Laboratories</span>
+                </div>
+                <div class="office-detail-stat office-detail-stat--rooms">
+                    <span class="office-detail-stat__value" id="officeDetailRooms">0</span>
+                    <span class="office-detail-stat__label">Room</span>
+                </div>
+                <div class="office-detail-stat office-detail-stat--total">
+                    <span class="office-detail-stat__value" id="officeDetailTotal">0</span>
+                    <span class="office-detail-stat__label">Total</span>
+                </div>
+            </div>
+
+            <div class="office-detail-facilities">
+                <div class="office-detail-facilities-head">
+                    <div class="office-detail-facilities-lead">
+                        <h3 class="office-detail-facilities-title">Facilities</h3>
+                        <p class="office-detail-facilities-subtitle">Rooms and Laboratories in this office</p>
+                    </div>
+                    <button type="button" class="office-detail-add-btn" id="addFacilityBtn">
+                        <i class="fas fa-plus" aria-hidden="true"></i> Add facility
+                    </button>
+                </div>
+                <div class="table-wrapper office-detail-table-wrap">
+                        <table class="facility-data-table facility-data-table--facilities">
+                            <colgroup>
+                                <col class="office-facilities-col-index" />
+                                <col class="office-facilities-col-name" />
+                                <col class="office-facilities-col-type" />
+                                <col class="office-facilities-col-code" />
+                                <col class="office-facilities-col-building" />
+                                <col class="office-facilities-col-floor" />
+                                <col class="office-facilities-col-action" />
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th scope="col">#</th>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>Code</th>
+                                    <th>Building</th>
+                                    <th>Floor</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facilityTableBody">
+                                <tr>
+                                    <td colspan="7" class="loading-cell">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                </div>
+                <div class="facility-pagination" id="facilityPagination" aria-label="Facility list pages" hidden>
+                    <button type="button" id="facilityPrevPageBtn" class="facility-pagination-arrow" disabled aria-label="Previous page">
+                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" id="facilityNextPageBtn" class="facility-pagination-arrow" disabled aria-label="Next page">
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
         </div>
-        <div class="table-container">
-            <div class="table-wrapper">
-                <table class="facility-data-table facility-data-table--facilities">
-                    <colgroup>
-                        <col class="facility-col-entry-num" style="width:1.75%" />
-                        <col style="width:16%" />
-                        <col style="width:10%" />
-                        <col style="width:20%" />
-                        <col style="width:20%" />
-                        <col style="width:14%" />
-                        <col style="width:18.25%" />
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th scope="col">#</th>
-                            <th>Building</th>
-                            <th>Code</th>
-                            <th>Laboratory</th>
-                            <th>Room</th>
-                            <th>Type</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="facilityTableBody">
-                        <tr>
-                            <td colspan="7" class="loading-cell">Loading...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    </div>
     </div>
 
     <!-- Office Modal -->
     <div class="modal" id="officeModal">
-        <div class="modal-content">
-            <span class="close-modal" id="closeOfficeModal">&times;</span>
-            <h2 id="modalTitle">Add Office</h2>
-            <form id="officeForm" enctype="multipart/form-data">
+        <div class="modal-content office-modal-content">
+            <div class="modal-header office-modal-header">
+                <div class="office-modal-header-text">
+                    <h2 id="modalTitle">Add office</h2>
+                    <p id="officeModalSubtitle" class="office-modal-subtitle">Create an office, then add its rooms and labs.</p>
+                </div>
+                <button type="button" class="close-modal office-modal-close" id="closeOfficeModal" aria-label="Close modal">&times;</button>
+            </div>
+            <form id="officeForm" class="office-modal-form" enctype="multipart/form-data">
                 <input type="hidden" name="office_id" id="office_id">
                 <div class="form-group">
-                    <label>Office Name</label>
-                    <input type="text" name="office_name" id="office_name" placeholder="e.g. Chemistry" required>
+                    <label for="office_name">Office name <span class="required">*</span></label>
+                    <input type="text" name="office_name" id="office_name" placeholder="e.g. Chemistry Office" required>
                 </div>
                 <div class="form-group">
-                    <label for="office_type">Office Type</label>
+                    <label for="office_type">Type <span class="required">*</span></label>
                     <select name="type" id="office_type" required>
                         <option value="">Select office type</option>
-                        <option value="academic">Academic</option>
-                        <option value="administrative">Administrative</option>
-                        <option value="executive">Executive</option>
+                        <option value="Academics">Academic</option>
+                        <option value="Administrative">Administrative</option>
+                        <option value="Executive">Executive</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="office_photo">Office Logo (Optional)</label>
-                    <input type="file" name="office_photo" id="office_photo" accept="image/png,image/jpeg,image/gif,image/webp">
-                    <small class="field-hint">Leave empty to keep no image. You can upload/update later.</small>
+                    <label for="office_photo" class="office-logo-label">Office logo <span class="optional-label">(optional)</span></label>
+                    <div class="office-logo-upload">
+                        <div class="office-logo-preview" id="officeLogoPreview">
+                            <img id="officeLogoImage" alt="Office logo preview" hidden>
+                            <div id="officeLogoPlaceholder" class="office-logo-placeholder" aria-hidden="true">
+                                <i class="fas fa-image"></i>
+                            </div>
+                        </div>
+                        <div class="office-logo-actions">
+                            <label for="office_photo" class="btn-choose-file">Choose file</label>
+                            <input type="file" name="office_photo" id="office_photo" accept="image/png,image/jpeg,image/gif,image/webp" class="file-input-hidden">
+                            <small class="field-hint">Leave empty to keep no image — you can upload or update it later.</small>
+                        </div>
+                    </div>
                 </div>
-
-                <button type="submit" class="btn-save">Save Office</button>
+                <div class="modal-footer office-modal-footer">
+                    <button type="button" class="btn-cancel" id="cancelOfficeBtn">Cancel</button>
+                    <button type="submit" class="btn-save" id="saveOfficeBtn">Save office</button>
+                </div>
             </form>
         </div>
     </div>
 
     <!-- Facility Modal -->
     <div class="modal" id="facilityModal">
-        <div class="modal-content">
-            <span class="close-modal" id="closeFacilityModal">&times;</span>
-            <h2 id="facilityModalTitle">Add Facility</h2>
-            <form id="facilityForm">
+        <div class="modal-content facility-modal-content">
+            <div class="modal-header facility-modal-header">
+                <div class="facility-modal-header-text">
+                    <h2 id="facilityModalTitle">Add facility</h2>
+                    <p id="facilityModalSubtitle" class="facility-modal-subtitle">Add a room or lab to this office.</p>
+                </div>
+                <button type="button" class="close-modal facility-modal-close" id="closeFacilityModal" aria-label="Close modal">&times;</button>
+            </div>
+            <form id="facilityForm" class="facility-modal-form">
                 <input type="hidden" name="facility_id" id="facility_id">
                 <input type="hidden" name="office_id" id="facility_office_id">
+                <input type="hidden" name="laboratory" id="facility_laboratory">
+                <input type="hidden" name="room" id="facility_room">
+                <input type="hidden" name="type" id="facility_type">
                 <div class="form-group">
-                    <label>Building</label>
-                    <input type="text" name="building" id="facility_building" placeholder="e.g. Building A">
-                </div>
-                <div class="form-group">
-                    <label>Code</label>
-                    <input type="text" name="code" id="facility_code" placeholder="e.g. LAB-001" required>
-                </div>
-                <div class="form-group">
-                    <label>Floor</label>
-                    <input type="text" name="floor" id="facility_floor" placeholder="e.g. 2nd Floor">
-                </div>
-                <div class="form-group">
-                    <label>Laboratory</label>
-                    <input type="text" name="laboratory" id="facility_laboratory" placeholder="e.g. Lab 1">
-                </div>
-                <div class="form-group">
-                    <label>Room</label>
-                    <input type="text" name="room" id="facility_room" placeholder="e.g. Room 101">
-                </div>
-                <div class="form-group">
-                    <label>Type</label>
-                    <select name="type" id="facility_type" required>
+                    <label for="facility_type_kind">Type <span class="required">*</span></label>
+                    <select id="facility_type_kind" required>
                         <option value="">Select facility type</option>
-                        <option value="Computer Lab">Computer Lab</option>
                         <option value="Laboratory">Laboratory</option>
-                        <option value="Classroom">Classroom</option>
-                        <option value="Office">Office</option>
-                        <option value="Storage Room">Storage Room</option>
-                        <option value="Other">Other</option>
+                        <option value="Room">Room</option>
+                        <option value="__new__">+ Add new type...</option>
                     </select>
                 </div>
-                <button type="submit" class="btn-save">Save Facility</button>
+                <div class="form-group facility-new-type-group hidden" id="facilityNewTypeGroup">
+                    <label for="facility_new_type">New type name <span class="required">*</span></label>
+                    <input type="text" id="facility_new_type" placeholder="e.g. Lecture Hall, AVR, Storage">
+                    <small class="field-hint">This will be added to the type list for next time.</small>
+                </div>
+                <div class="form-group">
+                    <label for="facility_name">Name <span class="required">*</span></label>
+                    <input type="text" id="facility_name" placeholder="Select a type first" disabled>
+                </div>
+                <div class="facility-form-row">
+                    <div class="form-group">
+                        <label for="facility_building">Building</label>
+                        <input type="text" name="building" id="facility_building" placeholder="e.g. Building A">
+                    </div>
+                    <div class="form-group">
+                        <label for="facility_floor">Floor</label>
+                        <input type="text" name="floor" id="facility_floor" placeholder="e.g. 2nd Floor">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="facility_code">Code</label>
+                    <input type="text" name="code" id="facility_code" placeholder="e.g. LAB-001">
+                </div>
+                <div class="modal-footer facility-modal-footer">
+                    <button type="button" class="btn-cancel" id="cancelFacilityBtn">Cancel</button>
+                    <button type="submit" class="btn-save" id="saveFacilityBtn">Add facility</button>
+                </div>
             </form>
         </div>
     </div>
 
 </main>
+
+<!-- Delete Confirmation Modal -->
+<div class="fm-delete-modal" id="fmDeleteModal" aria-hidden="true">
+    <div class="fm-delete-backdrop" id="fmDeleteBackdrop"></div>
+    <div class="fm-delete-card" role="dialog" aria-modal="true" aria-labelledby="fmDeleteTitle" aria-describedby="fmDeleteDesc">
+        <button type="button" class="fm-delete-close" id="fmDeleteClose" aria-label="Close">&times;</button>
+        <div class="fm-delete-icon" aria-hidden="true">
+            <i class="fas fa-trash-alt"></i>
+        </div>
+        <h3 id="fmDeleteTitle" class="fm-delete-title">Delete this department?</h3>
+        <p id="fmDeleteDesc" class="fm-delete-desc">This will permanently remove the department from your list. This action cannot be undone.</p>
+        <p class="fm-delete-name" id="fmDeleteName"></p>
+        <div class="fm-delete-actions">
+            <button type="button" class="fm-delete-btn fm-delete-btn-cancel" id="fmDeleteCancel">Cancel</button>
+            <button type="button" class="fm-delete-btn fm-delete-btn-delete" id="fmDeleteConfirm">
+                <i class="fas fa-trash-alt"></i> <span id="fmDeleteConfirmLabel">Delete</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Success Confirmation Modal -->
+<div class="fm-success-modal" id="fmSuccessModal" aria-hidden="true">
+    <div class="fm-success-backdrop" id="fmSuccessBackdrop"></div>
+    <div class="fm-success-card" role="dialog" aria-modal="true" aria-labelledby="fmSuccessTitle" aria-describedby="fmSuccessMessage">
+        <div class="fm-success-icon" aria-hidden="true">
+            <i class="fas fa-check"></i>
+        </div>
+        <h3 id="fmSuccessTitle" class="fm-success-title">Deleted</h3>
+        <p id="fmSuccessMessage" class="fm-success-desc"></p>
+        <div class="fm-success-actions">
+            <button type="button" class="fm-success-btn" id="fmSuccessOk">OK</button>
+        </div>
+    </div>
+</div>
 
 <button class="mobile-menu-btn" id="mobileMenuBtn" style="display:none;">
     <i class="fas fa-bars"></i>

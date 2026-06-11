@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const supplierSearchInput = document.getElementById('supplierSearchInput');
     const prevSupplierBtn = document.getElementById('prevSupplierBtn');
     const nextSupplierBtn = document.getElementById('nextSupplierBtn');
-    const supplierPageInfo = document.getElementById('supplierPageInfo');
+    const supplierPagination = document.getElementById('supplierPagination');
 
     const ITEMS_PER_PAGE = 10;
     
@@ -184,18 +184,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updatePaginationUI(totalRecords, totalPages) {
-        if (!supplierPageInfo || !prevSupplierBtn || !nextSupplierBtn) return;
+        if (!prevSupplierBtn || !nextSupplierBtn) return;
 
-        if (totalRecords === 0) {
-            supplierPageInfo.textContent = 'Page 1 of 1 (0 records)';
-            prevSupplierBtn.disabled = true;
-            nextSupplierBtn.disabled = true;
-            return;
-        }
-
-        supplierPageInfo.textContent = `Page ${currentPage} of ${totalPages} (${totalRecords} records)`;
-        prevSupplierBtn.disabled = currentPage <= 1;
-        nextSupplierBtn.disabled = currentPage >= totalPages;
+        const showPagination = totalRecords > ITEMS_PER_PAGE;
+        if (supplierPagination) supplierPagination.hidden = !showPagination;
+        prevSupplierBtn.disabled = !showPagination || currentPage <= 1;
+        nextSupplierBtn.disabled = !showPagination || currentPage >= totalPages || totalRecords === 0;
     }
 
     function applySupplierView() {

@@ -35,8 +35,8 @@
 }
 
 .users-list-card .filter-section.account-management-filter-bar{
-  background:#f8fafc;
-  padding:0.85rem 1.25rem;
+  background:#ffffff;
+  padding:0.75rem 1.25rem 0.35rem;
   border-radius:0;
   box-shadow:none;
   margin-bottom:0;
@@ -88,7 +88,7 @@
   grid-template-rows:minmax(0,1fr);
   align-items:stretch;
   gap:1rem;
-  padding:0.85rem 1.25rem 1.25rem;
+  padding:0.5rem 1.25rem 1.25rem;
   flex:1 1 auto;
   min-height:0;
 }
@@ -866,7 +866,7 @@
     grid-template-rows:minmax(0,1fr) minmax(0,1fr);
     align-items:stretch;
     gap:1rem;
-    padding:1rem 1.25rem 1.25rem;
+    padding:0.5rem 1.25rem 1.25rem;
   }
 
   .account-management-container .users-table-panel .table-wrapper{
