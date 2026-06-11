@@ -175,10 +175,13 @@ if ($roleLc === 'comptroller') {
               </table>
             </div>
           </div>
-          <div class="pagination-controls">
-            <button type="button" class="pagination-btn pagination-btn--prev" id="prevLoggedBtn" disabled><i class="fas fa-chevron-left"></i> Previous</button>
-            <span id="loggedPageInfo" class="page-info">Page 1 of 1 (0 records)</span>
-            <button type="button" class="pagination-btn pagination-btn--next" id="nextLoggedBtn">Next <i class="fas fa-chevron-right"></i></button>
+          <div class="pagination-controls audit-pagination" id="loggedPagination" aria-label="Logged history pages" hidden>
+            <button type="button" class="audit-pagination-arrow" id="prevLoggedBtn" disabled aria-label="Previous page">
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="audit-pagination-arrow" id="nextLoggedBtn" disabled aria-label="Next page">
+              <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            </button>
           </div>
         </div>
 
@@ -203,10 +206,13 @@ if ($roleLc === 'comptroller') {
               </table>
             </div>
           </div>
-          <div class="pagination-controls">
-            <button type="button" class="pagination-btn pagination-btn--prev" id="prevActivityBtn" disabled><i class="fas fa-chevron-left"></i> Previous</button>
-            <span id="activityPageInfo" class="page-info">Page 1 of 1 (0 records)</span>
-            <button type="button" class="pagination-btn pagination-btn--next" id="nextActivityBtn">Next <i class="fas fa-chevron-right"></i></button>
+          <div class="pagination-controls audit-pagination" id="activityPagination" aria-label="Activity history pages" hidden>
+            <button type="button" class="audit-pagination-arrow" id="prevActivityBtn" disabled aria-label="Previous page">
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="audit-pagination-arrow" id="nextActivityBtn" disabled aria-label="Next page">
+              <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            </button>
           </div>
         </div>
     </div>

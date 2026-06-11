@@ -74,10 +74,13 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
             </table>
           </div>
 
-          <div class="pagination-controls">
-            <button type="button" class="pagination-btn pagination-btn--prev" id="prevSupplierBtn" disabled><i class="fas fa-chevron-left"></i> Previous</button>
-            <span id="supplierPageInfo" class="page-info">Page 1 of 1 (0 records)</span>
-            <button type="button" class="pagination-btn pagination-btn--next" id="nextSupplierBtn" disabled>Next <i class="fas fa-chevron-right"></i></button>
+          <div class="pagination-controls supplier-pagination" id="supplierPagination" aria-label="Supplier list pages" hidden>
+            <button type="button" class="supplier-pagination-arrow" id="prevSupplierBtn" disabled aria-label="Previous page">
+              <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="supplier-pagination-arrow" id="nextSupplierBtn" disabled aria-label="Next page">
+              <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            </button>
           </div>
         </div>
       </div>

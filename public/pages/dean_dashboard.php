@@ -77,7 +77,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
     <div class="dean-dashboard-panels" aria-label="Requests and pipeline">
         <section class="dashboard-panel dashboard-panel--recent dean-recent-panel" aria-label="Recent requests">
             <header class="dashboard-panel__head dashboard-panel__head--split dean-recent-panel__head">
-                <h2 class="dashboard-panel__title"><i class="fas fa-clock" aria-hidden="true"></i> Recent Requests</h2>
+                <h2 class="dashboard-panel__title"><i class="fas fa-clock" aria-hidden="true"></i> Pending Requests</h2>
                 <button id="requestItemBtn" class="dean-request-btn" type="button" onclick="window.location.href='dean_requisition_form.php?from=dashboard';">
                     <i class="fas fa-plus" aria-hidden="true"></i> Request Item
                 </button>

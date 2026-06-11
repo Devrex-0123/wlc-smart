@@ -52,10 +52,67 @@ try {
         $stmt->execute([$user_id, $activity_type, $description]);
     }
 
+    function officeTypeGroupKey(?string $type): string {
+        $value = strtolower(trim((string) $type));
+        if ($value === 'academics' || $value === 'academic') {
+            return 'academic';
+        }
+        if ($value === 'administrative') {
+            return 'administrative';
+        }
+        if ($value === 'executive') {
+            return 'executive';
+        }
+        return '';
+    }
+
+    function allowedOfficeTypes(): array {
+        return ['Academics', 'Administrative', 'Executive'];
+    }
+
+    function normalizeOfficeTypeForDb(?string $type): ?string {
+        $value = strtolower(trim((string) $type));
+        $map = [
+            'academics' => 'Academics',
+            'academic' => 'Academics',
+            'administrative' => 'Administrative',
+            'executive' => 'Executive',
+        ];
+        return $map[$value] ?? null;
+    }
+
+    // Campus-wide facility summary for dashboard cards
+    if ($action === 'get_summary') {
+        $totalOffices = (int) $db->query("SELECT COUNT(*) FROM offices")->fetchColumn();
+        $typeRows = $db->query("SELECT type, COUNT(*) AS cnt FROM offices GROUP BY type")->fetchAll(PDO::FETCH_ASSOC);
+        $byType = ['academic' => 0, 'administrative' => 0, 'executive' => 0];
+        foreach ($typeRows as $row) {
+            $key = officeTypeGroupKey($row['type'] ?? '');
+            if ($key !== '' && isset($byType[$key])) {
+                $byType[$key] += (int) $row['cnt'];
+            }
+        }
+        $totalLabs = (int) $db->query("SELECT COUNT(*) FROM facilities WHERE COALESCE(laboratory, '') != ''")->fetchColumn();
+        $totalRooms = (int) $db->query("SELECT COUNT(*) FROM facilities WHERE COALESCE(room, '') != ''")->fetchColumn();
+        echo json_encode([
+            'success' => true,
+            'summary' => [
+                'total_offices' => $totalOffices,
+                'academic' => $byType['academic'],
+                'administrative' => $byType['administrative'],
+                'executive' => $byType['executive'],
+                'total_labs' => $totalLabs,
+                'total_rooms' => $totalRooms,
+                'total_facilities' => $totalLabs + $totalRooms,
+            ],
+        ]);
+        exit;
+    }
+
     // List offices with counts (paginated; search + sort apply before LIMIT)
     if ($action === 'list_offices') {
         $page = max(1, (int)($_POST['page'] ?? 1));
-        $per_page = min(50, max(1, (int)($_POST['per_page'] ?? 5)));
+        $per_page = min(200, max(1, (int)($_POST['per_page'] ?? 10)));
         $offset = ($page - 1) * $per_page;
         $q = trim($_POST['q'] ?? '');
         $sort = $_POST['sort'] ?? '';
@@ -123,14 +180,13 @@ try {
     // Add office
     if ($action === 'add_office') {
         $dept_name = trim($_POST['office_name'] ?? '');
-        $office_type = trim($_POST['type'] ?? '');
-        $allowedOfficeTypes = ['academic', 'administrative', 'executive'];
+        $office_type = normalizeOfficeTypeForDb($_POST['type'] ?? '');
 
         if (!$dept_name) {
             echo json_encode(['success' => false, 'message' => 'Office name is required']);
             exit;
         }
-        if (!in_array($office_type, $allowedOfficeTypes, true)) {
+        if ($office_type === null) {
             echo json_encode(['success' => false, 'message' => 'Valid office type is required']);
             exit;
         }
@@ -158,14 +214,13 @@ try {
     if ($action === 'edit_office') {
         $dept_id = $_POST['office_id'] ?? 0;
         $dept_name = trim($_POST['office_name'] ?? '');
-        $office_type = trim($_POST['type'] ?? '');
-        $allowedOfficeTypes = ['academic', 'administrative', 'executive'];
+        $office_type = normalizeOfficeTypeForDb($_POST['type'] ?? '');
 
         if (!$dept_id || !$dept_name) {
             echo json_encode(['success' => false, 'message' => 'Invalid data']);
             exit;
         }
-        if (!in_array($office_type, $allowedOfficeTypes, true)) {
+        if ($office_type === null) {
             echo json_encode(['success' => false, 'message' => 'Valid office type is required']);
             exit;
         }
