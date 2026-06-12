@@ -2,15 +2,14 @@ const API = '../../app/api/admin_requisition.php';
 
 const requestTableBody = document.getElementById('requestTableBody');
 const searchInput = document.getElementById('searchInput');
-const statusFilter = document.getElementById('statusFilter');
-const sortDropdown = document.getElementById('sortDropdown');
 const totalCount = document.getElementById('totalCount');
 const pendingCount = document.getElementById('pendingCount');
-const ongoingCount = document.getElementById('ongoingCount');
+const rejectedCount = document.getElementById('rejectedCount');
 const completedCount = document.getElementById('completedCount');
 const prevReqBtn = document.getElementById('prevReqBtn');
 const nextReqBtn = document.getElementById('nextReqBtn');
 const reqPageInfo = document.getElementById('reqPageInfo');
+const reqPageNum = document.getElementById('reqPageNum');
 
 const confirmModal = document.getElementById('confirmModal');
 const confirmText = document.getElementById('confirmText');
@@ -19,6 +18,9 @@ const confirmOk = document.getElementById('confirmOk');
 
 const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 const sidebar = document.getElementById('sidebar');
+const hideDeleteAction = document.querySelector('[data-req-hide-delete="true"]') !== null;
+const pageScope = document.querySelector('[data-req-scope]')?.dataset.reqScope ?? 'all';
+const filterChips = document.querySelectorAll('.req-filter-chip');
 
 const REQ_PROGRESS_KEY = 'imrms_req_progress_';
 const REQ_VIEWS_PREFIX = 'imrms_request_views_';
@@ -26,6 +28,7 @@ const REQ_VIEWS_PREFIX = 'imrms_request_views_';
 let requests = [];
 const reqPerPage = 5;
 let currentReqPage = 1;
+let activeStatusFilter = 'all';
 
 /** Get timestamp when request was last viewed */
 function getRequestViewedTime(requestId) {
@@ -100,99 +103,146 @@ function openConfirm(message) {
     });
 }
 
+function isRejected(request) {
+    return String(request?.requisition_status || '').toLowerCase() === 'reject';
+}
+
+function isPendingRequisition(request) {
+    return request.status === 'Pending' && !isRejected(request);
+}
+
+function matchesPageScope(request) {
+    if (pageScope === 'management') return isPendingRequisition(request);
+    if (pageScope === 'workflow') return !isPendingRequisition(request);
+    return true;
+}
+
+function matchesStatusFilter(request, filter) {
+    if (filter === 'all') return true;
+    if (filter === 'ongoing') return request.status === 'Ongoing' && !isRejected(request);
+    if (filter === 'rejected') return isRejected(request);
+    if (filter === 'completed') return request.status === 'Completed' && !isRejected(request);
+    return true;
+}
+
+function setActiveFilterChip(filter) {
+    activeStatusFilter = filter;
+    filterChips.forEach((chip) => {
+        const isActive = chip.dataset.filter === filter;
+        chip.classList.toggle('is-active', isActive);
+        chip.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+}
+
 function updateStats(data) {
-    totalCount.textContent = data.length;
-    pendingCount.textContent = data.filter((r) => r.status === 'Pending').length;
-    ongoingCount.textContent = data.filter((r) => r.status === 'Ongoing').length;
-    completedCount.textContent = data.filter((r) => r.status === 'Completed').length;
+    if (totalCount) totalCount.textContent = data.length;
+    if (pendingCount) pendingCount.textContent = data.filter((r) => r.status === 'Pending' && !isRejected(r)).length;
+    if (rejectedCount) rejectedCount.textContent = data.filter(isRejected).length;
+    if (completedCount) completedCount.textContent = data.filter((r) => r.status === 'Completed' && !isRejected(r)).length;
 }
 
 function statusClass(status) {
     return status.toLowerCase();
 }
 
+function formatTablePageInfo(total, page, perPage) {
+    if (total <= 0) return 'Showing 0 to 0 of 0 entries';
+    const start = (page - 1) * perPage + 1;
+    const end = Math.min(page * perPage, total);
+    const noun = total === 1 ? 'entry' : 'entries';
+    return `Showing ${start} to ${end} of ${total} ${noun}`;
+}
+
+function updatePaginationUI(totalRecords, totalPages) {
+    if (reqPageInfo) {
+        reqPageInfo.textContent = formatTablePageInfo(totalRecords, currentReqPage, reqPerPage);
+    }
+    if (reqPageNum) {
+        reqPageNum.textContent = String(currentReqPage);
+    }
+    prevReqBtn.disabled = currentReqPage <= 1 || totalRecords === 0;
+    nextReqBtn.disabled = currentReqPage >= totalPages || totalRecords === 0;
+}
+
 function filteredData() {
-    const q = searchInput.value.trim().toLowerCase();
-    const status = statusFilter.value;
-    const data = requests.filter((r) => {
-        const matchesStatus = status === 'all' || r.status === status;
+    const q = (searchInput?.value ?? '').trim().toLowerCase();
+    return requests.filter((r) => {
+        if (!matchesPageScope(r)) return false;
+        if (filterChips.length && !matchesStatusFilter(r, activeStatusFilter)) return false;
         const reqStr = (r.requester || '').toLowerCase();
         const deptStr = (r.office || '').toLowerCase();
         const hay = `${r.id} ${r.items.join(' ')} ${r.suppliers.join(' ')} ${reqStr} ${deptStr}`.toLowerCase();
-        const matchesQuery = q === '' || hay.includes(q);
-        return matchesStatus && matchesQuery;
+        return q === '' || hay.includes(q);
     });
+}
 
-    const sort = sortDropdown.value;
-    if (sort === 'entry-asc') {
-        data.sort((a, b) => (a.request_id || 0) - (b.request_id || 0));
-    } else if (sort === 'entry-desc') {
-        data.sort((a, b) => (b.request_id || 0) - (a.request_id || 0));
-    }
+function escHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/"/g, '&quot;');
+}
 
-    return data;
+function buildRequestRowHtml(record, rowNum) {
+    const needsAttention = requestNeedsAttention(record);
+    const rowClass = needsAttention ? ' class="request-row-highlight"' : '';
+    const indicatorHtml = needsAttention ? '<span class="request-indicator" title="New or updated request"></span>' : '';
+    return `
+        <tr${rowClass}>
+            <td>${rowNum}</td>
+            <td class="req-requisition-cell">
+                <div class="req-requisition-stack">
+                    <span class="req-requisition-ref">${escHtml(record.id)}</span>
+                    <span class="req-requisition-item">${escHtml(record.items.join(', ') || '—')}</span>
+                    <span class="req-requisition-dept">${escHtml(record.office || '—')}</span>
+                </div>
+            </td>
+            <td>${escHtml(record.requester || '—')}</td>
+            <td><span class="status-pill ${statusClass(record.status)}">${escHtml(record.status)}</span></td>
+            <td>${new Date(record.date).toLocaleDateString()}</td>
+            <td>
+                <div class="actions-cell">
+                    ${pageScope === 'management' ? `
+                    <button type="button" class="edit status-btn view-btn" data-id="${escHtml(record.id)}" data-request-id="${record.request_id}" title="View requisition">
+                        <i class="fas fa-eye"></i> View${indicatorHtml}
+                    </button>` : `
+                    <button type="button" class="edit status-btn" data-id="${escHtml(record.id)}" data-request-id="${record.request_id}" title="View workflow and status">
+                        <i class="fas fa-bars-progress"></i> Status${indicatorHtml}
+                    </button>`}
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+function buildEmptyRowHtml() {
+    return '<tr class="req-table-empty-row" aria-hidden="true"><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
 }
 
 function renderTable() {
     const data = filteredData();
-    updateStats(requests);
+    const statsSource = pageScope === 'management' ? requests.filter(matchesPageScope) : requests;
+    updateStats(statsSource);
     const totalPages = Math.max(1, Math.ceil(data.length / reqPerPage));
     if (currentReqPage > totalPages) {
         currentReqPage = totalPages;
     }
 
-    if (!data.length) {
-        requestTableBody.innerHTML = `
-            <tr>
-                <td colspan="9" style="text-align:center;padding:2rem;color:#64748b;">No requests to display.</td>
-            </tr>
-        `;
-        reqPageInfo.textContent = 'Page 1 of 1';
-        prevReqBtn.disabled = true;
-        nextReqBtn.disabled = true;
-        return;
-    }
-
     const start = (currentReqPage - 1) * reqPerPage;
     const pageRows = data.slice(start, start + reqPerPage);
+    const rowsHtml = [];
 
-    requestTableBody.innerHTML = pageRows.map((r, i) => {
-        const esc = (s) =>
-            String(s)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/"/g, '&quot;');
-        const rowNum = start + i + 1;
-        const needsAttention = requestNeedsAttention(r);
-        const rowClass = needsAttention ? ' class="request-row-highlight"' : '';
-        const indicatorHtml = needsAttention ? '<span class="request-indicator" title="New or updated request"></span>' : '';
-        return `
-        <tr${rowClass}>
-            <td>${rowNum}</td>
-            <td><strong>${esc(r.id)}</strong></td>
-            <td>${new Date(r.date).toLocaleDateString()}</td>
-            <td>${esc(r.requester || '—')}</td>
-            <td>${esc(r.office || '—')}</td>
-            <td>${esc(r.items.join(', '))}</td>
-            <td>${r.suppliers.length}</td>
-            <td><span class="status-pill ${statusClass(r.status)}">${esc(r.status)}</span></td>
-            <td>
-                <div class="actions-cell">
-                    <button type="button" class="edit status-btn" data-id="${esc(r.id)}" data-request-id="${r.request_id}" title="View workflow and status">
-                        <i class="fas fa-bars-progress"></i> Status${indicatorHtml}
-                    </button>
-                    <button type="button" class="delete" data-id="${esc(r.id)}" title="Delete Request">
-                        <i class="fas fa-trash"></i> Delete
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `;
-    }).join('');
+    for (let i = 0; i < reqPerPage; i++) {
+        if (pageRows[i]) {
+            rowsHtml.push(buildRequestRowHtml(pageRows[i], start + i + 1));
+        } else {
+            rowsHtml.push(buildEmptyRowHtml());
+        }
+    }
 
-    reqPageInfo.textContent = `Page ${currentReqPage} of ${totalPages}`;
-    prevReqBtn.disabled = currentReqPage <= 1;
-    nextReqBtn.disabled = currentReqPage >= totalPages;
+    requestTableBody.innerHTML = rowsHtml.join('');
+    requestTableBody.classList.toggle('is-all-placeholder', data.length === 0);
+    updatePaginationUI(data.length, totalPages);
 }
 
 async function loadRequests() {
@@ -237,7 +287,7 @@ requestTableBody.addEventListener('click', async (e) => {
     }
 
     const deleteBtn = e.target.closest('.delete');
-    if (deleteBtn) {
+    if (deleteBtn && !hideDeleteAction) {
         const ok = await openConfirm('Delete this requisition?');
         if (!ok) return;
         const target = requests.find((r) => r.id === deleteBtn.dataset.id);
@@ -268,17 +318,21 @@ requestTableBody.addEventListener('click', async (e) => {
     }
 });
 
-searchInput.addEventListener('input', () => {
-    currentReqPage = 1;
-    renderTable();
-});
-statusFilter.addEventListener('change', () => {
-    currentReqPage = 1;
-    renderTable();
-});
-sortDropdown.addEventListener('change', () => {
-    currentReqPage = 1;
-    renderTable();
+if (searchInput) {
+    searchInput.addEventListener('input', () => {
+        currentReqPage = 1;
+        renderTable();
+    });
+}
+
+filterChips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+        const nextFilter = chip.dataset.filter || 'all';
+        if (nextFilter === activeStatusFilter) return;
+        setActiveFilterChip(nextFilter);
+        currentReqPage = 1;
+        renderTable();
+    });
 });
 
 prevReqBtn.addEventListener('click', () => {

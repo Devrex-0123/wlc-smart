@@ -22,7 +22,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Facility Management - IMRMS</title>
 <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
-<link rel="stylesheet" href="../assets/css/facility_management.css">
+<link rel="stylesheet" href="../assets/css/facility_management.css?v=wlc1">
 <link rel="stylesheet" href="../assets/css/loading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -32,14 +32,25 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <?php $imActivePage = 'facility_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 
 <main class="main-content facility-management-container">
-    <div class="module-page-header">
-        <h1 class="module-page-header__title">Facility Management</h1>
-        <p class="module-page-header__subtitle">Manage facilities, monitor locations, and maintain organized campus spaces.</p>
+    <div class="module-page-header facility-page-header">
+        <div class="facility-page-header__top">
+            <div class="facility-page-header__text">
+                <h1 class="module-page-header__title">Facility Management</h1>
+                <p class="module-page-header__subtitle">Manage facilities, monitor locations, and maintain organized campus spaces.</p>
+            </div>
+            <div class="facility-page-header__actions">
+                <div class="search-container facility-page-header__search">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="officeSearchInput" placeholder="Search" class="search-input" aria-label="Search offices">
+                </div>
+                <button class="btn-filter facility-page-header__add-btn" id="addOfficeBtn" type="button"><i class="fas fa-plus"></i> Add Department</button>
+            </div>
+        </div>
         <section class="facility-summary-stats" aria-label="Facility summary">
             <article class="facility-summary-card facility-summary-card--offices">
                 <div class="facility-summary-card__head">
                     <span class="facility-summary-card__badge" aria-hidden="true"><i class="fas fa-building"></i></span>
-                    <span class="facility-summary-card__label">Departments</span>
+                    <span class="facility-summary-card__label">Total Departments</span>
                 </div>
                 <p class="facility-summary-card__value" id="facilitySummaryOffices">0</p>
                 <p class="facility-summary-card__meta" id="facilitySummaryOfficesMeta">—</p>
@@ -66,7 +77,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                     <span class="facility-summary-card__label">Total facilities</span>
                 </div>
                 <p class="facility-summary-card__value" id="facilitySummaryTotal">0</p>
-                <p class="facility-summary-card__meta">Labs and Rooms</p>
+                <p class="facility-summary-card__meta">Laboratories and Rooms</p>
             </article>
         </section>
     </div>
@@ -90,13 +101,6 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                         <span>Executive Offices</span>
                     </button>
                 </nav>
-                <div class="filter-controls">
-                    <div class="search-container">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="officeSearchInput" placeholder="Search offices..." class="search-input">
-                    </div>
-                    <button class="btn-filter" id="addOfficeBtn" type="button"><i class="fas fa-plus"></i> Add Office</button>
-                </div>
             </div>
 
             <div class="offices-list-card__body">
@@ -136,14 +140,18 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                     </div>
                 </div>
 
-                <div class="pagination-controls office-pagination" id="officePagination" aria-label="Department list pages" hidden>
-                    <button type="button" id="officePrevPageBtn" class="facility-pagination-arrow" disabled aria-label="Previous page">
-                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" id="officeNextPageBtn" class="facility-pagination-arrow" disabled aria-label="Next page">
-                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                    </button>
-                </div>
+                <footer class="table-panel-footer" id="officePagination" aria-label="Department list pages">
+                    <p class="table-panel-footer__info" id="officePageInfo">Showing 0 to 0 of 0 departments</p>
+                    <div class="table-panel-footer__pagination">
+                        <button type="button" id="officePrevPageBtn" class="table-panel-footer__page-btn" disabled aria-label="Previous page">
+                            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                        </button>
+                        <span class="table-panel-footer__page-num" id="officePageNum">1</span>
+                        <button type="button" id="officeNextPageBtn" class="table-panel-footer__page-btn" disabled aria-label="Next page">
+                            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </footer>
             </div>
         </div>
     </div>
@@ -224,14 +232,18 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                             </tbody>
                         </table>
                 </div>
-                <div class="facility-pagination" id="facilityPagination" aria-label="Facility list pages" hidden>
-                    <button type="button" id="facilityPrevPageBtn" class="facility-pagination-arrow" disabled aria-label="Previous page">
-                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" id="facilityNextPageBtn" class="facility-pagination-arrow" disabled aria-label="Next page">
-                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                    </button>
-                </div>
+                <footer class="table-panel-footer" id="facilityPagination" aria-label="Facility list pages">
+                    <p class="table-panel-footer__info" id="facilityPageInfo">Showing 0 to 0 of 0 facilities</p>
+                    <div class="table-panel-footer__pagination">
+                        <button type="button" id="facilityPrevPageBtn" class="table-panel-footer__page-btn" disabled aria-label="Previous page">
+                            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                        </button>
+                        <span class="table-panel-footer__page-num" id="facilityPageNum">1</span>
+                        <button type="button" id="facilityNextPageBtn" class="table-panel-footer__page-btn" disabled aria-label="Next page">
+                            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </footer>
             </div>
         </div>
     </div>

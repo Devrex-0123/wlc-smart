@@ -183,13 +183,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function formatTablePageInfo(total, page, perPage, singular, plural) {
+        if (total <= 0) return `Showing 0 to 0 of 0 ${plural}`;
+        const start = (page - 1) * perPage + 1;
+        const end = Math.min(page * perPage, total);
+        const noun = total === 1 ? singular : plural;
+        return `Showing ${start} to ${end} of ${total} ${noun}`;
+    }
+
     function updatePaginationUI(totalRecords, totalPages) {
         if (!prevSupplierBtn || !nextSupplierBtn) return;
 
-        const showPagination = totalRecords > ITEMS_PER_PAGE;
-        if (supplierPagination) supplierPagination.hidden = !showPagination;
-        prevSupplierBtn.disabled = !showPagination || currentPage <= 1;
-        nextSupplierBtn.disabled = !showPagination || currentPage >= totalPages || totalRecords === 0;
+        const pageInfo = document.getElementById('supplierPageInfo');
+        const pageNum = document.getElementById('supplierPageNum');
+        if (pageInfo) {
+            pageInfo.textContent = formatTablePageInfo(totalRecords, currentPage, ITEMS_PER_PAGE, 'supplier', 'suppliers');
+        }
+        if (pageNum) pageNum.textContent = String(currentPage);
+        prevSupplierBtn.disabled = currentPage <= 1 || totalRecords === 0;
+        nextSupplierBtn.disabled = currentPage >= totalPages || totalRecords === 0;
     }
 
     function applySupplierView() {

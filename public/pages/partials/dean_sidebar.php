@@ -11,8 +11,8 @@ $deanActivePage = isset($deanActivePage) && is_string($deanActivePage) && $deanA
     ? $deanActivePage
     : basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
 
-if ($deanActivePage === 'dean_requisition_status_progress.php') {
-    $deanActivePage = 'dean_requisition_status.php';
+if ($deanActivePage === 'dean_requisition_status_progress.php' || $deanActivePage === 'dean_requisition_status.php') {
+    $deanActivePage = 'dean_requisition_management.php';
 }
 
 $deanDisplayName = trim((string)($deanUser['full_name'] ?? ''));
@@ -42,11 +42,6 @@ $deanIsActive = static function (string $page) use ($deanActivePage): string {
             <li>
                 <a href="dean_requisition_management.php" class="internal-link<?php echo $deanIsActive('dean_requisition_management.php'); ?>" data-notification-key="inventory_review" data-notification-view-key="inventory_review">
                     <i class="fas fa-file-signature"></i> <span>Requisition Management</span>
-                </a>
-            </li>
-            <li class="nav-gap-sm">
-                <a href="dean_requisition_status.php" class="internal-link<?php echo $deanIsActive('dean_requisition_status.php'); ?>" data-notification-key="requester_attention" data-notification-view-key="requester_attention">
-                    <i class="fas fa-bars-progress"></i> <span>Status</span>
                 </a>
             </li>
 

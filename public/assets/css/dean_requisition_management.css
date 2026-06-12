@@ -5,6 +5,474 @@
     gap: 1rem;
 }
 
+.module-page-header.management-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+}
+
+/* Page header — title left, search right (Account Management style) */
+.requisition-management-container .req-page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.85rem;
+}
+
+.requisition-management-container .req-page-header__text {
+    min-width: 0;
+    flex: 1 1 280px;
+}
+
+.requisition-management-container .req-page-header__title {
+    margin: 0 0 0.25rem;
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.2;
+}
+
+.requisition-management-container .req-page-header__subtitle {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    max-width: 42rem;
+}
+
+.requisition-management-container .req-page-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 0 1 auto;
+    margin-left: auto;
+    margin-top: 0.35rem;
+    padding-bottom: 0.1rem;
+}
+
+.requisition-management-container .req-page-header__search {
+    position: relative;
+    width: min(320px, 42vw);
+    min-width: 200px;
+}
+
+.requisition-management-container .req-page-header__search i {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.requisition-management-container .req-page-header__search .search-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 0.75rem 0 2.1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    color: #334155;
+    background: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.requisition-management-container .req-page-header__search .search-input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.requisition-management-container .req-page-header__search .search-input::placeholder {
+    color: #94a3b8;
+}
+
+.requisition-management-container .req-filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.85rem;
+}
+
+.requisition-management-container .req-filter-chips-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.requisition-management-container .req-filter-bar .req-filter-chips-bar {
+    margin-bottom: 0;
+}
+
+.requisition-management-container .req-filter-bar__search {
+    position: relative;
+    flex: 0 1 320px;
+    width: min(320px, 100%);
+    min-width: 200px;
+    margin-left: auto;
+}
+
+.requisition-management-container .req-filter-bar__search i {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.requisition-management-container .req-filter-bar__search .search-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 0.75rem 0 2.1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    color: #334155;
+    background: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.requisition-management-container .req-filter-bar__search .search-input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.requisition-management-container .req-filter-bar__search .search-input::placeholder {
+    color: #94a3b8;
+}
+
+.requisition-management-container .req-filter-chip {
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #475569;
+    border-radius: 999px;
+    padding: 0.38rem 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+        background 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.requisition-management-container .req-filter-chip:hover {
+    border-color: #bbf7d0;
+    color: #166534;
+    background: #f8fffb;
+}
+
+.requisition-management-container .req-filter-chip.is-active {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.22);
+}
+
+.requisition-management-container .req-filter-chip.is-active:hover {
+    background: #15803d;
+    border-color: #15803d;
+    color: #fff;
+}
+
+@media (max-width: 768px) {
+    .requisition-management-container .req-page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .requisition-management-container .req-page-header__actions {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .requisition-management-container .req-page-header__search {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .requisition-management-container .req-filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .requisition-management-container .req-filter-bar__search {
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        margin-left: 0;
+    }
+}
+
+@keyframes reqSummaryEnter {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.requisition-management-container .req-summary-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 1rem;
+}
+
+.requisition-management-container .req-summary-card {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-height: 118px;
+    padding: 0.9rem 1rem 0.85rem;
+    padding-left: calc(1rem + 4px);
+    border-radius: 14px;
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    background: linear-gradient(155deg, #ffffff 0%, #f8fafc 55%, #ffffff 100%);
+    box-shadow:
+        0 4px 18px rgba(15, 23, 42, 0.06),
+        0 0 0 1px rgba(255, 255, 255, 0.85) inset;
+    min-width: 0;
+    cursor: default;
+    transition:
+        transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 0.32s ease,
+        border-color 0.32s ease;
+    animation: reqSummaryEnter 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.requisition-management-container .req-summary-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+    pointer-events: none;
+}
+
+.requisition-management-container .req-summary-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 55%;
+    height: 100%;
+    background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.78) 48%, transparent 100%);
+    transform: skewX(-18deg);
+    pointer-events: none;
+    transition: left 0.65s ease;
+}
+
+.requisition-management-container .req-summary-card:nth-child(1) { animation-delay: 0.05s; }
+.requisition-management-container .req-summary-card:nth-child(2) { animation-delay: 0.12s; }
+.requisition-management-container .req-summary-card:nth-child(3) { animation-delay: 0.19s; }
+.requisition-management-container .req-summary-card:nth-child(4) { animation-delay: 0.26s; }
+
+.requisition-management-container .req-summary-card:hover {
+    transform: translateY(-4px);
+    border-color: #cbd5e1;
+    box-shadow:
+        0 14px 32px rgba(15, 23, 42, 0.1),
+        0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+.requisition-management-container .req-summary-card:hover::after {
+    left: 130%;
+}
+
+.requisition-management-container .req-summary-card__head {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.requisition-management-container .req-summary-card__badge {
+    width: 27px;
+    height: 27px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.77rem;
+    flex-shrink: 0;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.requisition-management-container .req-summary-card:hover .req-summary-card__badge {
+    transform: scale(1.08) rotate(-4deg);
+}
+
+.requisition-management-container .req-summary-card__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #475569;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+}
+
+.requisition-management-container .req-summary-card__value {
+    position: relative;
+    z-index: 1;
+    margin: 0.05rem 0 0;
+    font-size: 1.92rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.3s ease, transform 0.3s ease;
+}
+
+.requisition-management-container .req-summary-card:hover .req-summary-card__value {
+    transform: scale(1.02);
+    transform-origin: left center;
+}
+
+.requisition-management-container .req-summary-card__meta {
+    position: relative;
+    z-index: 1;
+    margin: auto 0 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #64748b;
+    line-height: 1.32;
+}
+
+.requisition-management-container .req-summary-card--total::before {
+    background: linear-gradient(180deg, #1e40af 0%, #3b82f6 100%);
+}
+
+.requisition-management-container .req-summary-card--total {
+    background: linear-gradient(155deg, #ffffff 0%, #eff6ff 52%, #ffffff 100%);
+}
+
+.requisition-management-container .req-summary-card--total .req-summary-card__badge {
+    color: #1d4ed8;
+    background: #dbeafe;
+    border: 1px solid #bfdbfe;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+}
+
+.requisition-management-container .req-summary-card--total:hover {
+    border-color: #93c5fd;
+    box-shadow:
+        0 14px 32px rgba(37, 99, 235, 0.12),
+        0 0 0 1px rgba(219, 234, 254, 0.9) inset;
+}
+
+.requisition-management-container .req-summary-card--pending::before {
+    background: linear-gradient(180deg, #b45309 0%, #f59e0b 100%);
+}
+
+.requisition-management-container .req-summary-card--pending {
+    background: linear-gradient(155deg, #ffffff 0%, #fffbeb 52%, #ffffff 100%);
+}
+
+.requisition-management-container .req-summary-card--pending .req-summary-card__badge {
+    color: #b45309;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.12);
+}
+
+.requisition-management-container .req-summary-card--pending:hover {
+    border-color: #fcd34d;
+    box-shadow:
+        0 14px 32px rgba(245, 158, 11, 0.12),
+        0 0 0 1px rgba(254, 243, 199, 0.9) inset;
+}
+
+.requisition-management-container .req-summary-card--rejected::before {
+    background: linear-gradient(180deg, #b91c1c 0%, #ef4444 100%);
+}
+
+.requisition-management-container .req-summary-card--rejected {
+    background: linear-gradient(155deg, #ffffff 0%, #fef2f2 52%, #ffffff 100%);
+}
+
+.requisition-management-container .req-summary-card--rejected .req-summary-card__badge {
+    color: #b91c1c;
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.12);
+}
+
+.requisition-management-container .req-summary-card--rejected .req-summary-card__value {
+    color: #991b1b;
+}
+
+.requisition-management-container .req-summary-card--rejected:hover {
+    border-color: #fca5a5;
+    box-shadow:
+        0 14px 32px rgba(239, 68, 68, 0.12),
+        0 0 0 1px rgba(254, 226, 226, 0.9) inset;
+}
+
+.requisition-management-container .req-summary-card--completed::before {
+    background: linear-gradient(180deg, #166534 0%, #22c55e 100%);
+}
+
+.requisition-management-container .req-summary-card--completed {
+    background: linear-gradient(155deg, #ffffff 0%, #f0fdf4 52%, #ffffff 100%);
+}
+
+.requisition-management-container .req-summary-card--completed .req-summary-card__badge {
+    color: #166534;
+    background: #dcfce7;
+    border: 1px solid #bbf7d0;
+    box-shadow: 0 4px 12px rgba(22, 101, 52, 0.12);
+}
+
+.requisition-management-container .req-summary-card--completed .req-summary-card__value {
+    color: #14532d;
+}
+
+.requisition-management-container .req-summary-card--completed:hover {
+    border-color: #86efac;
+    box-shadow:
+        0 14px 32px rgba(22, 101, 52, 0.12),
+        0 0 0 1px rgba(220, 252, 231, 0.9) inset;
+}
+
+@media (max-width: 1100px) {
+    .requisition-management-container .req-summary-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .requisition-management-container .req-summary-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Match dean account management filter layout */
 .filter-section {
     background: white;
@@ -246,7 +714,257 @@
     font-size: 0.9rem;
 }
 
-/* Table headers: dashboard.css (.main-content .table-wrapper thead th) */
+/* Requisition table — solid green header (Facility Department List style) */
+.requisition-management-container {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.requisition-management-container .table-container {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.requisition-management-container .table-container .table-wrapper {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+.requisition-management-container .req-management-table {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.requisition-management-container .req-management-table thead {
+    background: #106b44;
+}
+
+.requisition-management-container .req-management-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #106b44 !important;
+    color: #ffffff !important;
+    font-weight: 700;
+    font-size: 0.72rem;
+    padding: 0.7rem 0.5rem !important;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.25;
+    text-align: center !important;
+    vertical-align: middle !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: none !important;
+    border-bottom: none !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.16) !important;
+}
+
+.requisition-management-container .req-management-table thead th:nth-child(odd),
+.requisition-management-container .req-management-table thead th:nth-child(even) {
+    background: #106b44 !important;
+    color: #ffffff !important;
+}
+
+/* # column — percentage only; do not mix px + % on colgroup or the browser expands this column */
+.requisition-management-container .req-management-table thead th:nth-child(1),
+.requisition-management-container .req-management-table tbody td:nth-child(1) {
+    width: 4% !important;
+    max-width: 48px !important;
+    min-width: 0 !important;
+    padding: 0.45rem 0.15rem !important;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    line-height: 1.1;
+    text-align: center !important;
+    white-space: nowrap;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.requisition-management-container .req-management-table thead th:nth-child(1) {
+    border-top-left-radius: 0;
+    padding-top: 0.55rem !important;
+    padding-bottom: 0.55rem !important;
+}
+
+.requisition-management-container .req-management-table thead th:nth-child(3),
+.requisition-management-container .req-management-table tbody td:nth-child(3) {
+    width: 18% !important;
+    min-width: 0;
+}
+
+.requisition-management-container .req-management-table thead th:last-child {
+    border-top-right-radius: 0;
+    border-right: none !important;
+}
+
+/* Override dashboard.css tbody tr borders — use cell borders on data rows only */
+.requisition-management-container .req-management-table tbody tr {
+    border: none !important;
+    border-bottom: none !important;
+    background: #fff;
+    transform: none !important;
+}
+
+.requisition-management-container .req-management-table tbody tr {
+    height: 5.25rem;
+}
+
+.requisition-management-container .req-management-table tbody td {
+    height: 5.25rem;
+    min-height: 5.25rem;
+    max-height: 5.25rem;
+    padding: 0.65rem 0.5rem;
+    font-size: 0.82rem;
+    color: #334155;
+    text-align: center;
+    vertical-align: middle;
+    border: none !important;
+    background: #fff;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.requisition-management-container .req-management-table tbody tr:not(.req-table-empty-row) td {
+    border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.requisition-management-container .req-management-table tbody tr:not(.req-table-empty-row):has(+ tr.req-table-empty-row) td {
+    border-bottom: none !important;
+}
+
+.requisition-management-container .req-management-table tbody tr:not(.req-table-empty-row):last-child td {
+    border-bottom: none !important;
+}
+
+.requisition-management-container .req-management-table tbody.is-all-placeholder tr td {
+    border: none !important;
+    border-bottom: none !important;
+}
+
+.requisition-management-container .req-management-table tbody tr:not(.req-table-empty-row):hover td {
+    background: #f8fffb;
+}
+
+.requisition-management-container .req-management-table tbody tr.request-row-highlight td {
+    background: #f0fdf4;
+}
+
+.requisition-management-container .req-management-table tbody tr.req-table-empty-row,
+.requisition-management-container .req-management-table tbody tr.req-table-empty-row td {
+    height: 5.25rem;
+    min-height: 5.25rem;
+    max-height: 5.25rem;
+    padding: 0.65rem 0.5rem;
+    background: #fff !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.requisition-management-container .req-management-table tbody tr.req-table-empty-row:hover,
+.requisition-management-container .req-management-table tbody tr.req-table-empty-row:hover td {
+    background: #fff !important;
+    transform: none !important;
+}
+
+.requisition-management-container .req-management-table .req-requisition-cell {
+    text-align: left !important;
+    min-width: 0;
+    max-width: none;
+}
+
+.requisition-management-container .req-requisition-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.12rem;
+    line-height: 1.3;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+.requisition-management-container .req-requisition-ref {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #0f766e;
+    letter-spacing: 0.02em;
+}
+
+.requisition-management-container .req-requisition-item {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #0f172a;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.requisition-management-container .req-requisition-dept {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #64748b;
+}
+
+.requisition-management-container .req-management-table thead th:last-child,
+.requisition-management-container .req-management-table tbody td:last-child {
+    padding-left: 0.35rem !important;
+    padding-right: 0.35rem !important;
+}
+
+.requisition-management-container[data-req-hide-delete="true"] .req-management-table thead th:last-child,
+.requisition-management-container[data-req-hide-delete="true"] .req-management-table tbody td:last-child {
+    width: 8% !important;
+    max-width: 82px !important;
+    min-width: 0 !important;
+    padding-left: 0.2rem !important;
+    padding-right: 0.2rem !important;
+    white-space: nowrap;
+}
+
+.requisition-management-container[data-req-hide-delete="true"] .req-management-table .actions-cell {
+    flex-wrap: nowrap;
+    gap: 0.2rem;
+}
+
+.requisition-management-container[data-req-hide-delete="true"] .req-management-table .actions-cell button {
+    padding: 0.28rem 0.38rem;
+    font-size: 0.68rem;
+    white-space: nowrap;
+}
+
+.requisition-management-container[data-req-hide-delete="true"] .req-management-table .actions-cell .delete {
+    display: none !important;
+}
+
+.requisition-management-container .req-management-table .actions-cell {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.requisition-management-container .req-management-table .actions-cell button {
+    padding: 0.3rem 0.45rem;
+    font-size: 0.72rem;
+    gap: 0.2rem;
+    max-width: 100%;
+}
 
 .status-pill {
     display: inline-flex;

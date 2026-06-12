@@ -40,9 +40,9 @@ if ($isComptroller) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Requisition progress - IMRMS</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
-    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css">
+    <title>Requisition Progress - IMRMS</title>
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc43">
+    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css?v=wlc10">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -51,18 +51,11 @@ if ($isComptroller) {
 <?php if ($isComptroller): ?>
     <?php require __DIR__ . '/partials/comptroller_sidebar.php'; ?>
 <?php else: ?>
-    <?php $imActivePage = 'requisition_status.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
+    <?php $imActivePage = 'requisition_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 <?php endif; ?>
 
 <main class="main-content">
-    <a href="<?php echo htmlspecialchars($rspProgressBackHref, ENT_QUOTES, 'UTF-8'); ?>" class="rsp-back rsp-back-upper-left" aria-label="<?php echo htmlspecialchars($rspBackAriaLabel, ENT_QUOTES, 'UTF-8'); ?>"><i class="fas fa-arrow-left"></i> Back</a>
-    <div class="page-header management-header" style="margin-bottom: 1rem;">
-        <div>
-            <h1>Requisition progress</h1>
-            <p>Workflow overview for this request. Open forms below to review canvass, purchase requisition, or purchase order.</p>
-        </div>
-    </div>
-    <div id="rspRoot" data-readonly="<?php echo htmlspecialchars($rspReadonly, ENT_QUOTES, 'UTF-8'); ?>" data-viewer="<?php echo htmlspecialchars($rspViewer, ENT_QUOTES, 'UTF-8'); ?>" data-back-href="<?php echo htmlspecialchars($rspProgressBackHref, ENT_QUOTES, 'UTF-8'); ?>" data-progress-from="<?php echo htmlspecialchars($progressPageFrom, ENT_QUOTES, 'UTF-8'); ?>"></div>
+    <div id="rspRoot" data-readonly="<?php echo htmlspecialchars($rspReadonly, ENT_QUOTES, 'UTF-8'); ?>" data-viewer="<?php echo htmlspecialchars($rspViewer, ENT_QUOTES, 'UTF-8'); ?>" data-back-href="<?php echo htmlspecialchars($rspProgressBackHref, ENT_QUOTES, 'UTF-8'); ?>" data-back-aria-label="<?php echo htmlspecialchars($rspBackAriaLabel, ENT_QUOTES, 'UTF-8'); ?>" data-progress-from="<?php echo htmlspecialchars($progressPageFrom, ENT_QUOTES, 'UTF-8'); ?>"></div>
 </main>
 
 <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Menu"><i class="fas fa-bars"></i></button>
@@ -73,6 +66,6 @@ if ($isComptroller) {
 <?php else: ?>
 <?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 <?php endif; ?>
-<script src="../assets/js/requisition_status_progress.js"></script>
+<script src="../assets/js/requisition_status_progress.js?v=wlc10"></script>
 </body>
 </html>

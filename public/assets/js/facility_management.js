@@ -396,17 +396,28 @@ function appendFacilitySpacerRows(count) {
     }
 }
 
+function formatTablePageInfo(total, page, perPage, singular, plural) {
+    if (total <= 0) return `Showing 0 to 0 of 0 ${plural}`;
+    const start = (page - 1) * perPage + 1;
+    const end = Math.min(page * perPage, total);
+    const noun = total === 1 ? singular : plural;
+    return `Showing ${start} to ${end} of ${total} ${noun}`;
+}
+
 function updateOfficePagination(totalItems, totalPages) {
     officeTotalPages = Math.max(1, totalPages || 1);
     const prev = document.getElementById('officePrevPageBtn');
     const next = document.getElementById('officeNextPageBtn');
-    const pagination = document.getElementById('officePagination');
+    const pageInfo = document.getElementById('officePageInfo');
+    const pageNum = document.getElementById('officePageNum');
     if (!prev || !next) return;
 
-    const showPagination = totalItems > DEPARTMENTS_PER_PAGE;
-    if (pagination) pagination.hidden = !showPagination;
-    prev.disabled = !showPagination || officePage <= 1;
-    next.disabled = !showPagination || officePage >= officeTotalPages || totalItems === 0;
+    if (pageInfo) {
+        pageInfo.textContent = formatTablePageInfo(totalItems, officePage, DEPARTMENTS_PER_PAGE, 'department', 'departments');
+    }
+    if (pageNum) pageNum.textContent = String(officePage);
+    prev.disabled = officePage <= 1 || totalItems === 0;
+    next.disabled = officePage >= officeTotalPages || totalItems === 0;
 }
 
 function setupOfficePagination() {
@@ -709,10 +720,14 @@ function updateFacilityPaginationControls(totalItems) {
     if (facilityPage > facilityTotalPages) facilityPage = facilityTotalPages;
     if (facilityPage < 1) facilityPage = 1;
 
-    const showPagination = totalItems > FACILITIES_PER_PAGE;
-    if (facilityPagination) facilityPagination.hidden = !showPagination;
-    if (facilityPrevPageBtn) facilityPrevPageBtn.disabled = !showPagination || facilityPage <= 1;
-    if (facilityNextPageBtn) facilityNextPageBtn.disabled = !showPagination || facilityPage >= facilityTotalPages;
+    const pageInfo = document.getElementById('facilityPageInfo');
+    const pageNum = document.getElementById('facilityPageNum');
+    if (pageInfo) {
+        pageInfo.textContent = formatTablePageInfo(totalItems, facilityPage, FACILITIES_PER_PAGE, 'facility', 'facilities');
+    }
+    if (pageNum) pageNum.textContent = String(facilityPage);
+    if (facilityPrevPageBtn) facilityPrevPageBtn.disabled = facilityPage <= 1 || totalItems === 0;
+    if (facilityNextPageBtn) facilityNextPageBtn.disabled = facilityPage >= facilityTotalPages || totalItems === 0;
 }
 
 function renderFacilityTable(facilities) {

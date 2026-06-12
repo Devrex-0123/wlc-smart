@@ -8,8 +8,22 @@
     animation: fadeIn 0.4s ease-out;
 }
 
+/* Page header — title left, search + add supplier right (matches Audit Trail / Account Management) */
+.supplier-page-header__top {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.supplier-page-header__text {
+    min-width: 0;
+    flex: 1 1 280px;
+}
+
 .supplier-management-container .module-page-header {
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.75rem;
     text-align: left;
     align-self: stretch;
 }
@@ -24,11 +38,82 @@
 }
 
 .supplier-management-container .module-page-header__subtitle {
-    margin: 0 0 0.55rem;
+    margin: 0;
     color: #64748b;
     font-size: 0.9rem;
     line-height: 1.35;
     text-align: left;
+}
+
+.supplier-page-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 0 1 auto;
+    margin-left: auto;
+    margin-top: 0.35rem;
+    padding-bottom: 0.1rem;
+}
+
+.supplier-page-header__search {
+    position: relative;
+    width: min(320px, 42vw);
+    min-width: 200px;
+}
+
+.supplier-page-header__search i {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.supplier-page-header__search .search-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 0.75rem 0 2.1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    color: #334155;
+    background: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.supplier-page-header__search .search-input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.supplier-page-header__search .search-input::placeholder {
+    color: #94a3b8;
+}
+
+.supplier-page-header__add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 38px;
+    padding: 0 1rem;
+    background: #16a34a;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.supplier-page-header__add-btn:hover {
+    background: #15803d;
+    transform: translateY(-1px);
 }
 
 .supplier-management-container #suppliersView {
@@ -55,107 +140,6 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     overflow: hidden;
     animation: slideDown 0.5s ease;
-}
-
-.suppliers-list-card .filter-section.suppliers-filter-bar {
-    background: #fff;
-    padding: 0.85rem 1.25rem;
-    min-height: 0;
-    border-radius: 0;
-    box-shadow: none;
-    margin-bottom: 0;
-    border-bottom: none;
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    box-sizing: border-box;
-    animation: none;
-}
-
-.suppliers-list-card__heading {
-    margin: 0;
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: #1e293b;
-    line-height: 1.2;
-    flex: 0 0 auto;
-    white-space: nowrap;
-}
-
-.suppliers-filter-bar .filter-controls {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 0.65rem;
-    margin-left: auto;
-    flex: 0 0 auto;
-}
-
-/* Search + Add Supplier — match account_management filter bar */
-.suppliers-filter-bar .search-container {
-    position: relative;
-    flex: 0 0 auto;
-    width: 230px;
-    min-width: 0;
-}
-
-.suppliers-filter-bar .search-container i {
-    position: absolute;
-    left: 0.5rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #94a3b8;
-    font-size: 0.75rem;
-    pointer-events: none;
-}
-
-.suppliers-filter-bar .search-input {
-    width: 100%;
-    height: 32px;
-    padding: 0 0.5rem 0 1.75rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    font-size: 0.8rem;
-    transition: all 0.3s ease;
-    font-family: inherit;
-    box-sizing: border-box;
-    color: #334155;
-    background: #fff;
-}
-
-.suppliers-filter-bar .search-input:focus {
-    outline: none;
-    border-color: #16a34a;
-    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
-}
-
-.suppliers-filter-bar .search-input::placeholder {
-    color: #cbd5e1;
-}
-
-.suppliers-filter-bar .btn-filter {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    height: 30px;
-    padding: 0 0.8rem;
-    background: #16a34a;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.85rem;
-    white-space: nowrap;
-    box-sizing: border-box;
-    transition: background 0.2s ease, transform 0.2s ease;
-}
-
-.suppliers-filter-bar .btn-filter:hover {
-    background: #15803d;
-    transform: translateY(-1px);
 }
 
 .suppliers-list-card .table-container {
@@ -217,51 +201,11 @@
     z-index: 2;
 }
 
-.suppliers-list-card .pagination-controls,
-.suppliers-list-card .supplier-pagination {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.85rem 1.25rem 0.95rem;
-    border-top: 1px solid #e2e8f0;
-    background: #fff;
+.suppliers-list-card .table-panel-footer {
+    padding: 0.75rem 1.25rem 0.95rem;
     flex-shrink: 0;
     margin-top: 0;
     min-height: 0;
-}
-
-.supplier-pagination-arrow {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border: 1px solid #106b44;
-    border-radius: 8px;
-    background: #f0fdf4;
-    color: #106b44;
-    font-size: 0.88rem;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 6px rgba(16, 107, 68, 0.12);
-    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-}
-
-.supplier-pagination-arrow:not(:disabled):hover {
-    background: #106b44;
-    border-color: #106b44;
-    color: #fff;
-    box-shadow: 0 4px 10px rgba(16, 107, 68, 0.24);
-}
-
-.supplier-pagination-arrow:disabled {
-    background: #f1f5f9;
-    border-color: #e2e8f0;
-    color: #94a3b8;
-    box-shadow: none;
-    opacity: 1;
-    cursor: not-allowed;
 }
 
 /* Supplier table header — solid green bar (Audit Trail style) */
@@ -1261,33 +1205,32 @@
         align-items: stretch;
     }
 
-    .suppliers-list-card .filter-section.suppliers-filter-bar {
-        flex-wrap: wrap;
+    .supplier-page-header__top {
+        flex-direction: column;
+        align-items: stretch;
     }
 
-    .suppliers-filter-bar .filter-controls {
+    .supplier-page-header__actions {
         width: 100%;
         margin-left: 0;
-        flex-wrap: wrap;
-    }
-
-    .filter-controls {
-        width: 100%;
+        margin-top: 0.5rem;
+        padding-bottom: 0;
         flex-direction: column;
+        align-items: stretch;
     }
 
-    .search-container {
-        min-width: unset;
-        max-width: unset;
+    .supplier-page-header__search {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .supplier-page-header__add-btn {
+        width: 100%;
+        justify-content: center;
     }
 
     .sort-dropdown {
         width: 100%;
-    }
-
-    .filter-controls button {
-        width: 100%;
-        justify-content: center;
     }
 
     .suppliers-list-card .table-wrapper {

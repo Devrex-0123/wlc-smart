@@ -61,6 +61,7 @@ function readRootConfig(root) {
         return {
             readonly: false,
             backHref: 'requisition_management.php',
+            backAriaLabel: 'Back',
             deanFlow: false,
             progressFrom: '',
             viewer: '',
@@ -68,10 +69,11 @@ function readRootConfig(root) {
     }
     const readonly = root.dataset.readonly === '1' || root.dataset.readonly === 'true';
     const backHref = root.dataset.backHref || 'requisition_management.php';
+    const backAriaLabel = root.dataset.backAriaLabel || 'Back';
     const deanFlow = root.dataset.deanFlow === '1' || root.dataset.deanFlow === 'true';
     const progressFrom = root.dataset.progressFrom || '';
     const viewer = root.dataset.viewer || '';
-    return { readonly, backHref, deanFlow, progressFrom, viewer };
+    return { readonly, backHref, backAriaLabel, deanFlow, progressFrom, viewer };
 }
 
 function loadRecord(requestId) {
@@ -192,13 +194,48 @@ function purchaseRequisitionFullyAccepted(record) {
     );
 }
 
-function canViewWorkflowForms(config) {
-    return (
-        config.deanFlow ||
-        config.viewer === 'inventory' ||
-        config.viewer === 'comptroller' ||
-        config.viewer === 'president'
-    );
+/** Requisition form is available once the request exists. */
+function canOpenRequisitionForm(record) {
+    return numericRequestId(record) != null;
+}
+
+/** Canvass opens after requisition acceptance (or staff review when canvass has a decision). */
+function canOpenCanvassForm(record, config) {
+    const reqNum = numericRequestId(record);
+    if (reqNum == null) return false;
+    const rqLc = String(record.requisition_status || '').trim().toLowerCase();
+    if (rqLc === 'reject') return false;
+    if (inventoryRequisitionAccepted(record)) return true;
+    const invOrComp = config.viewer === 'inventory' || config.viewer === 'comptroller';
+    const canvasLc = String(record.canvas_status || '').trim().toLowerCase();
+    return invOrComp && (canvasLc === 'accept' || canvasLc === 'reject');
+}
+
+/** Purchase requisition opens after the canvass verification chain is complete. */
+function canOpenPurchaseRequisitionForm(record) {
+    return numericRequestId(record) != null && canvassFullyVerified(record);
+}
+
+/** Purchase order opens after purchase requisition approval and a PO record exists. */
+function canOpenPurchaseOrderForm(record) {
+    const reqNum = numericRequestId(record);
+    if (reqNum == null) return false;
+    const poId = Number(record.purchase_order_id || 0);
+    return purchaseRequisitionFullyAccepted(record) && poId > 0;
+}
+
+function buildFormLinkRow({ label, formType, href, enabled, requestId }) {
+    const unviewed =
+        enabled && requestId != null && !isFormViewed(requestId, formType)
+            ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>'
+            : '';
+    const disabledCls = enabled ? '' : ' rsp-form-view-disabled';
+    const ariaDisabled = enabled ? '' : ' aria-disabled="true"';
+    const linkHref = enabled ? href : '#';
+    return `<li class="rsp-form-link-row">
+                <span class="rsp-form-link-text">${label}${unviewed}</span>
+                <a href="${linkHref}" class="rsp-form-view${disabledCls}" data-form-type="${formType}"${ariaDisabled}>View</a>
+            </li>`;
 }
 
 async function ensurePurchaseOrderForProgress(requestId, record) {
@@ -470,14 +507,7 @@ function renderApp(root, record, config) {
     progressRecord = record;
     const st = record.status || 'Pending';
     const { currentIndex, pct, fillPct } = getStepState(record);
-    const badgeClass = statusClass(st);
     const sel = (v) => (st === v ? ' selected' : '');
-
-    const items = Array.isArray(record.items) ? record.items : [];
-    const itemsHtml =
-        items.length > 0
-            ? `<ul class="rsp-items-list">${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`
-            : '<p class="rsp-step-desc" style="margin:0;">—</p>';
 
     const horizontalSteps = STEP_DEFS.map((def, i) => {
         let phase = 'upcoming';
@@ -517,10 +547,14 @@ function renderApp(root, record, config) {
         `;
     }).join('');
 
-    const updateCard = config.readonly
+    const progressSubtitle = config.deanFlow
+        ? 'View-only workflow for your request (you cannot change status here).'
+        : 'Track the current status and approval progress of this requisition.';
+
+    const updateSection = config.readonly
         ? ''
         : `
-                <div class="rsp-card rsp-update-card">
+                <div class="rsp-hero-section rsp-hero-update">
                     <h3><i class="fas fa-sliders"></i> Update status</h3>
                     <p class="rsp-step-desc" style="margin:0 0 0.85rem 0;">Adjust the workflow stage when needed. The progress view updates after saving.</p>
                     <div class="rsp-update-row">
@@ -595,55 +629,63 @@ function renderApp(root, record, config) {
               '&from=' +
               encodeURIComponent(purchaseOrderFromParam)
             : '#';
-    const rqLc = String(record.requisition_status || '').trim().toLowerCase();
-    const stTrim = String(record.status || '').trim();
-    const canvasLc = String(record.canvas_status || '').trim().toLowerCase();
-    const invOrComp = config.viewer === 'inventory' || config.viewer === 'comptroller';
-    const showCanvassCta =
-        reqNum != null &&
-        rqLc !== 'reject' &&
-        (rqLc === 'accept' ||
-            (invOrComp && (canvasLc === 'accept' || canvasLc === 'reject')));
+    const requisitionFormEnabled = canOpenRequisitionForm(record);
+    const canvassFormEnabled = canOpenCanvassForm(record, config);
+    const purchaseFormEnabled = canOpenPurchaseRequisitionForm(record);
+    const purchaseOrderFormEnabled = canOpenPurchaseOrderForm(record);
 
-    const canvassRow = showCanvassCta
-        ? `<li class="rsp-form-link-row">
-                <span class="rsp-form-link-text">Canvass sheet / abstract of quotation${!isFormViewed(numericRequestId(record), 'canvass') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>
-                <a href="${canvassHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}" data-form-type="canvass"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
-            </li>`
-        : '';
-    const showPurchaseCta = canViewWorkflowForms(config) && canvassFullyVerified(record);
-    const purchaseRow = showPurchaseCta
-        ? `<li class="rsp-form-link-row">
-                <span class="rsp-form-link-text">Purchase requisition form${!isFormViewed(numericRequestId(record), 'purchase') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>
-                <a href="${purchaseHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}" data-form-type="purchase"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
-            </li>`
-        : '';
-    const showPurchaseOrderCta =
-        canViewWorkflowForms(config) && purchaseRequisitionFullyAccepted(record) && poId > 0;
-    const purchaseOrderRow = showPurchaseOrderCta
-        ? `<li class="rsp-form-link-row">
-                <span class="rsp-form-link-text">Purchase order form${!isFormViewed(numericRequestId(record), 'purchase_order') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>
-                <a href="${purchaseOrderHref}" class="rsp-form-view${reqNum == null || poId <= 0 ? ' rsp-form-view-disabled' : ''}" data-form-type="purchase_order"${reqNum == null || poId <= 0 ? ' aria-disabled="true"' : ''}>View</a>
-            </li>`
-        : '';
+    const formRows = [
+        buildFormLinkRow({
+            label: 'Requisition Form',
+            formType: 'requisition',
+            href: formHref,
+            enabled: requisitionFormEnabled,
+            requestId: reqNum,
+        }),
+        buildFormLinkRow({
+            label: 'Canvass Sheet / Abstract Of Quotation',
+            formType: 'canvass',
+            href: canvassHref,
+            enabled: canvassFormEnabled,
+            requestId: reqNum,
+        }),
+        buildFormLinkRow({
+            label: 'Purchase Requisition Form',
+            formType: 'purchase',
+            href: purchaseHref,
+            enabled: purchaseFormEnabled,
+            requestId: reqNum,
+        }),
+        buildFormLinkRow({
+            label: 'Purchase Order Form',
+            formType: 'purchase_order',
+            href: purchaseOrderHref,
+            enabled: purchaseOrderFormEnabled,
+            requestId: reqNum,
+        }),
+    ].join('');
 
     root.innerHTML = `
         <div class="rsp-wrap">
-            <header class="rsp-hero">
-                <div class="rsp-hero-top">
-                    <div>
-                        <h1 class="rsp-hero-title">${esc(record.id || 'Request')}</h1>
-                        <div class="rsp-hero-meta">
-                            <span><i class="far fa-calendar"></i> ${esc(formatDate(record.date))}</span>
-                            <span><i class="fas fa-user"></i> ${esc(record.requester || '—')}</span>
-                            <span><i class="fas fa-building"></i> ${esc(record.office || '—')}</span>
+            <header class="rsp-hero rsp-unified">
+                <div class="rsp-hero-intro">
+                    <div class="rsp-hero-intro-head">
+                        <div class="rsp-hero-intro-text">
+                            <h2 class="rsp-page-title">Requisition Progress</h2>
+                            <p class="rsp-page-subtitle">${esc(progressSubtitle)}</p>
                         </div>
-                    </div>
-                    <div style="text-align:right;">
-                        <span class="rsp-badge ${badgeClass}" style="margin-top:0.5rem;">${esc(st)}</span>
+                        <a href="${esc(config.backHref)}" class="rsp-back rsp-back-card" aria-label="${esc(config.backAriaLabel)}"><i class="fas fa-arrow-left"></i> Back</a>
                     </div>
                 </div>
-                <div class="rsp-hero-workflow" aria-label="Request progress">
+                <div class="rsp-hero-top">
+                    <h1 class="rsp-hero-title">${esc(record.id || 'Request')}</h1>
+                    <div class="rsp-hero-meta">
+                        <span><i class="far fa-calendar"></i> ${esc(formatDate(record.date))}</span>
+                        <span><i class="fas fa-user"></i> ${esc(record.requester || '—')}</span>
+                        <span><i class="fas fa-building"></i> ${esc(record.office || '—')}</span>
+                    </div>
+                </div>
+                <div class="rsp-hero-section rsp-hero-workflow" aria-label="Request progress">
                     <div class="rsp-progress-label">
                         <span>Workflow</span>
                     </div>
@@ -657,28 +699,16 @@ function renderApp(root, record, config) {
                         ${verticalSteps}
                     </div>
                 </div>
-            </header>
-
-            <section class="rsp-details">
-                <div class="rsp-card rsp-card-form">
+                <div class="rsp-hero-section rsp-hero-forms">
                     <h3><i class="fas fa-file-lines"></i> Form</h3>
-                    <div class="rsp-form-items-block">
-                        ${itemsHtml}
-                    </div>
                     <div class="rsp-form-links-inner" aria-label="Requisition and canvass forms">
                         <ul class="rsp-form-links-list">
-                            <li class="rsp-form-link-row">
-                                <span class="rsp-form-link-text">Requisition form${!isFormViewed(numericRequestId(record), 'requisition') ? '<span class="form-unviewed-indicator" title="New form - not yet viewed"></span>' : ''}</span>
-                                <a href="${formHref}" class="rsp-form-view${reqNum == null ? ' rsp-form-view-disabled' : ''}" data-form-type="requisition"${reqNum == null ? ' aria-disabled="true"' : ''}>View</a>
-                            </li>
-                            ${canvassRow}
-                            ${purchaseRow}
-                            ${purchaseOrderRow}
+                            ${formRows}
                         </ul>
                     </div>
                 </div>
-                ${updateCard}
-            </section>
+                ${updateSection}
+            </header>
         </div>
     `;
 

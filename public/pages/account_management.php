@@ -18,7 +18,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Account Management - IMRMS</title>
 <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
-<link rel="stylesheet" href="../assets/css/account_management.css?v=wlc31">
+<link rel="stylesheet" href="../assets/css/account_management.css?v=wlc34">
 <link rel="stylesheet" href="../assets/css/loading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
@@ -40,78 +40,107 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <body>
 <?php $imActivePage = 'account_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 
-<main class="main-content account-management-container">
-    <div class="module-page-header">
-        <h1 class="module-page-header__title">Account Management</h1>
-        <p class="module-page-header__subtitle">Manage user accounts, roles, permissions, and system access securely.</p>
+<main class="main-content account-management-container" id="accountManagementRoot">
+    <div class="account-page-header">
+        <div class="account-page-header__text">
+            <h1 class="account-page-header__title">Account Management</h1>
+            <p class="account-page-header__subtitle">Manage user accounts, roles, permissions, and system access securely.</p>
+        </div>
+        <div class="account-page-header__actions">
+            <div class="search-container account-page-header__search">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Search" class="search-input" aria-label="Search users">
+            </div>
+            <button class="btn-filter account-page-header__add-btn" id="addUserBtn" type="button"><i class="fas fa-plus"></i> Add User</button>
+        </div>
     </div>
 
-    <div class="users-list-card">
-        <div class="filter-section account-management-filter-bar">
-            <h2 class="users-list-card__heading">User List</h2>
-            <div class="filter-controls">
-                <div class="search-container">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Search" class="search-input" aria-label="Search users">
-                </div>
-                <button class="btn-filter" id="addUserBtn" type="button"><i class="fas fa-plus"></i> Add User</button>
-            </div>
-        </div>
-
-        <div class="users-tables-split" id="usersTablesSplit">
-            <div class="users-table-panel users-table-panel--admin">
-                <h3 class="users-table-panel__title users-table-panel__title--admin">Administrative Users</h3>
-                <div class="table-container">
-                    <div class="table-wrapper">
-                        <table class="users-management-table users-management-table--admin">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Photo</th>
-                                    <th>Full Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
-                                    <th>Office</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="adminUsersTableBody">
-                                <tr>
-                                    <td colspan="8" class="users-table-loading">Loading users...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+    <div class="users-tables-split" id="usersTablesSplit">
+        <section class="users-panel-card users-panel-card--admin">
+            <header class="users-panel-card__header">
+                <div class="users-panel-card__header-main">
+                    <span class="users-panel-card__icon users-panel-card__icon--admin" aria-hidden="true"><i class="fas fa-users"></i></span>
+                    <div class="users-panel-card__header-text">
+                        <h2 class="users-panel-card__title">Administrative Users</h2>
+                        <p class="users-panel-card__desc"> Users responsible for managing and approving system operations. </p>
                     </div>
                 </div>
-            </div>
-
-            <div class="users-table-panel users-table-panel--dept">
-                <h3 class="users-table-panel__title users-table-panel__title--dept">Department Heads</h3>
-                <div class="table-container">
-                    <div class="table-wrapper">
-                        <table class="users-management-table users-management-table--dept">
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Photo</th>
-                                    <th>Full Name</th>
-                                    <th>Email</th>
-                                    <th>Status</th>
-                                    <th>Office</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="deptUsersTableBody">
-                                <tr>
-                                    <td colspan="7" class="users-table-loading">Loading users...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                <span class="users-panel-card__count users-panel-card__count--admin" id="adminUsersCountBadge">0 Users</span>
+            </header>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table class="users-management-table users-management-table--admin">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Photo</th>
+                                <th>Full Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersTableBody">
+                            <tr>
+                                <td colspan="7" class="users-table-loading">Loading users...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
-        </div>
+            <footer class="users-panel-card__footer">
+                <p class="users-panel-card__page-info" id="adminPageInfo">Showing 0 to 0 of 0 users</p>
+                <div class="users-panel-card__pagination" aria-label="Administrative users pagination">
+                    <button type="button" class="users-panel-card__page-btn" id="adminPrevBtn" aria-label="Previous page" disabled><i class="fas fa-chevron-left"></i></button>
+                    <span class="users-panel-card__page-num users-panel-card__page-num--admin" id="adminPageNum">1</span>
+                    <button type="button" class="users-panel-card__page-btn" id="adminNextBtn" aria-label="Next page" disabled><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </footer>
+        </section>
+
+        <section class="users-panel-card users-panel-card--dept">
+            <header class="users-panel-card__header">
+                <div class="users-panel-card__header-main">
+                    <span class="users-panel-card__icon users-panel-card__icon--dept" aria-hidden="true"><i class="fas fa-building"></i></span>
+                    <div class="users-panel-card__header-text">
+                        <h2 class="users-panel-card__title">Department</h2>
+                        <p class="users-panel-card__desc">List of Departments and offices.</p>
+                    </div>
+                </div>
+                <span class="users-panel-card__count users-panel-card__count--dept" id="deptUsersCountBadge">0 Users</span>
+            </header>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table class="users-management-table users-management-table--dept">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Photo</th>
+                                <th>Full Name</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Office</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deptUsersTableBody">
+                            <tr>
+                                <td colspan="7" class="users-table-loading">Loading users...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <footer class="users-panel-card__footer">
+                <p class="users-panel-card__page-info" id="deptPageInfo">Showing 0 to 0 of 0 users</p>
+                <div class="users-panel-card__pagination" aria-label="Department users pagination">
+                    <button type="button" class="users-panel-card__page-btn" id="deptPrevBtn" aria-label="Previous page" disabled><i class="fas fa-chevron-left"></i></button>
+                    <span class="users-panel-card__page-num users-panel-card__page-num--dept" id="deptPageNum">1</span>
+                    <button type="button" class="users-panel-card__page-btn" id="deptNextBtn" aria-label="Next page" disabled><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </footer>
+        </section>
     </div>
 
     <!-- User Modal -->
@@ -411,7 +440,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 </div>
 
 <script src="../assets/js/logout.js?v=wlc1"></script>
-<script src="../assets/js/account_management.js?v=wlc31"></script>
+<script src="../assets/js/account_management.js?v=wlc33"></script>
 
 <?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 </body>

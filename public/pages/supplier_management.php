@@ -21,7 +21,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Supplier Management - IMRMS</title>
     <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
-    <link rel="stylesheet" href="../assets/css/supplier_management.css">
+    <link rel="stylesheet" href="../assets/css/supplier_management.css?v=wlc2">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -31,25 +31,25 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <?php $imActivePage = 'supplier_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 
 <main class="main-content supplier-management-container">
-  <div class="module-page-header">
-    <h1 class="module-page-header__title">Supplier Management</h1>
-    <p class="module-page-header__subtitle">Manage supplier information, contacts, and details.</p>
+  <div class="module-page-header supplier-page-header">
+    <div class="supplier-page-header__top">
+      <div class="supplier-page-header__text">
+        <h1 class="module-page-header__title">Supplier Management</h1>
+        <p class="module-page-header__subtitle">Manage supplier information, contacts, and details.</p>
+      </div>
+      <div class="supplier-page-header__actions">
+        <div class="search-container supplier-page-header__search">
+          <i class="fas fa-search"></i>
+          <input type="text" id="supplierSearchInput" placeholder="Search" class="search-input" aria-label="Search suppliers">
+        </div>
+        <button class="btn-filter supplier-page-header__add-btn" id="addSupplierBtn" type="button"><i class="fas fa-plus"></i> Add Supplier</button>
+      </div>
+    </div>
   </div>
 
     <!-- Suppliers View -->
     <div id="suppliersView">
       <div class="suppliers-list-card">
-        <div class="filter-section suppliers-filter-bar">
-          <h2 class="suppliers-list-card__heading">Suppliers List</h2>
-          <div class="filter-controls">
-            <div class="search-container">
-              <i class="fas fa-search"></i>
-              <input type="text" id="supplierSearchInput" placeholder="Search" class="search-input">
-            </div>
-            <button class="btn-filter" id="addSupplierBtn" type="button"><i class="fas fa-plus"></i> Add Supplier</button>
-          </div>
-        </div>
-
         <div class="table-container">
           <div class="table-wrapper">
             <table>
@@ -74,14 +74,18 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
             </table>
           </div>
 
-          <div class="pagination-controls supplier-pagination" id="supplierPagination" aria-label="Supplier list pages" hidden>
-            <button type="button" class="supplier-pagination-arrow" id="prevSupplierBtn" disabled aria-label="Previous page">
-              <i class="fas fa-chevron-left" aria-hidden="true"></i>
-            </button>
-            <button type="button" class="supplier-pagination-arrow" id="nextSupplierBtn" disabled aria-label="Next page">
-              <i class="fas fa-chevron-right" aria-hidden="true"></i>
-            </button>
-          </div>
+          <footer class="table-panel-footer" id="supplierPagination" aria-label="Supplier list pages">
+            <p class="table-panel-footer__info" id="supplierPageInfo">Showing 0 to 0 of 0 suppliers</p>
+            <div class="table-panel-footer__pagination">
+              <button type="button" class="table-panel-footer__page-btn" id="prevSupplierBtn" disabled aria-label="Previous page">
+                <i class="fas fa-chevron-left" aria-hidden="true"></i>
+              </button>
+              <span class="table-panel-footer__page-num" id="supplierPageNum">1</span>
+              <button type="button" class="table-panel-footer__page-btn" id="nextSupplierBtn" disabled aria-label="Next page">
+                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+              </button>
+            </div>
+          </footer>
         </div>
       </div>
     </div>

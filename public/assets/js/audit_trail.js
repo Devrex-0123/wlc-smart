@@ -60,16 +60,37 @@ function getFilters() {
   };
 }
 
-function updateAuditPagination({ paginationId, prevId, nextId, currentPage, totalPages, totalRecords }) {
-  const pagination = document.getElementById(paginationId);
+function formatTablePageInfo(total, page, perPage, singular, plural) {
+  if (total <= 0) return `Showing 0 to 0 of 0 ${plural}`;
+  const start = (page - 1) * perPage + 1;
+  const end = Math.min(page * perPage, total);
+  const noun = total === 1 ? singular : plural;
+  return `Showing ${start} to ${end} of ${total} ${noun}`;
+}
+
+function updateAuditPagination({
+  pageInfoId,
+  pageNumId,
+  prevId,
+  nextId,
+  currentPage,
+  totalPages,
+  totalRecords,
+  singular,
+  plural,
+}) {
+  const pageInfo = document.getElementById(pageInfoId);
+  const pageNum = document.getElementById(pageNumId);
   const prev = document.getElementById(prevId);
   const next = document.getElementById(nextId);
   if (!prev || !next) return;
 
-  const showPagination = totalRecords > itemsPerPage;
-  if (pagination) pagination.hidden = !showPagination;
-  prev.disabled = !showPagination || currentPage <= 1;
-  next.disabled = !showPagination || currentPage >= totalPages || totalRecords === 0;
+  if (pageInfo) {
+    pageInfo.textContent = formatTablePageInfo(totalRecords, currentPage, itemsPerPage, singular, plural);
+  }
+  if (pageNum) pageNum.textContent = String(currentPage);
+  prev.disabled = currentPage <= 1 || totalRecords === 0;
+  next.disabled = currentPage >= totalPages || totalRecords === 0;
 }
 
 function renderLogged() {
@@ -102,12 +123,15 @@ function renderLogged() {
   });
 
   updateAuditPagination({
-    paginationId: "loggedPagination",
+    pageInfoId: "loggedPageInfo",
+    pageNumId: "loggedPageNum",
     prevId: "prevLoggedBtn",
     nextId: "nextLoggedBtn",
     currentPage: loggedPage,
     totalPages,
-    totalRecords: filtered.length
+    totalRecords: filtered.length,
+    singular: "session",
+    plural: "sessions",
   });
 }
 
@@ -140,12 +164,15 @@ function renderActivity() {
   });
 
   updateAuditPagination({
-    paginationId: "activityPagination",
+    pageInfoId: "activityPageInfo",
+    pageNumId: "activityPageNum",
     prevId: "prevActivityBtn",
     nextId: "nextActivityBtn",
     currentPage: activityPage,
     totalPages,
-    totalRecords: filtered.length
+    totalRecords: filtered.length,
+    singular: "entry",
+    plural: "entries",
   });
 }
 
