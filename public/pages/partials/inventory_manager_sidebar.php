@@ -28,7 +28,7 @@ $imIsActive = static function (string $page) use ($imActivePage): string {
     <nav>
         <ul class="sidebar-nav">
             <li class="sidebar-section">Overview</li>
-            <li class="nav-item-gap">
+            <li>
                 <a href="dashboard.php" class="internal-link<?php echo $imIsActive('dashboard.php'); ?>">
                     <i class="fas fa-home"></i> <span>Dashboard</span>
                 </a>
@@ -40,9 +40,9 @@ $imIsActive = static function (string $page) use ($imActivePage): string {
                     <i class="fas fa-file-signature"></i> <span>Requisition Management</span>
                 </a>
             </li>
-            <li class="nav-gap-sm">
-                <a href="requisition_status.php" class="internal-link<?php echo $imIsActive('requisition_status.php'); ?>" data-notification-key="requester_attention">
-                    <i class="fas fa-bars-progress"></i> <span>Status</span>
+            <li>
+                <a href="approval_workflow.php" class="internal-link<?php echo $imIsActive('approval_workflow.php'); ?>">
+                    <i class="fas fa-sitemap"></i> <span>Approval Workflow</span>
                 </a>
             </li>
 
@@ -62,7 +62,7 @@ $imIsActive = static function (string $page) use ($imActivePage): string {
                     <i class="fas fa-truck"></i> <span>Supplier Management</span>
                 </a>
             </li>
-            <li class="nav-gap-sm">
+            <li>
                 <a href="facility_management.php" class="internal-link<?php echo $imIsActive('facility_management.php'); ?>">
                     <i class="fas fa-building"></i> <span>Facility Management</span>
                 </a>
@@ -74,16 +74,9 @@ $imIsActive = static function (string $page) use ($imActivePage): string {
                     <i class="fas fa-shield-alt"></i> <span>Audit Trail</span>
                 </a>
             </li>
-            <li class="nav-gap-sm">
+            <li>
                 <a href="account_management.php" class="internal-link<?php echo $imIsActive('account_management.php'); ?>">
                     <i class="fas fa-users-cog"></i> <span>Account Management</span>
-                </a>
-            </li>
-
-            <li class="sidebar-section sidebar-section--push">Account</li>
-            <li>
-                <a href="my_profile.php" class="internal-link<?php echo $imIsActive('my_profile.php'); ?>">
-                    <i class="fas fa-user"></i> <span>My Profile</span>
                 </a>
             </li>
         </ul>

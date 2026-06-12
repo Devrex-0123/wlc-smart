@@ -33,7 +33,7 @@ $initials = strtoupper(substr($user['Email'] ?? 'A', 0, 1));
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Requisition Management - IMRMS</title>
     <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
-    <link rel="stylesheet" href="../assets/css/dean_requisition_management.css">
+    <link rel="stylesheet" href="../assets/css/dean_requisition_management.css?v=wlc56">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -41,103 +41,100 @@ $initials = strtoupper(substr($user['Email'] ?? 'A', 0, 1));
 <body>
 <?php $imActivePage = 'requisition_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 
-<main class="main-content">
-    <div class="page-header management-header">
-        <div>
-            <h1>Requisition Management</h1>
-            <p>View and update requisition status across all offices.</p>
+<main class="main-content requisition-management-container" data-req-scope="management">
+    <div class="req-page-header">
+        <div class="req-page-header__text">
+            <h1 class="req-page-header__title">Requisition Management</h1>
+            <p class="req-page-header__subtitle">View requisition status across all offices.</p>
         </div>
-    </div>
-
-    <div class="summary-grid">
-        <div class="summary-card">
-            <p>Total Requests</p>
-            <h3 id="totalCount">0</h3>
-        </div>
-        <div class="summary-card">
-            <p>Pending</p>
-            <h3 id="pendingCount">0</h3>
-        </div>
-        <div class="summary-card">
-            <p>Ongoing</p>
-            <h3 id="ongoingCount">0</h3>
-        </div>
-        <div class="summary-card">
-            <p>Completed</p>
-            <h3 id="completedCount">0</h3>
-        </div>
-    </div>
-
-    <div class="filter-section">
-        <h3>All Requisitions</h3>
-        <div class="filter-controls">
-            <div class="search-container">
+        <div class="req-page-header__actions">
+            <div class="search-container req-page-header__search">
                 <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" class="search-input" placeholder="Search request, requester, office, item, or supplier...">
+                <input type="text" id="searchInput" class="search-input" placeholder="Search" aria-label="Search requisitions">
             </div>
-            <select id="statusFilter" class="sort-dropdown">
-                <option value="all">All Status</option>
-                <option value="Pending">Pending</option>
-                <option value="Ongoing">Ongoing</option>
-                <option value="Completed">Completed</option>
-            </select>
-            <select id="sortDropdown" class="sort-dropdown">
-                <option value="">Sort By</option>
-                <option value="entry-desc">Entry No. (Newest First)</option>
-                <option value="entry-asc">Entry No. (Oldest First)</option>
-            </select>
         </div>
     </div>
+
+    <section class="req-summary-stats" aria-label="Requisition summary">
+        <article class="req-summary-card req-summary-card--total">
+            <div class="req-summary-card__head">
+                <span class="req-summary-card__badge" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
+                <span class="req-summary-card__label">Total Requests</span>
+            </div>
+            <p class="req-summary-card__value" id="totalCount">0</p>
+            <p class="req-summary-card__meta">All requisition requests.</p>
+        </article>
+        <article class="req-summary-card req-summary-card--pending">
+            <div class="req-summary-card__head">
+                <span class="req-summary-card__badge" aria-hidden="true"><i class="fas fa-hourglass-half"></i></span>
+                <span class="req-summary-card__label">Pending</span>
+            </div>
+            <p class="req-summary-card__value" id="pendingCount">0</p>
+            <p class="req-summary-card__meta">Requests currently awaiting approval.</p>
+        </article>
+        <article class="req-summary-card req-summary-card--completed">
+            <div class="req-summary-card__head">
+                <span class="req-summary-card__badge" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+                <span class="req-summary-card__label">Completed</span>
+            </div>
+            <p class="req-summary-card__value" id="completedCount">0</p>
+            <p class="req-summary-card__meta">Requests that completed all workflow stages.</p>
+        </article>
+        <article class="req-summary-card req-summary-card--rejected">
+            <div class="req-summary-card__head">
+                <span class="req-summary-card__badge" aria-hidden="true"><i class="fas fa-circle-xmark"></i></span>
+                <span class="req-summary-card__label">Rejected</span>
+            </div>
+            <p class="req-summary-card__value" id="rejectedCount">0</p>
+            <p class="req-summary-card__meta">Requests that did not meet approval requirements.</p>
+        </article>
+    </section>
 
     <div class="table-container">
         <div class="table-wrapper">
-            <table>
+            <table class="req-management-table">
+                <colgroup>
+                    <col style="width:4%">
+                    <col style="width:32%">
+                    <col style="width:18%">
+                    <col style="width:13%">
+                    <col style="width:11%">
+                    <col style="width:10%">
+                </colgroup>
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Request No.</th>
-                        <th>Date</th>
-                        <th>Requester</th>
-                        <th>Office</th>
-                        <th>Items</th>
-                        <th>Suppliers</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th scope="col">#</th>
+                        <th scope="col">Requisition</th>
+                        <th scope="col">Requester</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Action</th>
                     </tr>
                 </thead>
                 <tbody id="requestTableBody"></tbody>
             </table>
         </div>
-        <div class="pagination-controls">
-            <button id="prevReqBtn" class="pagination-btn" disabled>
-                <i class="fas fa-chevron-left"></i> Previous
-            </button>
-            <span id="reqPageInfo" class="page-info">Page 1</span>
-            <button id="nextReqBtn" class="pagination-btn" disabled>
-                Next <i class="fas fa-chevron-right"></i>
-            </button>
-        </div>
+        <footer class="table-panel-footer" id="reqPagination" aria-label="Requisition list pages">
+            <p class="table-panel-footer__info" id="reqPageInfo">Showing 0 to 0 of 0 entries</p>
+            <div class="table-panel-footer__pagination">
+                <button type="button" class="table-panel-footer__page-btn" id="prevReqBtn" disabled aria-label="Previous page">
+                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                </button>
+                <span class="table-panel-footer__page-num" id="reqPageNum">1</span>
+                <button type="button" class="table-panel-footer__page-btn" id="nextReqBtn" disabled aria-label="Next page">
+                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                </button>
+            </div>
+        </footer>
     </div>
 </main>
-
-<div id="confirmModal" class="confirm-modal" style="display:none;">
-    <div class="confirm-backdrop"></div>
-    <div class="confirm-card">
-        <h4 id="confirmTitle">Confirm Action</h4>
-        <p id="confirmText">Are you sure?</p>
-        <div class="confirm-actions">
-            <button type="button" id="confirmCancel" class="btn-muted">Cancel</button>
-            <button type="button" id="confirmOk" class="btn-danger">Delete</button>
-        </div>
-    </div>
-</div>
 
 <div id="toastContainer"></div>
 
 <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
 
 <script src="../assets/js/logout.js?v=wlc1"></script>
-<script src="../assets/js/requisition_management.js"></script>
+<script src="../assets/js/requisition_management.js?v=wlc7"></script>
 <?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 </body>
 </html>

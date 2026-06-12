@@ -7,6 +7,20 @@
     animation: fadeIn 0.5s ease;
 }
 
+/* Page header — title left, search + add office right (matches Audit Trail) */
+.facility-page-header__top {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.facility-page-header__text {
+    min-width: 0;
+    flex: 1 1 280px;
+}
+
 .facility-management-container .module-page-header {
     margin-bottom: 1.25rem;
     text-align: left;
@@ -23,11 +37,82 @@
 }
 
 .facility-management-container .module-page-header__subtitle {
-    margin: 0 0 0.55rem;
+    margin: 0;
     color: #64748b;
     font-size: 0.9rem;
     line-height: 1.35;
     text-align: left;
+}
+
+.facility-page-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 0 1 auto;
+    margin-left: auto;
+    margin-top: 0.35rem;
+    padding-bottom: 0.1rem;
+}
+
+.facility-page-header__search {
+    position: relative;
+    width: min(320px, 42vw);
+    min-width: 200px;
+}
+
+.facility-page-header__search i {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.facility-page-header__search .search-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 0.75rem 0 2.1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    color: #334155;
+    background: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.facility-page-header__search .search-input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.facility-page-header__search .search-input::placeholder {
+    color: #94a3b8;
+}
+
+.facility-page-header__add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 38px;
+    padding: 0 1rem;
+    background: #16a34a;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.facility-page-header__add-btn:hover {
+    background: #15803d;
+    transform: translateY(-1px);
 }
 
 @keyframes facilitySummaryEnter {
@@ -44,7 +129,7 @@
 .facility-management-container .facility-summary-stats {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 0.85rem;
     width: 100%;
     margin-top: 1.15rem;
     margin-bottom: 0.25rem;
@@ -55,11 +140,11 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
-    min-height: 128px;
-    padding: 1.05rem 1.15rem 1rem;
-    padding-left: calc(1.15rem + 4px);
-    border-radius: 16px;
+    gap: 0.35rem;
+    min-height: 118px;
+    padding: 0.9rem 1rem 0.85rem;
+    padding-left: calc(1rem + 4px);
+    border-radius: 14px;
     border: 1px solid rgba(226, 232, 240, 0.95);
     background: linear-gradient(155deg, #ffffff 0%, #f8fafc 55%, #ffffff 100%);
     box-shadow:
@@ -120,17 +205,17 @@
     z-index: 1;
     display: flex;
     align-items: center;
-    gap: 0.55rem;
+    gap: 0.45rem;
 }
 
 .facility-summary-card__badge {
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
+    width: 27px;
+    height: 27px;
+    border-radius: 8px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.78rem;
+    font-size: 0.77rem;
     flex-shrink: 0;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
@@ -140,7 +225,7 @@
 }
 
 .facility-summary-card__label {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: #475569;
     line-height: 1.2;
@@ -150,8 +235,8 @@
 .facility-summary-card__value {
     position: relative;
     z-index: 1;
-    margin: 0.12rem 0 0;
-    font-size: 2.1rem;
+    margin: 0.05rem 0 0;
+    font-size: 1.92rem;
     font-weight: 800;
     line-height: 1;
     letter-spacing: -0.03em;
@@ -169,10 +254,10 @@
     position: relative;
     z-index: 1;
     margin: auto 0 0;
-    font-size: 0.76rem;
+    font-size: 0.75rem;
     font-weight: 500;
-    color: #94a3b8;
-    line-height: 1.35;
+    color: #64748b;
+    line-height: 1.32;
     transition: color 0.3s ease;
 }
 
@@ -311,12 +396,8 @@
         grid-template-columns: 1fr;
     }
 
-    .facility-summary-card {
-        min-height: 118px;
-    }
-
     .facility-summary-card__value {
-        font-size: 1.85rem;
+        font-size: 1.75rem;
     }
 }
 
@@ -466,39 +547,6 @@
     line-height: 1.4;
 }
 
-.offices-filter-bar .filter-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.65rem;
-    margin-left: auto;
-    flex: 0 1 auto;
-    justify-content: flex-end;
-}
-
-.offices-filter-bar .search-container {
-    flex: 1 1 200px;
-    min-width: 180px;
-    max-width: 280px;
-}
-
-.offices-filter-bar .search-input {
-    height: 36px;
-    padding: 0 0.65rem 0 2.25rem;
-    font-size: 0.85rem;
-    box-sizing: border-box;
-}
-
-.offices-filter-bar .btn-filter {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    height: 36px;
-    padding: 0 0.9rem;
-    font-size: 0.85rem;
-    white-space: nowrap;
-}
-
 .offices-list-card__body {
     display: flex;
     flex-direction: column;
@@ -511,7 +559,8 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.45rem;
-    flex: 1 1 360px;
+    flex: 1 1 100%;
+    width: 100%;
     min-width: 0;
     padding: 0;
     margin: 0;
@@ -593,14 +642,8 @@
     min-height: 0;
 }
 
-.offices-list-card .office-pagination {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.85rem 1.25rem 1rem;
-    border-top: 1px solid #e2e8f0;
-    background: #fff;
+.offices-list-card .table-panel-footer {
+    padding: 0.75rem 1.25rem 1rem;
     flex: 0 0 auto;
     margin-top: 0;
     min-height: 0;
@@ -1716,20 +1759,28 @@
         align-items: stretch;
     }
 
-    .offices-filter-bar .filter-controls {
-        width: 100%;
-        margin-left: 0;
-        justify-content: stretch;
+    .facility-page-header__top {
+        flex-direction: column;
+        align-items: stretch;
     }
 
-    .offices-filter-bar .search-container {
-        flex: 1 1 100%;
-        max-width: none;
+    .facility-page-header__actions {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 0.5rem;
+        padding-bottom: 0;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .facility-page-header__search {
+        width: 100%;
         min-width: 0;
     }
 
-    .offices-filter-bar .btn-filter {
+    .facility-page-header__add-btn {
         width: 100%;
+        justify-content: center;
     }
 
     .offices-filter-bar .office-type-tabs {
@@ -1742,8 +1793,10 @@
         width: 100%;
     }
 
-    .offices-list-card .office-pagination {
-        justify-content: flex-end;
+    .offices-list-card .table-panel-footer {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
     }
 
     .office-detail-stats {
@@ -2056,46 +2109,8 @@
     width: 100%;
 }
 
-.facility-pagination {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.4rem;
+.office-detail-facilities .table-panel-footer {
     margin-top: 0.85rem;
-    padding-top: 0.15rem;
-}
-
-.facility-pagination-arrow {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border: 1px solid #106b44;
-    border-radius: 8px;
-    background: #f0fdf4;
-    color: #106b44;
-    font-size: 0.88rem;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 6px rgba(16, 107, 68, 0.12);
-    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-}
-
-.facility-pagination-arrow:not(:disabled):hover {
-    background: #106b44;
-    border-color: #106b44;
-    color: #fff;
-    box-shadow: 0 4px 10px rgba(16, 107, 68, 0.24);
-}
-
-.facility-pagination-arrow:disabled {
-    background: #f1f5f9;
-    border-color: #e2e8f0;
-    color: #94a3b8;
-    box-shadow: none;
-    opacity: 1;
-    cursor: not-allowed;
 }
 
 .office-detail-view .facility-data-table--facilities thead th {

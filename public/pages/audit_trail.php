@@ -27,7 +27,7 @@ $initials = strtoupper(substr($initialSeed, 0, 1));
   <title>Audit Trail - WLC-SMART</title>
   <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
   <link rel="stylesheet" href="../assets/css/loading.css">
-  <link rel="stylesheet" href="../assets/css/audit_trail.css?v=wlc47">
+  <link rel="stylesheet" href="../assets/css/audit_trail.css?v=wlc49">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
@@ -79,9 +79,19 @@ if ($roleLc === 'comptroller') {
 ?>
 
 <main class="main-content audit-trail-container">
-  <div class="module-page-header">
-    <h1 class="module-page-header__title">Audit Trail</h1>
-    <p class="module-page-header__subtitle">Combined view of logged sessions and activity history.</p>
+  <div class="module-page-header audit-trail-page-header">
+    <div class="audit-trail-page-header__top">
+      <div class="audit-trail-page-header__text">
+        <h1 class="module-page-header__title">Audit Trail</h1>
+        <p class="module-page-header__subtitle">Combined view of logged sessions and activity history.</p>
+      </div>
+      <div class="audit-trail-page-header__actions">
+        <div class="search-container audit-trail-page-header__search">
+          <i class="fas fa-search"></i>
+          <input type="text" id="globalSearch" placeholder="Search" class="search-input" aria-label="Search audit trail">
+        </div>
+      </div>
+    </div>
     <section class="dashboard-stats" aria-label="Audit summary">
       <article class="dashboard-stat-card dashboard-stat-card--assets">
         <div class="dashboard-stat-card__head">
@@ -128,10 +138,6 @@ if ($roleLc === 'comptroller') {
             <button type="button" id="showActivityBtn" class="view-toggle active"><i class="fas fa-list"></i> Activity History</button>
             <button type="button" id="showLoggedBtn" class="view-toggle"><i class="fas fa-history"></i> Logged History</button>
           </div>
-          <div class="search-container">
-            <i class="fas fa-search"></i>
-            <input type="text" id="globalSearch" placeholder="Search activity..." class="search-input" aria-label="Search audit trail">
-          </div>
           <div class="audit-trail-filter-bar__dates">
           <div class="date-filter-row">
             <label class="date-filter-label" for="dateFrom">From</label>
@@ -175,14 +181,18 @@ if ($roleLc === 'comptroller') {
               </table>
             </div>
           </div>
-          <div class="pagination-controls audit-pagination" id="loggedPagination" aria-label="Logged history pages" hidden>
-            <button type="button" class="audit-pagination-arrow" id="prevLoggedBtn" disabled aria-label="Previous page">
-              <i class="fas fa-chevron-left" aria-hidden="true"></i>
-            </button>
-            <button type="button" class="audit-pagination-arrow" id="nextLoggedBtn" disabled aria-label="Next page">
-              <i class="fas fa-chevron-right" aria-hidden="true"></i>
-            </button>
-          </div>
+          <footer class="table-panel-footer" id="loggedPagination" aria-label="Logged history pages">
+            <p class="table-panel-footer__info" id="loggedPageInfo">Showing 0 to 0 of 0 sessions</p>
+            <div class="table-panel-footer__pagination">
+              <button type="button" class="table-panel-footer__page-btn" id="prevLoggedBtn" disabled aria-label="Previous page">
+                <i class="fas fa-chevron-left" aria-hidden="true"></i>
+              </button>
+              <span class="table-panel-footer__page-num" id="loggedPageNum">1</span>
+              <button type="button" class="table-panel-footer__page-btn" id="nextLoggedBtn" disabled aria-label="Next page">
+                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+              </button>
+            </div>
+          </footer>
         </div>
 
         <div class="audit-trail-table-panel" id="activityPanel">
@@ -206,14 +216,18 @@ if ($roleLc === 'comptroller') {
               </table>
             </div>
           </div>
-          <div class="pagination-controls audit-pagination" id="activityPagination" aria-label="Activity history pages" hidden>
-            <button type="button" class="audit-pagination-arrow" id="prevActivityBtn" disabled aria-label="Previous page">
-              <i class="fas fa-chevron-left" aria-hidden="true"></i>
-            </button>
-            <button type="button" class="audit-pagination-arrow" id="nextActivityBtn" disabled aria-label="Next page">
-              <i class="fas fa-chevron-right" aria-hidden="true"></i>
-            </button>
-          </div>
+          <footer class="table-panel-footer" id="activityPagination" aria-label="Activity history pages">
+            <p class="table-panel-footer__info" id="activityPageInfo">Showing 0 to 0 of 0 entries</p>
+            <div class="table-panel-footer__pagination">
+              <button type="button" class="table-panel-footer__page-btn" id="prevActivityBtn" disabled aria-label="Previous page">
+                <i class="fas fa-chevron-left" aria-hidden="true"></i>
+              </button>
+              <span class="table-panel-footer__page-num" id="activityPageNum">1</span>
+              <button type="button" class="table-panel-footer__page-btn" id="nextActivityBtn" disabled aria-label="Next page">
+                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+              </button>
+            </div>
+          </footer>
         </div>
     </div>
   </div>
@@ -221,6 +235,6 @@ if ($roleLc === 'comptroller') {
 
 <button class="mobile-menu-btn" id="mobileMenuBtn" style="display:none;"><i class="fas fa-bars"></i></button>
 <script src="../assets/js/logout.js?v=wlc1"></script>
-<script src="../assets/js/audit_trail.js?v=wlc13"></script>
+<script src="../assets/js/audit_trail.js?v=wlc14"></script>
 </body>
 </html>

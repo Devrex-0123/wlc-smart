@@ -25,7 +25,6 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 1.25rem;
     padding: 0.5rem 0.85rem;
     border-radius: 10px;
     border: 1px solid var(--rsp-border);
@@ -43,10 +42,21 @@
     color: #14532d;
 }
 
-/* First control in main content: upper-left, tight spacing above page title */
-.main-content > .rsp-back-upper-left {
-    display: inline-flex;
-    margin: 0 0 0.5rem 0;
+.rsp-hero-intro-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.rsp-hero-intro-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.rsp-back.rsp-back-card {
+    margin: 0;
+    flex-shrink: 0;
 }
 
 .rsp-hero {
@@ -58,19 +68,89 @@
     box-shadow: var(--rsp-shadow);
 }
 
-.rsp-hero-top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
+.rsp-hero.rsp-unified {
+    margin-bottom: 0;
 }
 
-/* Workflow + stepper live inside the hero (single card) */
-.rsp-hero-workflow {
+.rsp-hero-intro {
+    margin-bottom: 1.15rem;
+    padding-bottom: 1.15rem;
+    border-bottom: 1px solid rgba(16, 185, 129, 0.22);
+}
+
+.rsp-page-title {
+    margin: 0 0 0.35rem;
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: var(--rsp-slate-900);
+    line-height: 1.2;
+}
+
+.rsp-page-subtitle {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: var(--rsp-slate-500);
+    max-width: 42rem;
+    text-align: left;
+}
+
+.rsp-hero-top {
+    margin-top: 0.15rem;
+}
+
+/* Unified card sections — workflow, forms, update */
+.rsp-hero-section {
     margin-top: 1.25rem;
     padding-top: 1.25rem;
     border-top: 1px solid rgba(16, 185, 129, 0.22);
+}
+
+.rsp-hero-section.rsp-hero-workflow {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 1rem;
+}
+
+.rsp-hero-section h3 {
+    margin: 0 0 0.85rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--rsp-slate-900);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.rsp-hero-section h3 i {
+    color: var(--rsp-primary);
+}
+
+.rsp-hero-forms .rsp-items-list {
+    font-size: 1rem;
+}
+
+.rsp-hero-forms .rsp-form-link-text {
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--rsp-slate-900);
+}
+
+.rsp-hero-forms .rsp-form-view {
+    font-size: 1.08rem;
+    font-weight: 700;
+    text-underline-offset: 5px;
+    min-height: 2.75rem;
+    padding: 0.45rem 0.65rem;
+}
+
+.rsp-hero-forms .rsp-form-link-row {
+    align-items: center;
+}
+
+.rsp-hero-forms .rsp-form-items-block .rsp-step-desc {
+    font-size: 1rem;
+    color: var(--rsp-slate-600);
 }
 
 /* Inside “Form” card: items + plain-text form rows with minimal View links */
@@ -79,9 +159,9 @@
 }
 
 .rsp-form-links-inner {
-    margin-top: 0.25rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--rsp-border);
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
 }
 
 .rsp-form-links-list {

@@ -77,7 +77,7 @@ if ($username === '') {
     <section class="dashboard-panels" aria-label="Procurement overview">
         <section class="dashboard-panel dashboard-panel--recent" aria-label="Recent requisitions">
             <header class="dashboard-panel__head dashboard-panel__head--split">
-                <h2 class="dashboard-panel__title"><i class="fas fa-clock" aria-hidden="true"></i> Recent Requisitions</h2>
+                <h2 class="dashboard-panel__title"><i class="fas fa-clock" aria-hidden="true"></i> Pending Requisitions</h2>
                 <a href="requisition_management.php" class="dashboard-panel__action">View all</a>
             </header>
 

@@ -29,7 +29,23 @@ const modalTitle = document.getElementById('modalTitle');
 const userForm = document.getElementById('userForm');
 const adminUsersTableBody = document.getElementById('adminUsersTableBody');
 const deptUsersTableBody = document.getElementById('deptUsersTableBody');
-const usersListCard = document.querySelector('.users-list-card');
+const accountManagementRoot = document.getElementById('accountManagementRoot');
+const adminUsersCountBadge = document.getElementById('adminUsersCountBadge');
+const deptUsersCountBadge = document.getElementById('deptUsersCountBadge');
+const adminPageInfo = document.getElementById('adminPageInfo');
+const deptPageInfo = document.getElementById('deptPageInfo');
+const adminPageNum = document.getElementById('adminPageNum');
+const deptPageNum = document.getElementById('deptPageNum');
+const adminPrevBtn = document.getElementById('adminPrevBtn');
+const adminNextBtn = document.getElementById('adminNextBtn');
+const deptPrevBtn = document.getElementById('deptPrevBtn');
+const deptNextBtn = document.getElementById('deptNextBtn');
+
+const USERS_PER_PAGE = 5;
+let adminCurrentPage = 1;
+let deptCurrentPage = 1;
+let filteredAdminUsers = [];
+let filteredDeptUsers = [];
 const photoInput = document.getElementById('photo');
 const photoPreview = document.getElementById('photoPreview');
 const photoPlaceholder = document.getElementById('photoPlaceholder');
@@ -494,7 +510,9 @@ async function loadUsers() {
         allUsers = data.users || [];
         
         searchInput.value = '';
-        
+        adminCurrentPage = 1;
+        deptCurrentPage = 1;
+
         renderSplitUserTables(allUsers);
     } catch(err){
         console.error(err);
@@ -768,7 +786,38 @@ photoLightbox?.addEventListener('click', e => {
 });
 
 // ---------------- Edit & DELETE (Now Instant Update) + photo click ----------------
-usersListCard?.addEventListener('click', async e => {
+function formatUsersLabel(count) {
+    return `${count} User${count === 1 ? '' : 's'}`;
+}
+
+function formatPageInfo(total, page, perPage) {
+    if (total <= 0) return 'Showing 0 to 0 of 0 users';
+    const start = (page - 1) * perPage + 1;
+    const end = Math.min(page * perPage, total);
+    const noun = total === 1 ? 'user' : 'users';
+    return `Showing ${start} to ${end} of ${total} ${noun}`;
+}
+
+function updatePanelPagination(panel, total, currentPage, perPage) {
+    const totalPages = Math.max(1, Math.ceil(total / perPage) || 1);
+    const safePage = Math.min(Math.max(1, currentPage), totalPages);
+
+    if (panel === 'admin') {
+        if (adminPageInfo) adminPageInfo.textContent = formatPageInfo(total, safePage, perPage);
+        if (adminPageNum) adminPageNum.textContent = String(safePage);
+        if (adminPrevBtn) adminPrevBtn.disabled = safePage <= 1;
+        if (adminNextBtn) adminNextBtn.disabled = safePage >= totalPages || total === 0;
+        return safePage;
+    }
+
+    if (deptPageInfo) deptPageInfo.textContent = formatPageInfo(total, safePage, perPage);
+    if (deptPageNum) deptPageNum.textContent = String(safePage);
+    if (deptPrevBtn) deptPrevBtn.disabled = safePage <= 1;
+    if (deptNextBtn) deptNextBtn.disabled = safePage >= totalPages || total === 0;
+    return safePage;
+}
+
+accountManagementRoot?.addEventListener('click', async e => {
     // Photo click -> open preview
     const photoWrapper = e.target.closest('.user-photo-wrapper');
     if (photoWrapper) {
@@ -783,10 +832,10 @@ usersListCard?.addEventListener('click', async e => {
         return;
     }
 
-    const editBtn = e.target.closest(".edit");
-    const deleteBtn = e.target.closest(".delete");
-    const statusBtn = e.target.closest(".status-toggle");
-    const viewBtn = e.target.closest(".view");
+    const editBtn = e.target.closest('.action-btn.edit');
+    const deleteBtn = e.target.closest('.action-btn.delete');
+    const statusBtn = e.target.closest('.action-btn.status-toggle');
+    const viewBtn = e.target.closest('.action-btn.view');
 
     if (statusBtn) {
         const uid = statusBtn.dataset.id;
@@ -894,7 +943,15 @@ function isDeptPanelUser(user) {
     return (user.role || '').trim() === 'Dean';
 }
 
-function buildUserRowHtml(user, rowNum, showRole = true) {
+function flattenPanelUsers(users, roleDefs) {
+    const flat = [];
+    roleDefs.forEach((roleDef) => {
+        flat.push(...usersForRoleDef(users, roleDef));
+    });
+    return flat;
+}
+
+function buildUserRowHtml(user, rowNum, { showRole = false, showOffice = false } = {}) {
     const firstLetter = (user.email || '').charAt(0).toUpperCase();
     const hasPhoto = !!user.photo_url;
     const photoSrc = hasPhoto ? `../${user.photo_url}` : '';
@@ -903,6 +960,7 @@ function buildUserRowHtml(user, rowNum, showRole = true) {
     const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
     const roleLabel = showRole && isCanvasserAssignee(user) ? 'Canvasser' : (user.role || '');
     const roleCell = showRole ? `<td>${roleLabel}</td>` : '';
+    const officeCell = showOffice ? `<td>${user.office_name || '—'}</td>` : '';
     const fullName = (user.full_name || '').trim() || '—';
 
     return `
@@ -919,91 +977,103 @@ function buildUserRowHtml(user, rowNum, showRole = true) {
         <td>${user.email}</td>
         ${roleCell}
         <td class="users-col-status"><span class="status-pill status-${status}">${statusLabel}</span></td>
-        <td>${user.office_name || ''}</td>
+        ${officeCell}
         <td>
             <div class="user-action-cell">
-                <button class="action-btn view" data-id="${user.user_id}" title="View details">
+                <button type="button" class="action-btn view" data-id="${user.user_id}" title="View details">
                     <i class="fas fa-eye"></i>
                 </button>
-                <button class="action-btn status-toggle" data-id="${user.user_id}" data-next="${nextStatus}" title="Set ${nextStatus}">
+                <button type="button" class="action-btn status-toggle" data-id="${user.user_id}" data-next="${nextStatus}" title="Set ${nextStatus}">
                     <i class="fas fa-user-lock"></i>
                 </button>
-                <button class="action-btn edit" data-id="${user.user_id}"><i class="fas fa-edit"></i></button>
-                <button class="action-btn delete" data-id="${user.user_id}"><i class="fas fa-trash"></i></button>
+                <button type="button" class="action-btn edit" data-id="${user.user_id}" title="Edit user">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button type="button" class="action-btn delete" data-id="${user.user_id}" title="Delete user">
+                    <i class="fas fa-trash"></i>
+                </button>
             </div>
         </td>
     `;
 }
 
-function renderRolePanel(tbody, users, panelConfig) {
-    const { roleDefs, colspan, showRole, sortOption, rowOffset = 0 } = panelConfig;
+function renderUserPanel(tbody, users, panelConfig) {
+    const { colspan, showRole, showOffice, page, perPage } = panelConfig;
+    const total = users.length;
+    const totalPages = Math.max(1, Math.ceil(total / perPage) || 1);
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    const start = (safePage - 1) * perPage;
+    const pageUsers = users.slice(start, start + perPage);
 
     tbody.innerHTML = '';
-    let rowNum = rowOffset;
 
-    roleDefs.forEach(roleDef => {
-        let roleUsers = usersForRoleDef(users, roleDef);
-        if (sortOption) {
-            roleUsers = sortUsers(roleUsers, sortOption);
-        }
-        if (!roleUsers.length) return;
-
-        roleUsers.forEach(user => {
-            rowNum += 1;
-            const tr = document.createElement('tr');
-            tr.innerHTML = buildUserRowHtml(user, rowNum, showRole);
-            tbody.appendChild(tr);
-        });
-    });
-
-    if (rowNum === rowOffset) {
+    if (!pageUsers.length) {
         tbody.innerHTML = `<tr><td colspan="${colspan}" class="users-table-loading">No users found.</td></tr>`;
+        return safePage;
     }
 
-    return rowNum;
+    pageUsers.forEach((user, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = buildUserRowHtml(user, start + index + 1, { showRole, showOffice });
+        tbody.appendChild(tr);
+    });
+
+    return safePage;
 }
 
 function renderSplitUserTables(users) {
-    const adminUsers = users.filter(isAdminPanelUser);
-    const deptUsers = users.filter(isDeptPanelUser);
-
     if (!adminUsersTableBody || !deptUsersTableBody) return;
 
-    if (!users.length) {
-        adminUsersTableBody.innerHTML = '<tr><td colspan="8" class="users-table-loading">No users found.</td></tr>';
-        deptUsersTableBody.innerHTML = '<tr><td colspan="7" class="users-table-loading">No users found.</td></tr>';
-        return;
+    filteredAdminUsers = flattenPanelUsers(users.filter(isAdminPanelUser), ADMIN_ROLE_DEFS);
+    filteredDeptUsers = flattenPanelUsers(users.filter(isDeptPanelUser), DEPT_ROLE_DEFS);
+
+    if (adminUsersCountBadge) {
+        adminUsersCountBadge.textContent = formatUsersLabel(filteredAdminUsers.length);
+    }
+    if (deptUsersCountBadge) {
+        deptUsersCountBadge.textContent = formatUsersLabel(filteredDeptUsers.length);
     }
 
-    renderRolePanel(adminUsersTableBody, adminUsers, {
-        roleDefs: ADMIN_ROLE_DEFS,
-        colspan: 8,
+    adminCurrentPage = renderUserPanel(adminUsersTableBody, filteredAdminUsers, {
+        colspan: 7,
         showRole: true,
-        rowOffset: 0,
+        showOffice: false,
+        page: adminCurrentPage,
+        perPage: USERS_PER_PAGE,
     });
+    adminCurrentPage = updatePanelPagination('admin', filteredAdminUsers.length, adminCurrentPage, USERS_PER_PAGE);
 
-    renderRolePanel(deptUsersTableBody, deptUsers, {
-        roleDefs: DEPT_ROLE_DEFS,
+    deptCurrentPage = renderUserPanel(deptUsersTableBody, filteredDeptUsers, {
         colspan: 7,
         showRole: false,
-        rowOffset: 0,
+        showOffice: true,
+        page: deptCurrentPage,
+        perPage: USERS_PER_PAGE,
     });
+    deptCurrentPage = updatePanelPagination('dept', filteredDeptUsers.length, deptCurrentPage, USERS_PER_PAGE);
 }
 
-function searchAndFilterUsers() {
-    const searchTerm = (searchInput.value || '').toLowerCase().trim();
+function getFilteredUsers() {
+    const searchTerm = (searchInput?.value || '').toLowerCase().trim();
 
-    let filteredUsers = allUsers.filter(user => {
+    return allUsers.filter((user) => {
         if (!searchTerm) return true;
         const email = (user.email || '').toLowerCase();
         const fullName = (user.full_name || '').toLowerCase();
         const role = (user.role || '').toLowerCase();
         const office = (user.office_name || '').toLowerCase();
-        
-        return email.includes(searchTerm) || fullName.includes(searchTerm) || role.includes(searchTerm) || office.includes(searchTerm);
-    });
 
-    renderSplitUserTables(filteredUsers);
+        return email.includes(searchTerm)
+            || fullName.includes(searchTerm)
+            || role.includes(searchTerm)
+            || office.includes(searchTerm);
+    });
+}
+
+function searchAndFilterUsers() {
+    adminCurrentPage = 1;
+    deptCurrentPage = 1;
+    renderSplitUserTables(getFilteredUsers());
 }
 
 function sortUsers(users, sortOption) {
@@ -1032,5 +1102,35 @@ function sortUsers(users, sortOption) {
 }
 
 searchInput?.addEventListener('input', searchAndFilterUsers);
+
+adminPrevBtn?.addEventListener('click', () => {
+    if (adminCurrentPage > 1) {
+        adminCurrentPage -= 1;
+        renderSplitUserTables(getFilteredUsers());
+    }
+});
+
+adminNextBtn?.addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(filteredAdminUsers.length / USERS_PER_PAGE));
+    if (adminCurrentPage < totalPages) {
+        adminCurrentPage += 1;
+        renderSplitUserTables(getFilteredUsers());
+    }
+});
+
+deptPrevBtn?.addEventListener('click', () => {
+    if (deptCurrentPage > 1) {
+        deptCurrentPage -= 1;
+        renderSplitUserTables(getFilteredUsers());
+    }
+});
+
+deptNextBtn?.addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(filteredDeptUsers.length / USERS_PER_PAGE));
+    if (deptCurrentPage < totalPages) {
+        deptCurrentPage += 1;
+        renderSplitUserTables(getFilteredUsers());
+    }
+});
 
 loadUsers();

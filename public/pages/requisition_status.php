@@ -39,7 +39,7 @@ $initials = strtoupper(substr($user['Email'] ?? 'A', 0, 1));
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="status-page">
-<?php $imActivePage = 'requisition_status.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
+<?php $imActivePage = 'requisition_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 
 <main class="main-content">
     <div class="page-header management-header">

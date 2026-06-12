@@ -29,9 +29,9 @@ $rspBackAriaLabel = 'Back to Requisition Management';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Requisition progress — President — IMRMS</title>
+    <title>Requisition Progress — President — IMRMS</title>
     <link rel="stylesheet" href="../assets/css/dashboard.css">
-    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css">
+    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css?v=wlc10">
     <link rel="stylesheet" href="../assets/css/president_verifier.css">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -41,20 +41,13 @@ $rspBackAriaLabel = 'Back to Requisition Management';
 <?php require __DIR__ . '/partials/president_verifier_sidebar.php'; ?>
 
 <main class="main-content">
-    <a href="<?php echo htmlspecialchars($rspProgressBackHref, ENT_QUOTES, 'UTF-8'); ?>" class="rsp-back rsp-back-upper-left" aria-label="<?php echo htmlspecialchars($rspBackAriaLabel, ENT_QUOTES, 'UTF-8'); ?>"><i class="fas fa-arrow-left"></i> Back</a>
-    <div class="page-header management-header" style="margin-bottom: 1rem;">
-        <div>
-            <h1>Requisition progress</h1>
-            <p>Workflow overview for this request. Open forms below to review canvass, purchase requisition, or purchase order.</p>
-        </div>
-    </div>
-    <div id="rspRoot" data-readonly="1" data-viewer="president" data-back-href="<?php echo htmlspecialchars($rspProgressBackHref, ENT_QUOTES, 'UTF-8'); ?>"></div>
+    <div id="rspRoot" data-readonly="1" data-viewer="president" data-back-href="<?php echo htmlspecialchars($rspProgressBackHref, ENT_QUOTES, 'UTF-8'); ?>" data-back-aria-label="<?php echo htmlspecialchars($rspBackAriaLabel, ENT_QUOTES, 'UTF-8'); ?>"></div>
 </main>
 
 <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="Menu"><i class="fas fa-bars"></i></button>
 
 <script src="../assets/js/logout.js?v=wlc1"></script>
 <script src="../assets/js/president_shell.js"></script>
-<script src="../assets/js/requisition_status_progress.js"></script>
+<script src="../assets/js/requisition_status_progress.js?v=wlc10"></script>
 </body>
 </html>
