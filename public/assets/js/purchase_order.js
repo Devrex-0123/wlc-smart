@@ -302,7 +302,18 @@
     const taxNetEl = document.getElementById('poTaxNetPayable');
     const taxNotesEl = document.getElementById('poTaxNotes');
     const taxStatusBadge = document.getElementById('poTaxStatusBadge');
-    const taxSaveBtn = document.getElementById('poTaxSaveBtn');
+    const taxDraftBtn = document.getElementById('poTaxDraftBtn');
+    const taxFinalizeBtn = document.getElementById('poTaxFinalizeBtn');
+    const taxReopenBtn = document.getElementById('poTaxReopenBtn');
+    const taxDraftRow = document.getElementById('poTaxDraftRow');
+    const taxFinalizedPanel = document.getElementById('poTaxFinalizedPanel');
+    const taxDraftSavedHint = document.getElementById('poTaxDraftSavedHint');
+    const taxFinalizedAtEl = document.getElementById('poTaxFinalizedAt');
+    const taxQuickAdd = document.querySelector('.comptroller-tax-quick-add');
+    const confirmModal = document.getElementById('poConfirmModal');
+    const confirmMessage = document.getElementById('poConfirmMessage');
+    const confirmCancelBtn = document.getElementById('poConfirmCancelBtn');
+    const confirmOkBtn = document.getElementById('poConfirmOkBtn');
 
     const EWT_TRANSACTION_TYPES = [
         { key: 'purchase_of_goods', label: 'Purchase of goods', rate: 0.01 },
@@ -316,6 +327,144 @@
     let addVatBtn = null;
     let addOtherBtn = null;
     let addDeductionBtn = null;
+
+    /** @type {'draft' | 'finalized'} */
+    let currentTaxStatus = 'draft';
+    let lastTaxFinalizedAt = null;
+    let taxDraftSaving = false;
+    let taxFinalizeSaving = false;
+    let taxReopenSaving = false;
+
+    function showConfirmModal(message) {
+        if (!confirmModal || !confirmMessage || !confirmCancelBtn || !confirmOkBtn) {
+            return Promise.resolve(window.confirm(message));
+        }
+        return new Promise((resolve) => {
+            confirmMessage.textContent = message;
+            confirmModal.style.display = 'flex';
+
+            const handleConfirm = () => {
+                cleanup();
+                resolve(true);
+            };
+            const handleCancel = () => {
+                cleanup();
+                resolve(false);
+            };
+            const handleBackdrop = (event) => {
+                if (event.target.classList.contains('confirm-modal-backdrop')) {
+                    handleCancel();
+                }
+            };
+            const handleEsc = (event) => {
+                if (event.key === 'Escape') {
+                    handleCancel();
+                }
+            };
+
+            function cleanup() {
+                confirmModal.style.display = 'none';
+                confirmOkBtn.removeEventListener('click', handleConfirm);
+                confirmCancelBtn.removeEventListener('click', handleCancel);
+                confirmModal.removeEventListener('click', handleBackdrop);
+                document.removeEventListener('keydown', handleEsc);
+            }
+
+            confirmOkBtn.addEventListener('click', handleConfirm);
+            confirmCancelBtn.addEventListener('click', handleCancel);
+            confirmModal.addEventListener('click', handleBackdrop);
+            document.addEventListener('keydown', handleEsc);
+        });
+    }
+
+    function formatSavedAtLabel(isoOrDate) {
+        const date = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate || Date.now());
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+        return date.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        });
+    }
+
+    function formatFinalizedAtLabel(isoOrDate) {
+        const label = formatSavedAtLabel(isoOrDate);
+        return label ? `Finalized ${label}` : '';
+    }
+
+    function setTaxFormReadOnly(readOnly) {
+        if (taxNotesEl) {
+            taxNotesEl.readOnly = readOnly;
+            taxNotesEl.classList.toggle('is-readonly', readOnly);
+        }
+        [addEwtBtn, addVatBtn, addOtherBtn, addDeductionBtn].forEach((btn) => {
+            if (btn) {
+                btn.disabled = readOnly;
+            }
+        });
+        if (taxQuickAdd) {
+            taxQuickAdd.classList.toggle('is-disabled', readOnly);
+        }
+        if (!taxRowsBody) {
+            return;
+        }
+        taxRowsBody.querySelectorAll('input, select, textarea, button').forEach((el) => {
+            if (el.classList.contains('po-tax-remove-btn')) {
+                el.disabled = readOnly;
+                return;
+            }
+            if (el.tagName === 'BUTTON') {
+                el.disabled = readOnly;
+                return;
+            }
+            el.disabled = readOnly;
+            if (readOnly) {
+                el.setAttribute('readonly', 'readonly');
+            } else {
+                el.removeAttribute('readonly');
+            }
+        });
+    }
+
+    function applyTaxWorkflowUi(options = {}) {
+        const finalized = currentTaxStatus === 'finalized';
+        if (taxDraftRow) {
+            taxDraftRow.hidden = finalized;
+        }
+        if (taxFinalizedPanel) {
+            taxFinalizedPanel.hidden = !finalized;
+        }
+        if (taxDraftBtn) {
+            taxDraftBtn.disabled = taxDraftSaving || taxFinalizeSaving || finalized;
+        }
+        if (taxFinalizeBtn) {
+            taxFinalizeBtn.disabled = taxDraftSaving || taxFinalizeSaving || finalized;
+            taxFinalizeBtn.innerHTML = taxFinalizeSaving
+                ? '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Finalizing...'
+                : '<i class="fas fa-lock" aria-hidden="true"></i> Finalize &amp; save';
+        }
+        if (taxDraftBtn) {
+            taxDraftBtn.innerHTML = taxDraftSaving
+                ? '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Saving...'
+                : '<i class="fas fa-floppy-disk" aria-hidden="true"></i> Save as draft';
+        }
+        if (taxReopenBtn) {
+            taxReopenBtn.disabled = taxReopenSaving || !finalized;
+            taxReopenBtn.innerHTML = taxReopenSaving
+                ? '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Reopening...'
+                : '<i class="fas fa-lock-open" aria-hidden="true"></i> Reopen for edit';
+        }
+        if (finalized && taxFinalizedAtEl) {
+            const at = options.finalizedAt || lastTaxFinalizedAt;
+            taxFinalizedAtEl.textContent = at ? formatFinalizedAtLabel(at) : '';
+        }
+        setTaxFormReadOnly(finalized);
+        updateTaxBadge(Boolean(options.taxComputed));
+    }
 
     function roundMoney(value) {
         return Math.round(Number(value) * 100) / 100;
@@ -343,9 +492,21 @@
         if (!taxStatusBadge) {
             return;
         }
-        taxStatusBadge.textContent = computed ? 'Computed' : 'Pending computation';
-        taxStatusBadge.classList.toggle('comptroller-tax-badge--computed', Boolean(computed));
-        taxStatusBadge.classList.toggle('comptroller-tax-badge--pending', !computed);
+        if (currentTaxStatus === 'finalized') {
+            taxStatusBadge.textContent = 'Finalized';
+            taxStatusBadge.classList.remove('comptroller-tax-badge--pending');
+            taxStatusBadge.classList.add('comptroller-tax-badge--computed', 'comptroller-tax-badge--finalized');
+            return;
+        }
+        if (computed) {
+            taxStatusBadge.textContent = 'Draft saved';
+            taxStatusBadge.classList.remove('comptroller-tax-badge--pending', 'comptroller-tax-badge--finalized');
+            taxStatusBadge.classList.add('comptroller-tax-badge--computed');
+            return;
+        }
+        taxStatusBadge.textContent = 'Pending computation';
+        taxStatusBadge.classList.remove('comptroller-tax-badge--computed', 'comptroller-tax-badge--finalized');
+        taxStatusBadge.classList.add('comptroller-tax-badge--pending');
     }
 
     function normalizeTaxTypeKey(taxType) {
@@ -794,43 +955,174 @@
             if (data.net_payable != null && taxNetEl) {
                 taxNetEl.textContent = formatMoney(data.net_payable);
             }
-            updateTaxBadge(Boolean(data.tax_computed));
+            currentTaxStatus = String(data.tax_status || 'draft').toLowerCase() === 'finalized' ? 'finalized' : 'draft';
+            lastTaxFinalizedAt = data.tax_finalized_at || null;
+            applyTaxWorkflowUi({
+                taxComputed: Boolean(data.tax_computed),
+                finalizedAt: lastTaxFinalizedAt,
+            });
             recalculateTaxBreakdown();
         } catch {
             /* ignore — comptroller can still enter fresh data */
         }
     }
 
-    async function saveTaxRecord() {
-        if (!isComptroller || currentPoId <= 0) {
-            return;
-        }
+    function validateTaxRowsBeforeSave() {
         if (rowHasType('vat')) {
             const vatRow = taxRowsBody.querySelector('tr[data-tax-kind="vat"]');
             if (vatRow && !isVatApplicable(vatRow)) {
                 showToast('VAT withholding is not applicable with the current supplier/VAT-exempt settings.', 'info');
-                return;
+                return null;
             }
         }
-
         const taxes = collectTaxRows();
         if (!taxes.length) {
             showToast('Add at least one applicable deduction before saving.', 'info');
-            return;
+            return null;
         }
+        return taxes;
+    }
+
+    function buildTaxSaveBody(action, taxes) {
         const netPayable = recalculateTaxBreakdown();
         const notes = taxNotesEl ? taxNotesEl.value.trim() : '';
+        const body = new FormData();
+        body.append('action', action);
+        body.append('purchase_order_id', String(currentPoId));
+        body.append('taxes', JSON.stringify(taxes));
+        body.append('notes', notes);
+        body.append('net_payable', String(netPayable));
+        return { body, netPayable, notes };
+    }
+
+    function showDraftSavedHint(savedAt) {
+        if (!taxDraftSavedHint) {
+            return;
+        }
+        const label = formatSavedAtLabel(savedAt);
+        taxDraftSavedHint.textContent = label ? `Saved at ${label}` : 'Saved';
+        taxDraftSavedHint.hidden = false;
+    }
+
+    async function saveTaxDraft() {
+        if (!isComptroller || currentPoId <= 0 || currentTaxStatus === 'finalized' || taxDraftSaving) {
+            return;
+        }
+        const taxes = validateTaxRowsBeforeSave();
+        if (!taxes) {
+            return;
+        }
+
+        taxDraftSaving = true;
+        applyTaxWorkflowUi({ taxComputed: Boolean(taxRowsBody && taxRowsBody.children.length) });
+
+        const { body } = buildTaxSaveBody('save_tax_draft', taxes);
 
         try {
-            if (taxSaveBtn) {
-                taxSaveBtn.disabled = true;
+            const res = await fetch(api, {
+                method: 'POST',
+                credentials: 'same-origin',
+                body,
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Could not save tax draft.');
             }
+
+            if (data.net_payable != null && taxNetEl) {
+                taxNetEl.textContent = formatMoney(data.net_payable);
+            }
+            populateTaxRowsFromSaved(data.taxes || taxes);
+            if (taxNotesEl && data.notes != null) {
+                taxNotesEl.value = String(data.notes);
+            }
+            currentTaxStatus = 'draft';
+            showDraftSavedHint(data.saved_at || new Date().toISOString());
+            applyTaxWorkflowUi({ taxComputed: true });
+        } catch (err) {
+            console.error('Failed to save tax draft:', err);
+            showToast(err instanceof Error ? err.message : 'Could not save tax draft.');
+        } finally {
+            taxDraftSaving = false;
+            applyTaxWorkflowUi({ taxComputed: true });
+        }
+    }
+
+    async function finalizeTaxRecord() {
+        if (!isComptroller || currentPoId <= 0 || currentTaxStatus === 'finalized' || taxFinalizeSaving) {
+            return;
+        }
+        const taxes = validateTaxRowsBeforeSave();
+        if (!taxes) {
+            return;
+        }
+
+        const ok = await showConfirmModal(
+            'Finalizing will lock this computation and notify the requester that payment is ready. Continue?'
+        );
+        if (!ok) {
+            return;
+        }
+
+        taxFinalizeSaving = true;
+        applyTaxWorkflowUi({ taxComputed: true });
+
+        const { body } = buildTaxSaveBody('finalize_tax', taxes);
+
+        try {
+            const res = await fetch(api, {
+                method: 'POST',
+                credentials: 'same-origin',
+                body,
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Could not finalize tax computation.');
+            }
+
+            showToast(data.message || 'Tax computation finalized.', 'success');
+            if (data.net_payable != null && taxNetEl) {
+                taxNetEl.textContent = formatMoney(data.net_payable);
+            }
+            populateTaxRowsFromSaved(data.taxes || taxes);
+            if (taxNotesEl && data.notes != null) {
+                taxNotesEl.value = String(data.notes);
+            }
+            if (taxDraftSavedHint) {
+                taxDraftSavedHint.hidden = true;
+            }
+            currentTaxStatus = 'finalized';
+            lastTaxFinalizedAt = data.tax_finalized_at || new Date().toISOString();
+            applyTaxWorkflowUi({
+                taxComputed: true,
+                finalizedAt: lastTaxFinalizedAt,
+            });
+        } catch (err) {
+            console.error('Failed to finalize tax computation:', err);
+            showToast(err instanceof Error ? err.message : 'Could not finalize tax computation.');
+        } finally {
+            taxFinalizeSaving = false;
+            applyTaxWorkflowUi({ taxComputed: true, finalizedAt: lastTaxFinalizedAt });
+        }
+    }
+
+    async function reopenTaxRecord() {
+        if (!isComptroller || currentPoId <= 0 || currentTaxStatus !== 'finalized' || taxReopenSaving) {
+            return;
+        }
+
+        const ok = await showConfirmModal('Reopen this tax computation for editing?');
+        if (!ok) {
+            return;
+        }
+
+        taxReopenSaving = true;
+        applyTaxWorkflowUi({ taxComputed: true, finalizedAt: lastTaxFinalizedAt });
+
+        try {
             const body = new FormData();
-            body.append('action', 'save_tax');
+            body.append('action', 'reopen_tax');
             body.append('purchase_order_id', String(currentPoId));
-            body.append('taxes', JSON.stringify(taxes));
-            body.append('notes', notes);
-            body.append('net_payable', String(netPayable));
 
             const res = await fetch(api, {
                 method: 'POST',
@@ -839,24 +1131,19 @@
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.success) {
-                throw new Error(data.message || 'Could not save tax record.');
+                throw new Error(data.message || 'Could not reopen tax computation.');
             }
 
-            showToast(data.message || 'Tax record saved.', 'success');
-            updateTaxBadge(true);
-            if (data.net_payable != null && taxNetEl) {
-                taxNetEl.textContent = formatMoney(data.net_payable);
-            }
-            populateTaxRowsFromSaved(data.taxes || taxes);
-            if (taxNotesEl && data.notes != null) {
-                taxNotesEl.value = String(data.notes);
-            }
+            showToast(data.message || 'Tax computation reopened.', 'success');
+            currentTaxStatus = 'draft';
+            lastTaxFinalizedAt = null;
+            applyTaxWorkflowUi({ taxComputed: Boolean(data.taxes && data.taxes.length) });
         } catch (err) {
-            showToast(err.message || 'Could not save tax record.');
+            console.error('Failed to reopen tax computation:', err);
+            showToast(err instanceof Error ? err.message : 'Could not reopen tax computation.');
         } finally {
-            if (taxSaveBtn) {
-                taxSaveBtn.disabled = false;
-            }
+            taxReopenSaving = false;
+            applyTaxWorkflowUi({ taxComputed: true });
         }
     }
 
@@ -889,12 +1176,23 @@
         if (addDeductionBtn) {
             addDeductionBtn.addEventListener('click', () => createTaxRow('other'));
         }
-        if (taxSaveBtn) {
-            taxSaveBtn.addEventListener('click', () => {
-                void saveTaxRecord();
+        if (taxDraftBtn) {
+            taxDraftBtn.addEventListener('click', () => {
+                void saveTaxDraft();
+            });
+        }
+        if (taxFinalizeBtn) {
+            taxFinalizeBtn.addEventListener('click', () => {
+                void finalizeTaxRecord();
+            });
+        }
+        if (taxReopenBtn) {
+            taxReopenBtn.addEventListener('click', () => {
+                void reopenTaxRecord();
             });
         }
 
+        applyTaxWorkflowUi({ taxComputed: false });
         updateTaxTypeButtons();
         updateTaxGrossDisplay(currentGrossAmount);
         recalculateTaxBreakdown();

@@ -9,6 +9,7 @@ require_once __DIR__ . '/../classes/db.php';
 require_once __DIR__ . '/approval_tables.php';
 require_once __DIR__ . '/../helpers/supplier.php';
 require_once __DIR__ . '/../helpers/purchase_order.php';
+require_once __DIR__ . '/../helpers/user_notifications.php';
 
 function poSendJson(array $payload): void
 {
@@ -197,12 +198,13 @@ function poNormalizeTaxRows(mixed $taxesRaw, float $grossAmount): array
 }
 
 /**
- * @return array{taxes: array<int, array<string, mixed>>, notes: string, net_payable: ?float, tax_computed: bool, computed_by: ?int, computed_at: ?string}
+ * @return array{taxes: array<int, array<string, mixed>>, notes: string, net_payable: ?float, tax_computed: bool, tax_status: string, tax_finalized_at: ?string, po_status: string, computed_by: ?int, computed_at: ?string}
  */
 function poFetchTaxRecord(PDO $db, int $poId): array
 {
     $headerStmt = $db->prepare(
-        'SELECT net_payable, tax_computed FROM purchase_orders WHERE id = ? AND deleted_at IS NULL LIMIT 1'
+        'SELECT net_payable, tax_computed, tax_status, tax_finalized_at, status
+         FROM purchase_orders WHERE id = ? AND deleted_at IS NULL LIMIT 1'
     );
     $headerStmt->execute([$poId]);
     $header = $headerStmt->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -249,9 +251,148 @@ function poFetchTaxRecord(PDO $db, int $poId): array
             ? round((float) $header['net_payable'], 2)
             : null,
         'tax_computed' => (int) ($header['tax_computed'] ?? 0) === 1,
+        'tax_status' => (string) ($header['tax_status'] ?? 'draft'),
+        'tax_finalized_at' => $header['tax_finalized_at'] ?? null,
+        'po_status' => (string) ($header['status'] ?? 'pending'),
         'computed_by' => $computedBy,
         'computed_at' => $computedAt,
     ];
+}
+
+/**
+ * @param array<int, array<string, mixed>> $taxRows
+ */
+function poPersistTaxComputation(
+    PDO $db,
+    int $poId,
+    int $userId,
+    array $taxRows,
+    string $notes,
+    float $netPayable,
+    string $taxStatus,
+    bool $finalize = false
+): void {
+    $del = $db->prepare('DELETE FROM purchase_order_taxes WHERE purchase_order_id = ?');
+    $del->execute([$poId]);
+
+    $insert = $db->prepare(
+        'INSERT INTO purchase_order_taxes
+         (purchase_order_id, tax_type, transaction_type, rate, rate_override, amount_deducted, label,
+          supplier_vat_registered, transaction_vat_exempt, notes, computed_by, computed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+    );
+    foreach ($taxRows as $taxRow) {
+        $insert->execute([
+            $poId,
+            $taxRow['tax_type'],
+            $taxRow['transaction_type'],
+            $taxRow['rate'],
+            (int) ($taxRow['rate_override'] ?? 0),
+            $taxRow['amount_deducted'],
+            $taxRow['label'],
+            $taxRow['supplier_vat_registered'],
+            $taxRow['transaction_vat_exempt'],
+            $notes !== '' ? $notes : null,
+            $userId,
+        ]);
+    }
+
+    if ($finalize) {
+        $upd = $db->prepare(
+            'UPDATE purchase_orders
+             SET net_payable = ?, tax_computed = 1, tax_status = ?, tax_finalized_at = NOW(),
+                 status = ?, updated_at = NOW()
+             WHERE id = ? AND deleted_at IS NULL'
+        );
+        $upd->execute([$netPayable, 'finalized', 'ready_for_release', $poId]);
+
+        return;
+    }
+
+    $upd = $db->prepare(
+        'UPDATE purchase_orders
+         SET net_payable = ?, tax_computed = 1, tax_status = ?, tax_finalized_at = NULL, updated_at = NOW()
+         WHERE id = ? AND deleted_at IS NULL'
+    );
+    $upd->execute([$netPayable, $taxStatus, $poId]);
+}
+
+/**
+ * @return array{taxRows: array<int, array<string, mixed>>, notes: string, netPayable: float, grossAmount: float, header: array<string, mixed>}
+ */
+function poPrepareTaxSavePayload(PDO $db, int $poId, int $userId, mixed $taxesRaw, mixed $notesRaw, mixed $netPayableRaw): array
+{
+    $record = poFetchById($db, $poId);
+    if (!$record) {
+        poSendJson(['success' => false, 'message' => 'Purchase order not found.']);
+    }
+
+    poAssertPresidentApprovedPo($record['header']);
+
+    $header = $record['header'];
+    $currentTaxStatus = strtolower(trim((string) ($header['tax_status'] ?? 'draft')));
+    if ($currentTaxStatus === 'finalized') {
+        poSendJson(['success' => false, 'message' => 'Tax computation is finalized. Reopen for edit before making changes.']);
+    }
+
+    $grossAmount = round((float) ($header['total_amount'] ?? 0), 2);
+    $taxRows = poNormalizeTaxRows($taxesRaw, $grossAmount);
+    $notes = poSanitizeString($notesRaw ?? '', 65535);
+    $netPayable = round((float) $netPayableRaw, 2);
+
+    $deductionSum = 0.0;
+    foreach ($taxRows as $taxRow) {
+        $deductionSum += (float) $taxRow['amount_deducted'];
+    }
+    $deductionSum = round($deductionSum, 2);
+    $expectedNet = round($grossAmount - $deductionSum, 2);
+    if (abs($expectedNet - $netPayable) > 0.02) {
+        $netPayable = $expectedNet;
+    }
+
+    if ($taxRows === []) {
+        poSendJson(['success' => false, 'message' => 'Add at least one deduction before saving.']);
+    }
+
+    return [
+        'taxRows' => $taxRows,
+        'notes' => $notes,
+        'netPayable' => $netPayable,
+        'grossAmount' => $grossAmount,
+        'header' => $header,
+    ];
+}
+
+function poInsertPaymentReadyNotification(PDO $db, array $header, float $netPayable): void
+{
+    $recipientId = (int) ($header['requested_by_user_id'] ?? 0);
+    if ($recipientId <= 0) {
+        return;
+    }
+
+    $requesterName = trim((string) ($header['requested_by_name'] ?? ''));
+    if ($requesterName === '') {
+        $userStmt = $db->prepare('SELECT full_name, Email FROM user WHERE user_id = ? LIMIT 1');
+        $userStmt->execute([$recipientId]);
+        $userRow = $userStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $requesterName = trim((string) ($userRow['full_name'] ?? ''));
+        if ($requesterName === '') {
+            $requesterName = explode('@', (string) ($userRow['Email'] ?? 'Requester'))[0] ?? 'Requester';
+        }
+    }
+
+    cwirmsInsertUserNotification(
+        $db,
+        $recipientId,
+        'payment_ready',
+        (int) ($header['id'] ?? 0),
+        isset($header['requisition_id']) ? (int) $header['requisition_id'] : null,
+        [
+            'po_number' => (string) ($header['po_number'] ?? ''),
+            'requester_full_name' => $requesterName,
+            'net_payable' => round($netPayable, 2),
+        ]
+    );
 }
 
 function poSanitizeString(mixed $value, int $maxLen): string
@@ -463,6 +604,8 @@ function poFormatRecord(PDO $db, array $header, array $lines): array
             ? round((float) $header['net_payable'], 2)
             : null,
         'tax_computed' => (int) ($header['tax_computed'] ?? 0) === 1,
+        'tax_status' => (string) ($header['tax_status'] ?? 'draft'),
+        'tax_finalized_at' => $header['tax_finalized_at'] ?? null,
         'status' => (string) ($header['status'] ?? 'pending'),
         'approved_by_president' => (int) ($header['approved_by_president'] ?? 0) === 1,
         'approved_at' => $header['approved_at'] ?? null,
@@ -814,7 +957,58 @@ if ($action === 'ensure_for_request') {
     ]);
 }
 
-if ($action === 'save_tax') {
+if ($action === 'save_tax' || $action === 'save_tax_draft') {
+    poAssertComptroller($db, $userId);
+
+    $poId = (int) ($_POST['purchase_order_id'] ?? 0);
+    if ($poId <= 0) {
+        poSendJson(['success' => false, 'message' => 'Purchase order id is required.']);
+    }
+
+    $payload = poPrepareTaxSavePayload(
+        $db,
+        $poId,
+        $userId,
+        $_POST['taxes'] ?? null,
+        $_POST['notes'] ?? '',
+        $_POST['net_payable'] ?? 0
+    );
+
+    $db->beginTransaction();
+    try {
+        poPersistTaxComputation(
+            $db,
+            $poId,
+            $userId,
+            $payload['taxRows'],
+            $payload['notes'],
+            $payload['netPayable'],
+            'draft',
+            false
+        );
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        poSendJson(['success' => false, 'message' => 'Failed to save tax draft.']);
+    }
+
+    $saved = poFetchTaxRecord($db, $poId);
+    poSendJson([
+        'success' => true,
+        'message' => 'Tax draft saved.',
+        'net_payable' => $payload['netPayable'],
+        'taxes' => $saved['taxes'],
+        'notes' => $saved['notes'],
+        'tax_computed' => true,
+        'tax_status' => $saved['tax_status'],
+        'tax_finalized_at' => $saved['tax_finalized_at'],
+        'saved_at' => date('c'),
+    ]);
+}
+
+if ($action === 'finalize_tax') {
     poAssertComptroller($db, $userId);
 
     $poId = (int) ($_POST['purchase_order_id'] ?? 0);
@@ -829,75 +1023,97 @@ if ($action === 'save_tax') {
 
     poAssertPresidentApprovedPo($record['header']);
 
-    $grossAmount = round((float) ($record['header']['total_amount'] ?? 0), 2);
-    $taxRows = poNormalizeTaxRows($_POST['taxes'] ?? null, $grossAmount);
-    $notes = poSanitizeString($_POST['notes'] ?? '', 65535);
-    $netPayable = round((float) ($_POST['net_payable'] ?? 0), 2);
-
-    $deductionSum = 0.0;
-    foreach ($taxRows as $taxRow) {
-        $deductionSum += (float) $taxRow['amount_deducted'];
-    }
-    $deductionSum = round($deductionSum, 2);
-    $expectedNet = round($grossAmount - $deductionSum, 2);
-    if (abs($expectedNet - $netPayable) > 0.02) {
-        $netPayable = $expectedNet;
+    $header = $record['header'];
+    $currentTaxStatus = strtolower(trim((string) ($header['tax_status'] ?? 'draft')));
+    if ($currentTaxStatus === 'finalized') {
+        poSendJson(['success' => false, 'message' => 'Tax computation is already finalized.']);
     }
 
-    if ($taxRows === []) {
-        poSendJson(['success' => false, 'message' => 'Add at least one deduction before saving.']);
-    }
+    $payload = poPrepareTaxSavePayload(
+        $db,
+        $poId,
+        $userId,
+        $_POST['taxes'] ?? null,
+        $_POST['notes'] ?? '',
+        $_POST['net_payable'] ?? 0
+    );
 
     $db->beginTransaction();
     try {
-        $del = $db->prepare('DELETE FROM purchase_order_taxes WHERE purchase_order_id = ?');
-        $del->execute([$poId]);
-
-        $insert = $db->prepare(
-            'INSERT INTO purchase_order_taxes
-             (purchase_order_id, tax_type, transaction_type, rate, rate_override, amount_deducted, label,
-              supplier_vat_registered, transaction_vat_exempt, notes, computed_by, computed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+        poPersistTaxComputation(
+            $db,
+            $poId,
+            $userId,
+            $payload['taxRows'],
+            $payload['notes'],
+            $payload['netPayable'],
+            'finalized',
+            true
         );
-        foreach ($taxRows as $taxRow) {
-            $insert->execute([
-                $poId,
-                $taxRow['tax_type'],
-                $taxRow['transaction_type'],
-                $taxRow['rate'],
-                (int) ($taxRow['rate_override'] ?? 0),
-                $taxRow['amount_deducted'],
-                $taxRow['label'],
-                $taxRow['supplier_vat_registered'],
-                $taxRow['transaction_vat_exempt'],
-                $notes !== '' ? $notes : null,
-                $userId,
-            ]);
-        }
-
-        $upd = $db->prepare(
-            'UPDATE purchase_orders
-             SET net_payable = ?, tax_computed = 1, updated_at = NOW()
-             WHERE id = ? AND deleted_at IS NULL'
-        );
-        $upd->execute([$netPayable, $poId]);
-
+        poInsertPaymentReadyNotification($db, $header, $payload['netPayable']);
         $db->commit();
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        poSendJson(['success' => false, 'message' => 'Failed to save tax record.']);
+        poSendJson(['success' => false, 'message' => 'Failed to finalize tax computation.']);
     }
 
     $saved = poFetchTaxRecord($db, $poId);
     poSendJson([
         'success' => true,
-        'message' => 'Tax record saved.',
-        'net_payable' => $netPayable,
+        'message' => 'Tax computation finalized. Requester has been notified.',
+        'net_payable' => $payload['netPayable'],
         'taxes' => $saved['taxes'],
         'notes' => $saved['notes'],
         'tax_computed' => true,
+        'tax_status' => $saved['tax_status'],
+        'tax_finalized_at' => $saved['tax_finalized_at'],
+        'po_status' => $saved['po_status'],
+    ]);
+}
+
+if ($action === 'reopen_tax') {
+    poAssertComptroller($db, $userId);
+
+    $poId = (int) ($_POST['purchase_order_id'] ?? 0);
+    if ($poId <= 0) {
+        poSendJson(['success' => false, 'message' => 'Purchase order id is required.']);
+    }
+
+    $record = poFetchById($db, $poId);
+    if (!$record) {
+        poSendJson(['success' => false, 'message' => 'Purchase order not found.']);
+    }
+
+    poAssertPresidentApprovedPo($record['header']);
+
+    $header = $record['header'];
+    $currentTaxStatus = strtolower(trim((string) ($header['tax_status'] ?? 'draft')));
+    if ($currentTaxStatus !== 'finalized') {
+        poSendJson(['success' => false, 'message' => 'Only finalized tax computations can be reopened.']);
+    }
+
+    $poStatus = strtolower(trim((string) ($header['status'] ?? '')));
+    $restoreStatus = $poStatus === 'ready_for_release' ? 'approved' : $poStatus;
+
+    $upd = $db->prepare(
+        'UPDATE purchase_orders
+         SET tax_status = ?, tax_finalized_at = NULL, status = ?, updated_at = NOW()
+         WHERE id = ? AND deleted_at IS NULL'
+    );
+    $upd->execute(['draft', $restoreStatus, $poId]);
+
+    $saved = poFetchTaxRecord($db, $poId);
+    poSendJson([
+        'success' => true,
+        'message' => 'Tax computation reopened for editing.',
+        'tax_status' => $saved['tax_status'],
+        'tax_finalized_at' => $saved['tax_finalized_at'],
+        'po_status' => $saved['po_status'],
+        'taxes' => $saved['taxes'],
+        'notes' => $saved['notes'],
+        'net_payable' => $saved['net_payable'],
     ]);
 }
 
@@ -923,6 +1139,9 @@ if ($action === 'fetch_tax') {
         'notes' => $saved['notes'],
         'net_payable' => $saved['net_payable'],
         'tax_computed' => $saved['tax_computed'],
+        'tax_status' => $saved['tax_status'],
+        'tax_finalized_at' => $saved['tax_finalized_at'],
+        'po_status' => $saved['po_status'],
         'gross_amount' => round((float) ($record['header']['total_amount'] ?? 0), 2),
         'computed_by' => $saved['computed_by'],
         'computed_at' => $saved['computed_at'],

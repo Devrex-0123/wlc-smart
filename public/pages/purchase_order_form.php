@@ -222,8 +222,30 @@ $todayLabel = date('F j, Y');
                 <label class="comptroller-tax-notes-label" for="poTaxNotes">Comptroller notes</label>
                 <textarea id="poTaxNotes" class="comptroller-tax-notes" rows="3" placeholder="e.g. EWT certificate (BIR Form 2307) to be issued to supplier. Reference: …"></textarea>
 
-                <div class="comptroller-tax-save-row">
-                    <button type="button" class="btn-submit" id="poTaxSaveBtn"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save tax record</button>
+                <div class="comptroller-tax-action-panel po-no-print" id="poTaxActionPanel">
+                    <div class="comptroller-tax-draft-row" id="poTaxDraftRow">
+                        <button type="button" class="btn-secondary po-tax-draft-btn" id="poTaxDraftBtn">
+                            <i class="fas fa-floppy-disk" aria-hidden="true"></i> Save as draft
+                        </button>
+                        <button type="button" class="btn-submit po-tax-finalize-btn" id="poTaxFinalizeBtn">
+                            <i class="fas fa-lock" aria-hidden="true"></i> Finalize &amp; save
+                        </button>
+                        <p class="comptroller-tax-draft-saved-hint" id="poTaxDraftSavedHint" hidden aria-live="polite"></p>
+                    </div>
+
+                    <div class="comptroller-tax-finalized-panel" id="poTaxFinalizedPanel" hidden>
+                        <div class="comptroller-tax-finalized-banner" role="status">
+                            <i class="fas fa-circle-check" aria-hidden="true"></i>
+                            <div>
+                                <strong>Tax computation finalized</strong>
+                                <span id="poTaxFinalizedAt">—</span>
+                                <p class="comptroller-tax-finalized-note">The requester has been notified that payment is ready for release.</p>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-secondary po-tax-reopen-btn" id="poTaxReopenBtn">
+                            <i class="fas fa-lock-open" aria-hidden="true"></i> Reopen for edit
+                        </button>
+                    </div>
                 </div>
             </div>
             <?php endif; ?>
@@ -240,6 +262,20 @@ $todayLabel = date('F j, Y');
 </main>
 
 <div id="poToast" class="toast error" style="display:none;"></div>
+
+<div id="poConfirmModal" class="confirm-modal" style="display:none;">
+    <div class="confirm-modal-backdrop"></div>
+    <div class="confirm-modal-card" role="dialog" aria-modal="true" aria-labelledby="poConfirmTitle">
+        <div class="confirm-modal-header">
+            <h3 id="poConfirmTitle">Please Confirm</h3>
+        </div>
+        <div class="confirm-modal-body" id="poConfirmMessage">Are you sure?</div>
+        <div class="confirm-modal-actions">
+            <button type="button" id="poConfirmCancelBtn" class="confirm-btn confirm-btn-cancel">Cancel</button>
+            <button type="button" id="poConfirmOkBtn" class="confirm-btn confirm-btn-ok">Confirm</button>
+        </div>
+    </div>
+</div>
 
 <script>
 window.IMRMS_PURCHASE_ORDER_CONFIG = <?php echo json_encode([

@@ -453,6 +453,10 @@ function ensurePurchaseOrderTables(PDO $db): void
             $db->exec("ALTER TABLE purchase_order_taxes {$ddl}");
         }
     }
+
+    require_once __DIR__ . '/../helpers/user_notifications.php';
+    cwirmsEnsurePoTaxStatusColumns($db);
+    ensureUserNotificationsTable($db);
 }
 
 function ensurePreferredSupplierItemQuotesTable(PDO $db): void
