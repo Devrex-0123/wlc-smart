@@ -82,6 +82,9 @@ try {
                    po.id AS purchase_order_id,
                    po.po_number AS purchase_order_number,
                    po.status AS purchase_order_status,
+                   po.requested_by_user_id AS po_requested_by_user_id,
+                   po.payment_released_at,
+                   po.items_received_at,
                    {$agg}
             FROM requisition_item r
             LEFT JOIN requisition_form_approval rfa ON rfa.request_id = r.request_id
@@ -131,6 +134,11 @@ try {
                 'purchase_order_id' => !empty($row['purchase_order_id']) ? (int) $row['purchase_order_id'] : null,
                 'purchase_order_number' => (string) ($row['purchase_order_number'] ?? ''),
                 'purchase_order_status' => (string) ($row['purchase_order_status'] ?? ''),
+                'purchase_order_requested_by_user_id' => !empty($row['po_requested_by_user_id'])
+                    ? (int) $row['po_requested_by_user_id']
+                    : null,
+                'payment_released_at' => $row['payment_released_at'] ?? null,
+                'items_received_at' => $row['items_received_at'] ?? null,
                 'requester' => $requester,
                 'office' => $row['office_name'] ?? '—',
                 'amount_label' => $amountLabel,

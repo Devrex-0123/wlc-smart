@@ -29,6 +29,50 @@ function ensureCanvassVerificationApprovalRow(PDO $db, int $requestId): void
     $st->execute([$requestId]);
 }
 
+function ensureCanvassVerificationCanvasSubmissionStatusColumn(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $colCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'canvass_verification_approval'
+           AND COLUMN_NAME = 'canvas_submission_status'"
+    );
+    $colCheck->execute();
+    if (((int) $colCheck->fetchColumn()) === 0) {
+        $db->exec(
+            "ALTER TABLE canvass_verification_approval
+             ADD COLUMN canvas_submission_status ENUM('draft', 'submitted') DEFAULT 'draft' AFTER pres_status"
+        );
+        $db->exec(
+            "UPDATE canvass_verification_approval
+             SET canvas_submission_status = 'submitted'
+             WHERE canvas_status = 'accept'
+                OR gsd_status IS NOT NULL
+                OR comp_status IS NOT NULL
+                OR pres_status IS NOT NULL"
+        );
+        $db->exec(
+            "UPDATE canvass_verification_approval
+             SET canvas_submission_status = 'draft'
+             WHERE canvas_status NOT IN ('accept', 'reject')
+               AND comp_status IS NULL
+               AND gsd_status IS NULL
+               AND pres_status IS NULL
+               AND checked_by IS NULL"
+        );
+        $db->exec(
+            'CREATE INDEX idx_canvass_submission_status
+             ON canvass_verification_approval (canvas_submission_status)'
+        );
+    }
+}
+
 function ensurePurchaseRequisitionApprovalRow(PDO $db, int $requestId): void
 {
     $st = $db->prepare('INSERT IGNORE INTO purchase_requisition_approval (request_id) VALUES (?)');

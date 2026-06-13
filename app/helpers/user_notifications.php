@@ -36,13 +36,20 @@ function cwirmsEnsurePoTaxStatusColumns(PDO $db): void
     if ($statusCheck && !str_contains((string) $statusCheck, 'ready_for_release')) {
         $db->exec(
             "ALTER TABLE purchase_orders
-             MODIFY COLUMN status ENUM('pending','approved','rejected','ready_for_release') NOT NULL DEFAULT 'pending'"
+             MODIFY COLUMN status ENUM('pending','approved','rejected','ready_for_release','completed') NOT NULL DEFAULT 'pending'"
+        );
+    } elseif ($statusCheck && !str_contains((string) $statusCheck, 'completed')) {
+        $db->exec(
+            "ALTER TABLE purchase_orders
+             MODIFY COLUMN status ENUM('pending','approved','rejected','ready_for_release','completed') NOT NULL DEFAULT 'pending'"
         );
     }
 
     $columns = [
         'tax_status' => "ADD COLUMN tax_status ENUM('draft','finalized') NOT NULL DEFAULT 'draft' AFTER tax_computed",
         'tax_finalized_at' => 'ADD COLUMN tax_finalized_at DATETIME NULL DEFAULT NULL AFTER tax_status',
+        'payment_released_at' => 'ADD COLUMN payment_released_at DATETIME NULL DEFAULT NULL AFTER tax_finalized_at',
+        'items_received_at' => 'ADD COLUMN items_received_at DATETIME NULL DEFAULT NULL AFTER payment_released_at',
     ];
     foreach ($columns as $column => $ddl) {
         $colCheck = $db->prepare(

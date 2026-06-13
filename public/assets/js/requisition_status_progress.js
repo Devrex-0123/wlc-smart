@@ -23,8 +23,9 @@ const STEP_DEFS = [
     { icon: 'fa-list-check', title: 'Validate Purchase Requisition', desc: 'Purchase requisition form is validated.' },
     { icon: 'fa-file-invoice-dollar', title: 'Purchase Order', desc: 'Purchase order document is prepared.' },
     { icon: 'fa-check-double', title: 'Validate Purchase Order', desc: 'Purchase order is validated and approved.' },
-    { icon: 'fa-truck-fast', title: 'Delivery / Receiving', desc: 'Item is for delivery, pending receipt, or already received.' },
-    { icon: 'fa-circle-check', title: 'Completed', desc: 'Request cycle is completed.' },
+    { icon: 'fa-hand-holding-dollar', title: 'Claim & release payment', desc: 'Requester confirms payment was claimed and released to the supplier.' },
+    { icon: 'fa-box-open', title: 'Items received', desc: 'Inventory Manager confirms items from the supplier were received.' },
+    { icon: 'fa-circle-check', title: 'Completed', desc: 'Request cycle is fully complete.' },
 ];
 
 function getQueryRequestId() {
@@ -65,6 +66,7 @@ function readRootConfig(root) {
             deanFlow: false,
             progressFrom: '',
             viewer: '',
+            userId: 0,
         };
     }
     const readonly = root.dataset.readonly === '1' || root.dataset.readonly === 'true';
@@ -73,7 +75,8 @@ function readRootConfig(root) {
     const deanFlow = root.dataset.deanFlow === '1' || root.dataset.deanFlow === 'true';
     const progressFrom = root.dataset.progressFrom || '';
     const viewer = root.dataset.viewer || '';
-    return { readonly, backHref, backAriaLabel, deanFlow, progressFrom, viewer };
+    const userId = parseInt(root.dataset.userId || '0', 10) || 0;
+    return { readonly, backHref, backAriaLabel, deanFlow, progressFrom, viewer, userId };
 }
 
 function loadRecord(requestId) {
@@ -261,6 +264,10 @@ async function ensurePurchaseOrderForProgress(requestId, record) {
             purchase_order_id: Number(data.data.id || 0) || null,
             purchase_order_number: String(data.data.po_number || ''),
             purchase_order_status: String(data.data.status || record.purchase_order_status || 'pending'),
+            purchase_order_requested_by_user_id:
+                Number(data.data.requested_by_user_id || 0) || record.purchase_order_requested_by_user_id || null,
+            payment_released_at: data.data.payment_released_at || record.payment_released_at || null,
+            items_received_at: data.data.items_received_at || record.items_received_at || null,
         };
         try {
             sessionStorage.setItem(STORAGE_PREFIX + String(requestId), JSON.stringify(merged));
@@ -281,14 +288,37 @@ function poStatusLower(record) {
     return String((record && record.purchase_order_status) || '').trim().toLowerCase();
 }
 
+function poPresidentValidated(record) {
+    const st = poStatusLower(record);
+    return st === 'approved' || st === 'ready_for_release' || st === 'completed';
+}
+
+function purchaseFlowComplete(record) {
+    return Boolean(record?.items_received_at) || poStatusLower(record) === 'completed';
+}
+
+function isPoRequester(record, sessionUserId) {
+    const poRequester = Number(record?.purchase_order_requested_by_user_id || 0);
+    return poRequester > 0 && poRequester === Number(sessionUserId || 0);
+}
+
 /**
  * Purchase flow after canvass is fully verified (0-based STEP_DEFS indices):
- * 4 PR form · 5 validate PR · 6 generate PO · 7 president validates PO · 8 delivery.
+ * 4 PR · 5 validate PR · 6 PO · 7 validate PO · 8 claim payment · 9 items received · 10 completed.
  */
 function currentIndexAfterCanvasForPurchaseFlow(record) {
     if (purchaseRequisitionFullyAccepted(record)) {
+        if (purchaseFlowComplete(record)) {
+            return null;
+        }
         if (purchaseOrderExists(record)) {
-            if (poStatusLower(record) === 'approved') {
+            if (record.payment_released_at) {
+                return 9;
+            }
+            if (poStatusLower(record) === 'ready_for_release') {
+                return 8;
+            }
+            if (poPresidentValidated(record)) {
                 return 8;
             }
             return 7;
@@ -303,6 +333,59 @@ function currentIndexAfterCanvasForPurchaseFlow(record) {
     return 5;
 }
 
+function resolveStepPhase(record, stepIndex, currentIndex) {
+    if (stepIndex === 7 && poPresidentValidated(record)) {
+        return 'done';
+    }
+    if (stepIndex === 8) {
+        if (record.payment_released_at) {
+            return 'done';
+        }
+        if (poStatusLower(record) === 'ready_for_release') {
+            return 'current';
+        }
+        return 'upcoming';
+    }
+    if (stepIndex === 9) {
+        if (record.items_received_at) {
+            return 'done';
+        }
+        if (record.payment_released_at) {
+            return 'current';
+        }
+        return 'upcoming';
+    }
+    if (stepIndex === 10) {
+        if (record.items_received_at) {
+            return 'done';
+        }
+        return 'upcoming';
+    }
+    if (currentIndex === null) {
+        return 'done';
+    }
+    if (stepIndex < currentIndex) {
+        return 'done';
+    }
+    if (stepIndex === currentIndex) {
+        return 'current';
+    }
+    return 'upcoming';
+}
+
+function stepTimestampHtml(record, stepIndex) {
+    if (stepIndex === 8 && record.payment_released_at) {
+        return `<div class="rsp-step-meta">Released ${esc(formatDate(record.payment_released_at))}</div>`;
+    }
+    if (stepIndex === 9 && record.items_received_at) {
+        return `<div class="rsp-step-meta">Received ${esc(formatDate(record.items_received_at))}</div>`;
+    }
+    if (stepIndex === 10 && record.items_received_at) {
+        return `<div class="rsp-step-meta">Completed ${esc(formatDate(record.items_received_at))}</div>`;
+    }
+    return '';
+}
+
 /**
  * Maps request/approval values to the detailed workflow stages.
  * After canvass: advances by purchase requisition verifiers (pr_inv_status / pr_pres_status).
@@ -311,6 +394,9 @@ function getStepState(record) {
     const s = String((record && record.status) || '').trim();
     const rq = String((record && record.requisition_status) || '').trim().toLowerCase();
 
+    if (purchaseFlowComplete(record)) {
+        return { currentIndex: null, pct: 100, fillPct: 100 };
+    }
     if (s === 'Completed') {
         return { currentIndex: null, pct: 100, fillPct: 100 };
     }
@@ -510,14 +596,7 @@ function renderApp(root, record, config) {
     const sel = (v) => (st === v ? ' selected' : '');
 
     const horizontalSteps = STEP_DEFS.map((def, i) => {
-        let phase = 'upcoming';
-        if (currentIndex === null) {
-            phase = 'done';
-        } else if (i < currentIndex) {
-            phase = 'done';
-        } else if (i === currentIndex) {
-            phase = 'current';
-        }
+        const phase = resolveStepPhase(record, i, currentIndex);
         return `
             <div class="rsp-step ${phase}" data-step="${i}" data-tooltip="${esc(def.desc)}" title="${esc(def.desc)}" tabindex="0" aria-label="${esc(`${def.title}: ${def.desc}`)}">
                 <div class="rsp-step-node" aria-hidden="true">
@@ -529,19 +608,14 @@ function renderApp(root, record, config) {
     }).join('');
 
     const verticalSteps = STEP_DEFS.map((def, i) => {
-        let phase = 'upcoming';
-        if (currentIndex === null) {
-            phase = 'done';
-        } else if (i < currentIndex) {
-            phase = 'done';
-        } else if (i === currentIndex) {
-            phase = 'current';
-        }
+        const phase = resolveStepPhase(record, i, currentIndex);
+        const meta = stepTimestampHtml(record, i);
         return `
             <div class="rsp-vstep ${phase}" data-tooltip="${esc(def.desc)}" title="${esc(def.desc)}" tabindex="0" aria-label="${esc(`${def.title}: ${def.desc}`)}">
                 <div class="rsp-vnode"><i class="fas ${def.icon}"></i></div>
                 <div class="rsp-vbody">
                     <div class="rsp-step-title">${esc(def.title)}</div>
+                    ${meta}
                 </div>
             </div>
         `;
@@ -665,6 +739,25 @@ function renderApp(root, record, config) {
         }),
     ].join('');
 
+    const showMarkPaymentReleased =
+        config.deanFlow &&
+        isPoRequester(record, config.userId) &&
+        poStatusLower(record) === 'ready_for_release' &&
+        !record.payment_released_at &&
+        Number(record.purchase_order_id || 0) > 0;
+
+    const requesterActionsSection = showMarkPaymentReleased
+            ? `
+                <div class="rsp-hero-section rsp-hero-requester-actions">
+                    <h3><i class="fas fa-hand-holding-dollar"></i> Your confirmation</h3>
+                    <p class="rsp-step-desc">Confirm once you have claimed the payment and released it to the supplier.</p>
+                    <div class="rsp-requester-actions">
+                        <button type="button" class="rsp-btn-save" id="rspMarkPaymentReleasedBtn"><i class="fas fa-hand-holding-dollar" aria-hidden="true"></i> Mark payment released</button>
+                    </div>
+                    <p id="rspRequesterActionMsg" class="rsp-status-msg" role="status"></p>
+                </div>`
+            : '';
+
     root.innerHTML = `
         <div class="rsp-wrap">
             <header class="rsp-hero rsp-unified">
@@ -707,6 +800,7 @@ function renderApp(root, record, config) {
                         </ul>
                     </div>
                 </div>
+                ${requesterActionsSection}
                 ${updateSection}
             </header>
         </div>
@@ -740,6 +834,90 @@ function renderApp(root, record, config) {
                 }
             });
         });
+    }
+
+    const markPaymentBtn = document.getElementById('rspMarkPaymentReleasedBtn');
+    if (markPaymentBtn) {
+        markPaymentBtn.addEventListener('click', () => {
+            void handleMarkPaymentReleased(root, config);
+        });
+    }
+}
+
+async function postPoRequesterAction(action, purchaseOrderId) {
+    const body = new URLSearchParams();
+    body.append('action', action);
+    body.append('purchase_order_id', String(purchaseOrderId));
+    const res = await fetch(PURCHASE_ORDER_API, {
+        method: 'POST',
+        credentials: 'include',
+        body,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Request failed.');
+    }
+    return data;
+}
+
+function mergePoProgressFields(record, poData) {
+    if (!poData) {
+        return record;
+    }
+    return {
+        ...record,
+        purchase_order_status: String(poData.status || record.purchase_order_status || ''),
+        purchase_order_requested_by_user_id:
+            Number(poData.requested_by_user_id || 0) || record.purchase_order_requested_by_user_id || null,
+        payment_released_at: poData.payment_released_at || null,
+        items_received_at: poData.items_received_at || null,
+    };
+}
+
+async function handleMarkPaymentReleased(root, config) {
+    if (!progressRecord || !config.deanFlow) {
+        return;
+    }
+    const msg = document.getElementById('rspRequesterActionMsg');
+    const btn = document.getElementById('rspMarkPaymentReleasedBtn');
+    const poId = Number(progressRecord.purchase_order_id || 0);
+    if (poId <= 0) {
+        return;
+    }
+
+    const ok = window.confirm('Confirm you have received the payment and released it to the supplier?');
+    if (!ok) {
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+    }
+    if (msg) {
+        msg.textContent = '';
+        msg.className = 'rsp-status-msg';
+    }
+
+    try {
+        const data = await postPoRequesterAction('mark_payment_released', poId);
+        progressRecord = mergePoProgressFields(progressRecord, data.data);
+        try {
+            sessionStorage.setItem(
+                STORAGE_PREFIX + String(progressRecord.request_id),
+                JSON.stringify(progressRecord)
+            );
+        } catch {
+            /* ignore */
+        }
+        renderApp(root, progressRecord, config);
+    } catch (err) {
+        if (msg) {
+            msg.textContent = err instanceof Error ? err.message : 'Could not save confirmation.';
+            msg.className = 'rsp-status-msg err';
+        }
+        if (btn) {
+            btn.disabled = false;
+        }
     }
 }
 

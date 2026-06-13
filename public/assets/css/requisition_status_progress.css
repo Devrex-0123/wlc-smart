@@ -704,6 +704,35 @@ a.rsp-form-view-disabled:hover {
     }
 }
 
+.rsp-step-meta {
+    margin-top: 0.2rem;
+    font-size: 0.78rem;
+    color: #047857;
+    font-weight: 500;
+}
+
+.rsp-hero-requester-actions .rsp-step-desc {
+    margin: 0 0 0.75rem;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.rsp-requester-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.rsp-btn-save--secondary {
+    background: #ffffff;
+    color: #15803d;
+    border: 1.5px solid #16a34a;
+}
+
+.rsp-btn-save--secondary:hover:not(:disabled) {
+    background: #f0fdf4;
+}
+
 /* Unviewed form indicator */
 .form-unviewed-indicator {
     display: inline-block;

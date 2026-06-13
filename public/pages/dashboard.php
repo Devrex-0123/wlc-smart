@@ -23,7 +23,7 @@ if ($username === '') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - IMRMS</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc34">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -72,6 +72,15 @@ if ($username === '') {
             <p class="dashboard-stat-card__value" id="deptsActiveCount">0</p>
             <a href="requisition_management.php" class="dashboard-stat-card__link">View breakdown <i class="fas fa-arrow-down" aria-hidden="true"></i></a>
         </article>
+    </section>
+
+    <section class="dashboard-panel dashboard-panel--awaiting-receipt" aria-label="Awaiting item receipt">
+        <header class="dashboard-panel__head dashboard-panel__head--split">
+            <h2 class="dashboard-panel__title"><i class="fas fa-box-open" aria-hidden="true"></i> Awaiting item receipt</h2>
+        </header>
+        <ul class="dashboard-recent__list" id="awaitingItemReceiptList">
+            <li class="dashboard-recent__empty">Loading…</li>
+        </ul>
     </section>
 
     <section class="dashboard-panels" aria-label="Procurement overview">
@@ -187,7 +196,7 @@ if ($username === '') {
 
 <?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 
-<script src="../assets/js/dashboard.js?v=wlc2"></script>
+<script src="../assets/js/dashboard.js?v=wlc4"></script>
 <script src="../assets/js/logout.js?v=wlc1"></script>
 </body>
 </html>

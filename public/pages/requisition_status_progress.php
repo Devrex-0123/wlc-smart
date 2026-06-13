@@ -42,7 +42,7 @@ if ($isComptroller) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Requisition Progress - IMRMS</title>
     <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc43">
-    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css?v=wlc10">
+    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css?v=wlc12">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -66,6 +66,6 @@ if ($isComptroller) {
 <?php else: ?>
 <?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 <?php endif; ?>
-<script src="../assets/js/requisition_status_progress.js?v=wlc10"></script>
+<script src="../assets/js/requisition_status_progress.js?v=wlc12"></script>
 </body>
 </html>

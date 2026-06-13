@@ -68,6 +68,14 @@ function poAssertComptroller(PDO $db, int $userId): void
     }
 }
 
+function poAssertInventoryManager(PDO $db, int $userId): void
+{
+    $role = poViewerRoleLc($db, $userId);
+    if ($role !== 'inventory manager' && $role !== 'inventory_manager') {
+        poSendJson(['success' => false, 'message' => 'Forbidden']);
+    }
+}
+
 /** @return array<string, float> */
 function poEwtTransactionRateMap(): array
 {
@@ -573,6 +581,14 @@ function poCanView(PDO $db, int $userId, array $header): bool
     return false;
 }
 
+function poAssertPoRequester(PDO $db, int $userId, array $header): void
+{
+    $requestedBy = (int) ($header['requested_by_user_id'] ?? 0);
+    if ($requestedBy <= 0 || $requestedBy !== $userId) {
+        poSendJson(['success' => false, 'message' => 'Only the requester may perform this action.']);
+    }
+}
+
 function poFormatRecord(PDO $db, array $header, array $lines): array
 {
     $dateIssued = '';
@@ -606,6 +622,8 @@ function poFormatRecord(PDO $db, array $header, array $lines): array
         'tax_computed' => (int) ($header['tax_computed'] ?? 0) === 1,
         'tax_status' => (string) ($header['tax_status'] ?? 'draft'),
         'tax_finalized_at' => $header['tax_finalized_at'] ?? null,
+        'payment_released_at' => $header['payment_released_at'] ?? null,
+        'items_received_at' => $header['items_received_at'] ?? null,
         'status' => (string) ($header['status'] ?? 'pending'),
         'approved_by_president' => (int) ($header['approved_by_president'] ?? 0) === 1,
         'approved_at' => $header['approved_at'] ?? null,
@@ -1145,6 +1163,81 @@ if ($action === 'fetch_tax') {
         'gross_amount' => round((float) ($record['header']['total_amount'] ?? 0), 2),
         'computed_by' => $saved['computed_by'],
         'computed_at' => $saved['computed_at'],
+    ]);
+}
+
+if ($action === 'mark_payment_released') {
+    $poId = (int) ($_POST['purchase_order_id'] ?? 0);
+    if ($poId <= 0) {
+        poSendJson(['success' => false, 'message' => 'Purchase order id is required.']);
+    }
+
+    $record = poFetchById($db, $poId);
+    if (!$record) {
+        poSendJson(['success' => false, 'message' => 'Purchase order not found.']);
+    }
+
+    $header = $record['header'];
+    poAssertPoRequester($db, $userId, $header);
+
+    $status = strtolower(trim((string) ($header['status'] ?? '')));
+    if ($status !== 'ready_for_release') {
+        poSendJson(['success' => false, 'message' => 'Payment can only be marked released once the purchase order is ready for release.']);
+    }
+
+    if (!empty($header['payment_released_at'])) {
+        poSendJson(['success' => false, 'message' => 'Payment has already been marked as released.']);
+    }
+
+    $upd = $db->prepare(
+        'UPDATE purchase_orders
+         SET payment_released_at = NOW(), updated_at = NOW()
+         WHERE id = ? AND deleted_at IS NULL'
+    );
+    $upd->execute([$poId]);
+
+    $record = poFetchById($db, $poId);
+    poSendJson([
+        'success' => true,
+        'message' => 'Payment marked as released to the supplier.',
+        'data' => poFormatRecord($db, $record['header'], $record['lines']),
+    ]);
+}
+
+if ($action === 'mark_items_received') {
+    $poId = (int) ($_POST['purchase_order_id'] ?? 0);
+    if ($poId <= 0) {
+        poSendJson(['success' => false, 'message' => 'Purchase order id is required.']);
+    }
+
+    $record = poFetchById($db, $poId);
+    if (!$record) {
+        poSendJson(['success' => false, 'message' => 'Purchase order not found.']);
+    }
+
+    $header = $record['header'];
+    poAssertInventoryManager($db, $userId);
+
+    if (empty($header['payment_released_at'])) {
+        poSendJson(['success' => false, 'message' => 'Payment must be released by the requester before confirming receipt.']);
+    }
+
+    if (!empty($header['items_received_at'])) {
+        poSendJson(['success' => false, 'message' => 'Items have already been marked as received.']);
+    }
+
+    $upd = $db->prepare(
+        'UPDATE purchase_orders
+         SET items_received_at = NOW(), status = ?, updated_at = NOW()
+         WHERE id = ? AND deleted_at IS NULL'
+    );
+    $upd->execute(['completed', $poId]);
+
+    $record = poFetchById($db, $poId);
+    poSendJson([
+        'success' => true,
+        'message' => 'Items marked as received. This requisition is now complete.',
+        'data' => poFormatRecord($db, $record['header'], $record['lines']),
     ]);
 }
 
