@@ -123,6 +123,9 @@ function poNormalizeTaxRows(mixed $taxesRaw, float $grossAmount): array
             continue;
         }
         $taxType = strtolower(trim((string) ($row['tax_type'] ?? '')));
+        if ($taxType === '') {
+            continue;
+        }
         if ($taxType === 'vat') {
             $taxType = 'vat withholding';
         }
@@ -357,9 +360,8 @@ function poPrepareTaxSavePayload(PDO $db, int $poId, int $userId, mixed $taxesRa
     if (abs($expectedNet - $netPayable) > 0.02) {
         $netPayable = $expectedNet;
     }
-
     if ($taxRows === []) {
-        poSendJson(['success' => false, 'message' => 'Add at least one deduction before saving.']);
+        $netPayable = $grossAmount;
     }
 
     return [

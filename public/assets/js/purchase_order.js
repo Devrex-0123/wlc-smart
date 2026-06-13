@@ -967,20 +967,8 @@
         }
     }
 
-    function validateTaxRowsBeforeSave() {
-        if (rowHasType('vat')) {
-            const vatRow = taxRowsBody.querySelector('tr[data-tax-kind="vat"]');
-            if (vatRow && !isVatApplicable(vatRow)) {
-                showToast('VAT withholding is not applicable with the current supplier/VAT-exempt settings.', 'info');
-                return null;
-            }
-        }
-        const taxes = collectTaxRows();
-        if (!taxes.length) {
-            showToast('Add at least one applicable deduction before saving.', 'info');
-            return null;
-        }
-        return taxes;
+    function collectTaxesForSave() {
+        return collectTaxRows();
     }
 
     function buildTaxSaveBody(action, taxes) {
@@ -1008,13 +996,9 @@
         if (!isComptroller || currentPoId <= 0 || currentTaxStatus === 'finalized' || taxDraftSaving) {
             return;
         }
-        const taxes = validateTaxRowsBeforeSave();
-        if (!taxes) {
-            return;
-        }
-
+        const taxes = collectTaxesForSave();
         taxDraftSaving = true;
-        applyTaxWorkflowUi({ taxComputed: Boolean(taxRowsBody && taxRowsBody.children.length) });
+        applyTaxWorkflowUi({ taxComputed: true });
 
         const { body } = buildTaxSaveBody('save_tax_draft', taxes);
 
@@ -1052,10 +1036,7 @@
         if (!isComptroller || currentPoId <= 0 || currentTaxStatus === 'finalized' || taxFinalizeSaving) {
             return;
         }
-        const taxes = validateTaxRowsBeforeSave();
-        if (!taxes) {
-            return;
-        }
+        const taxes = collectTaxesForSave();
 
         const ok = await showConfirmModal(
             'Finalizing will lock this computation and notify the requester that payment is ready. Continue?'

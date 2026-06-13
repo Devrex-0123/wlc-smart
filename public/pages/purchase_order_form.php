@@ -288,6 +288,6 @@ window.IMRMS_PURCHASE_ORDER_CONFIG = <?php echo json_encode([
     'todayLabel' => $todayLabel,
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS); ?>;
 </script>
-<script src="../assets/js/purchase_order.js"></script>
+<script src="../assets/js/purchase_order.js?v=wlc14"></script>
 </body>
 </html>
