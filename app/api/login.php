@@ -14,28 +14,34 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$email = trim(strtolower($_POST['email'] ?? ''));
+$identifier = trim((string) ($_POST['email'] ?? $_POST['username'] ?? ''));
 $password = $_POST['password'] ?? '';
 $consentAccepted = isset($_POST['privacy_agreement']) && $_POST['privacy_agreement'] === 'on';
 
-if (empty($email) || empty($password)) {
-    echo json_encode(["success" => false, "message" => "Email and password required"]);
+if ($identifier === '' || $password === '') {
+    echo json_encode(["success" => false, "message" => "Email/username and password required"]);
     exit;
 }
 
 $auth = new AuthController();
-$result = $auth->login($email, $password, $consentAccepted);
+$result = $auth->login($identifier, $password, $consentAccepted);
 
-// Add role to success response if login is successful
-if (isset($result['success']) && $result['success'] && isset($_SESSION['user_role'])) {
-    $result['role'] = $_SESSION['user_role']; // Make sure authController sets this in session
+if (isset($result['success']) && $result['success']) {
+    if (isset($_SESSION['user_role'])) {
+        $result['role'] = $_SESSION['user_role'];
+    }
+    if (isset($_SESSION['login_type'])) {
+        $result['login_type'] = $_SESSION['login_type'];
+    }
 
-    try {
-        $db = Database::connect();
-        $stmt = $db->prepare("INSERT INTO user_activity (user_id, activity_type, description, created_at) VALUES (?, 'Login', 'Successful login', NOW())");
-        $stmt->execute([(int)$_SESSION['user_id']]);
-    } catch (Throwable $e) {
-        // Non-blocking audit logging
+    if (($_SESSION['login_type'] ?? 'user') === 'user' && isset($_SESSION['user_id'])) {
+        try {
+            $db = Database::connect();
+            $stmt = $db->prepare("INSERT INTO user_activity (user_id, activity_type, description, created_at) VALUES (?, 'Login', 'Successful login', NOW())");
+            $stmt->execute([(int) $_SESSION['user_id']]);
+        } catch (Throwable $e) {
+            // Non-blocking audit logging
+        }
     }
 }
 

@@ -109,6 +109,14 @@
   transform:translateY(-1px);
 }
 
+.account-page-header__add-btn--dept{
+  background:#2563eb;
+}
+
+.account-page-header__add-btn--dept:hover{
+  background:#1d4ed8;
+}
+
 /* Split user panels */
 .account-management-container .users-tables-split{
   display:grid;
@@ -587,30 +595,50 @@
 .users-management-table--admin th:nth-child(7),
 .users-management-table--admin td:nth-child(7){width:120px; min-width:120px;}
 
-/* Column sizing — department heads (7 columns, no Role) */
+/* Column sizing — departments table (6 columns) */
 .users-management-table--dept th:nth-child(1),
 .users-management-table--dept td:nth-child(1){width:36px;}
 
 .users-management-table--dept th:nth-child(2),
-.users-management-table--dept td:nth-child(2) {
-  width: 80px;
-  min-width: 80px;
+.users-management-table--dept td:nth-child(2){
+  width:80px;
+  min-width:80px;
 }
 
 .users-management-table--dept th:nth-child(3),
-.users-management-table--dept td:nth-child(3){width:104px;}
+.users-management-table--dept td:nth-child(3){width:110px;}
 
 .users-management-table--dept th:nth-child(4),
-.users-management-table--dept td:nth-child(4){width:145px;}
+.users-management-table--dept td:nth-child(4){width:120px;}
 
 .users-management-table--dept th:nth-child(5),
-.users-management-table--dept td:nth-child(5){width:72px;}
+.users-management-table--dept td:nth-child(5){width:88px; min-width:88px;}
 
 .users-management-table--dept th:nth-child(6),
-.users-management-table--dept td:nth-child(6){width:100px;}
+.users-management-table--dept td:nth-child(6){width:120px; min-width:120px;}
 
-.users-management-table--dept th:nth-child(7),
-.users-management-table--dept td:nth-child(7){width:120px; min-width:120px;}
+.users-management-table--dept td.users-col-abbrev{
+  font-weight:600;
+  letter-spacing:0.02em;
+}
+
+/* Center department table contents */
+.account-management-container .users-panel-card--dept .table-wrapper td{
+  text-align:center;
+}
+
+.users-panel-card--dept .user-photo-wrapper{
+  margin:0 auto;
+  width:fit-content;
+}
+
+.users-panel-card--dept .user-action-cell{
+  justify-content:center;
+}
+
+.users-panel-card--dept .status-pill{
+  display:inline-block;
+}
 
 /* Actions scroll with the table (no sticky column) */
 .account-management-container .table-wrapper th:last-child,
@@ -728,6 +756,22 @@
 }
 
 #userModal.user-modal--edit .modal-form{
+  padding:1rem 1.25rem 1.25rem;
+}
+
+#departmentModal.user-modal--edit .modal-content{
+  max-width:560px;
+}
+
+#departmentModal.user-modal--edit .modal-header{
+  padding:1rem 1.25rem;
+}
+
+#departmentModal.user-modal--edit .modal-header h2{
+  font-size:1.2rem;
+}
+
+#departmentModal.user-modal--edit .modal-form{
   padding:1rem 1.25rem 1.25rem;
 }
 

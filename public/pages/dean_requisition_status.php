@@ -105,7 +105,7 @@ $initials = strtoupper(substr($user['Email'] ?? 'D', 0, 1));
 <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
 
 <?php require __DIR__ . '/partials/dean_sidebar_scripts.php'; ?>
-<script src="../assets/js/logout.js?v=wlc1"></script>
+<script src="../assets/js/logout.js?v=wlc2"></script>
 <script src="../assets/js/dean_requisition_status.js"></script>
 </body>
 </html>

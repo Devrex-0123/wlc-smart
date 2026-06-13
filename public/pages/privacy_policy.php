@@ -1,3 +1,6 @@
+<?php
+require_once __DIR__ . '/../../app/config/consent.php';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -92,6 +95,14 @@
             opacity: 0.95;
             max-width: 800px;
             margin: 0 auto;
+        }
+
+        .policy-header-meta {
+            font-size: 0.95rem;
+            font-weight: 500;
+            opacity: 0.92;
+            margin: 14px auto 0;
+            letter-spacing: 0.02em;
         }
 
         /* --- Content Layout Structure --- */
@@ -495,14 +506,14 @@
         <div class="header-container">
             <h1>Privacy Policy</h1>
             <h2>We're committed to protecting your privacy and ensuring transparency about how we collect, use, and safeguard your personal information on our platform.</h2>
+            <p class="policy-header-meta">Version <?php echo htmlspecialchars(CONSENT_VERSION); ?></p>
         </div>
     </header>
 
     <div class="policy-container">
         
         <main class="policy-content">
-            <div class="meta-info">Effective April 29, 2026</div>
-            <div class="meta-info" style="margin-bottom: 20px;">Our Privacy Policy has been updated.</div>
+            <div class="meta-info" style="margin-bottom: 20px;"><?php echo htmlspecialchars(CONSENT_EFFECTIVE_DATE); ?></div>
 
             <h2 class="system-title-sub">Your Privacy Matters</h2>
             <p class="intro-text">
@@ -575,7 +586,7 @@
 
             <section id="changes" class="policy-section">
                 <h2>Changes to our privacy policy</h2>
-                <p>WLC-SMART keeps this Privacy Notice under regular ongoing review structures. Any verified document updates will be instantly posted directly onto this web interface path environment. This privacy file configuration policy was last modified on <strong>April 29, 2026</strong>.</p>
+                <p>WLC-SMART keeps this Privacy Notice under regular ongoing review structures. Any verified document updates will be instantly posted directly onto this web interface path environment. This privacy file configuration policy was last modified on <strong><?php echo htmlspecialchars(CONSENT_EFFECTIVE_DATE); ?></strong> (Version <strong><?php echo htmlspecialchars(CONSENT_VERSION); ?></strong>).</p>
             </section>
 
             <section id="contact" class="policy-section">

@@ -260,7 +260,7 @@ window.DEAN_INVENTORY_CONFIG = <?php echo json_encode([
     'initialFacilityId' => $initialFacilityId,
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_UNESCAPED_UNICODE); ?>;
 </script>
-<script src="../assets/js/logout.js?v=wlc1"></script>
+<script src="../assets/js/logout.js?v=wlc2"></script>
 <script src="../assets/js/dean_inventory.js"></script>
 </body>
 </html>

@@ -15,11 +15,21 @@ if ($deanActivePage === 'dean_requisition_status_progress.php' || $deanActivePag
     $deanActivePage = 'dean_requisition_management.php';
 }
 
-$deanDisplayName = trim((string)($deanUser['full_name'] ?? ''));
-if ($deanDisplayName === '') {
-    $deanDisplayName = explode('@', (string)($deanUser['Email'] ?? ''))[0] ?? 'Dean';
+$isDepartmentSidebar = isset($_SESSION['login_type']) && $_SESSION['login_type'] === 'department';
+
+if ($isDepartmentSidebar) {
+    $deanDisplayName = strtoupper(trim((string)($_SESSION['department_abbreviation'] ?? ($deanUser['department_abbreviation'] ?? ''))));
+    if ($deanDisplayName === '') {
+        $deanDisplayName = 'DEPT';
+    }
+    $deanInitialSeed = $deanDisplayName;
+} else {
+    $deanDisplayName = trim((string)($deanUser['full_name'] ?? ''));
+    if ($deanDisplayName === '') {
+        $deanDisplayName = explode('@', (string)($deanUser['Email'] ?? ''))[0] ?? 'Dean';
+    }
+    $deanInitialSeed = $deanDisplayName !== '' ? $deanDisplayName : (string)($deanUser['Email'] ?? 'D');
 }
-$deanInitialSeed = $deanDisplayName !== '' ? $deanDisplayName : (string)($deanUser['Email'] ?? 'D');
 $deanInitials = strtoupper(substr($deanInitialSeed, 0, 1));
 $deanRoleLabel = ucfirst((string)($deanUser['role'] ?? 'Dean'));
 
@@ -52,12 +62,14 @@ $deanIsActive = static function (string $page) use ($deanActivePage): string {
                 </a>
             </li>
 
+            <?php if (!$isDepartmentSidebar): ?>
             <li class="sidebar-section">Account</li>
             <li>
                 <a href="dean_account_management.php" class="internal-link<?php echo $deanIsActive('dean_account_management.php'); ?>">
                     <i class="fas fa-users-cog"></i> <span>Account Management</span>
                 </a>
             </li>
+            <?php endif; ?>
         </ul>
     </nav>
     <div class="sidebar-footer">
@@ -72,7 +84,9 @@ $deanIsActive = static function (string $page) use ($deanActivePage): string {
             </div>
             <div class="user-details">
                 <h4><?php echo htmlspecialchars($deanDisplayName); ?></h4>
-                <p class="user-role"><?php echo htmlspecialchars($deanRoleLabel); ?></p>
+                <?php if (!$isDepartmentSidebar): ?>
+                    <p class="user-role"><?php echo htmlspecialchars($deanRoleLabel); ?></p>
+                <?php endif; ?>
             </div>
         </div>
         <button type="button" id="logoutBtn" class="btn-logout-sidebar">
@@ -80,3 +94,6 @@ $deanIsActive = static function (string $page) use ($deanActivePage): string {
         </button>
     </div>
 </aside>
+<?php if ($isDepartmentSidebar): ?>
+<script>document.body.dataset.loginType = 'department';</script>
+<?php endif; ?>

@@ -1,55 +1,59 @@
 <?php
 session_start();
-header("Content-Type: application/json");
+header('Content-Type: application/json');
 
-// Only allow POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode(["success" => false, "message" => "Invalid request method"]);
+    echo json_encode(['success' => false, 'message' => 'Invalid request method']);
     exit;
 }
 
-require_once __DIR__ . '/../classes/db.php';
-require_once __DIR__ . '/../models/user.php';
+$isUserLogin = !empty($_SESSION['user_id']);
+$isDepartmentLogin = isset($_SESSION['login_type'])
+    && $_SESSION['login_type'] === 'department'
+    && !empty($_SESSION['department_id']);
 
-if (!isset($_SESSION['user_id'])) {
-    echo json_encode(["success" => false, "message" => "Not logged in"]);
+if (!$isUserLogin && !$isDepartmentLogin) {
+    echo json_encode(['success' => false, 'message' => 'Not logged in']);
     exit;
 }
-
-$db = Database::connect();
-$userId = $_SESSION['user_id'];
 
 try {
-    // Update active log session if exists
-    $stmt = $db->prepare("
-        SELECT log_id FROM log_history 
-        WHERE user_id = ? AND (time_out IS NULL OR time_out = time_in)
-        ORDER BY time_in DESC 
-        LIMIT 1
-    ");
-    $stmt->execute([$userId]);
-    $activeLog = $stmt->fetch();
+    if ($isUserLogin) {
+        require_once __DIR__ . '/../classes/db.php';
+        require_once __DIR__ . '/../models/user.php';
 
-    if ($activeLog) {
-        $updateStmt = $db->prepare("UPDATE log_history SET time_out = NOW() WHERE log_id = ?");
-        $updateStmt->execute([$activeLog['log_id']]);
+        $db = Database::connect();
+        $userId = (int) $_SESSION['user_id'];
+
+        $stmt = $db->prepare('
+            SELECT log_id FROM log_history
+            WHERE user_id = ? AND (time_out IS NULL OR time_out = time_in)
+            ORDER BY time_in DESC
+            LIMIT 1
+        ');
+        $stmt->execute([$userId]);
+        $activeLog = $stmt->fetch();
+
+        if ($activeLog) {
+            $updateStmt = $db->prepare('UPDATE log_history SET time_out = NOW() WHERE log_id = ?');
+            $updateStmt->execute([$activeLog['log_id']]);
+        }
+
+        $userModel = new User();
+        $userModel->clearRememberTokenByUserId($userId);
     }
-
-    // Clear remember token on logout
-    $userModel = new User();
-    $userModel->clearRememberTokenByUserId((int)$userId);
 
     session_destroy();
 
     echo json_encode([
-        "success" => true,
-        "message" => "Logged out successfully"
+        'success' => true,
+        'message' => 'Logged out successfully',
     ]);
 } catch (Exception $e) {
     session_destroy();
     echo json_encode([
-        "success" => false,
-        "message" => "Logout failed (time_out may not be recorded)"
+        'success' => false,
+        'message' => 'Logout failed (time_out may not be recorded)',
     ]);
 }
 exit;

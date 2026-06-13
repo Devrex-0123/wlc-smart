@@ -1,12 +1,17 @@
 <?php
 session_start();
-if (!isset($_SESSION['user_id'])) {
+require_once __DIR__ . '/../../app/config/consent.php';
+
+$isDepartmentLogin = isset($_SESSION['login_type']) && $_SESSION['login_type'] === 'department' && !empty($_SESSION['department_id']);
+$isUserLogin = !empty($_SESSION['user_id']);
+
+if (!$isUserLogin && !$isDepartmentLogin) {
     header("Location: ../../index.php");
     exit;
 }
-$next = $_GET['next'] ?? 'dashboard.php';
+$next = $_GET['next'] ?? ($isDepartmentLogin ? 'public/pages/dean_dashboard.php' : 'public/pages/dashboard.php');
 if (!is_string($next) || strpos($next, 'public/pages/') !== 0) {
-    $next = 'public/pages/dashboard.php';
+    $next = $isDepartmentLogin ? 'public/pages/dean_dashboard.php' : 'public/pages/dashboard.php';
 }
 ?>
 <!DOCTYPE html>
@@ -41,7 +46,7 @@ if (!is_string($next) || strpos($next, 'public/pages/') !== 0) {
       <a href="terms_conditions.php?return=consent&next=<?php echo urlencode($next); ?>">Terms & Conditions</a>
     </div>
     <div class="notice">
-      Current consent version: <strong>v1.0</strong>
+      Current consent version: <strong><?php echo htmlspecialchars(CONSENT_VERSION); ?></strong>
     </div>
     <div class="actions">
       <button id="agreeBtn" class="agree"><i class="fas fa-check"></i> I Agree</button>
@@ -58,7 +63,7 @@ if (!is_string($next) || strpos($next, 'public/pages/') !== 0) {
         const res = await fetch('../../app/api/consent.php', {
           method: 'POST',
           credentials: 'include',
-          body: new URLSearchParams({ consent_version: 'v1.0' })
+          body: new URLSearchParams({ consent_version: <?php echo json_encode(CONSENT_VERSION); ?> })
         });
         const data = await res.json();
         if (!data.success) {
