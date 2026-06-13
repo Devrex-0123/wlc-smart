@@ -18,7 +18,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Account Management - IMRMS</title>
 <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
-<link rel="stylesheet" href="../assets/css/account_management.css?v=wlc34">
+<link rel="stylesheet" href="../assets/css/account_management.css?v=wlc40">
 <link rel="stylesheet" href="../assets/css/loading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
@@ -52,6 +52,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                 <input type="text" id="searchInput" placeholder="Search" class="search-input" aria-label="Search users">
             </div>
             <button class="btn-filter account-page-header__add-btn" id="addUserBtn" type="button"><i class="fas fa-plus"></i> Add User</button>
+            <button class="btn-filter account-page-header__add-btn account-page-header__add-btn--dept" id="addDepartmentBtn" type="button"><i class="fas fa-plus"></i> Add Department</button>
         </div>
     </div>
 
@@ -105,10 +106,10 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                     <span class="users-panel-card__icon users-panel-card__icon--dept" aria-hidden="true"><i class="fas fa-building"></i></span>
                     <div class="users-panel-card__header-text">
                         <h2 class="users-panel-card__title">Department</h2>
-                        <p class="users-panel-card__desc">List of Departments and offices.</p>
+                        <p class="users-panel-card__desc">Manage department accounts and access.</p>
                     </div>
                 </div>
-                <span class="users-panel-card__count users-panel-card__count--dept" id="deptUsersCountBadge">0 Users</span>
+                <span class="users-panel-card__count users-panel-card__count--dept" id="deptUsersCountBadge">0 Departments</span>
             </header>
             <div class="table-container">
                 <div class="table-wrapper">
@@ -117,23 +118,22 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                             <tr>
                                 <th>#</th>
                                 <th>Photo</th>
-                                <th>Full Name</th>
-                                <th>Email</th>
+                                <th>Abbreviation</th>
+                                <th>Type</th>
                                 <th>Status</th>
-                                <th>Office</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="deptUsersTableBody">
                             <tr>
-                                <td colspan="7" class="users-table-loading">Loading users...</td>
+                                <td colspan="6" class="users-table-loading">Loading departments...</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
             <footer class="users-panel-card__footer">
-                <p class="users-panel-card__page-info" id="deptPageInfo">Showing 0 to 0 of 0 users</p>
+                <p class="users-panel-card__page-info" id="deptPageInfo">Showing 0 to 0 of 0 departments</p>
                 <div class="users-panel-card__pagination" aria-label="Department users pagination">
                     <button type="button" class="users-panel-card__page-btn" id="deptPrevBtn" aria-label="Previous page" disabled><i class="fas fa-chevron-left"></i></button>
                     <span class="users-panel-card__page-num users-panel-card__page-num--dept" id="deptPageNum">1</span>
@@ -141,6 +141,111 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                 </div>
             </footer>
         </section>
+    </div>
+
+    <!-- Department Modal -->
+    <div class="modal" id="departmentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="departmentModalTitle">Add Department</h2>
+                <button type="button" class="close-modal" id="closeDepartmentModal" aria-label="Close modal">&times;</button>
+            </div>
+
+            <form id="departmentForm" enctype="multipart/form-data" class="modal-form">
+                <input type="hidden" name="department_id" id="department_id">
+
+                <div class="profile-avatar-section">
+                    <div class="avatar-preview-container">
+                        <img id="departmentPhotoPreview" alt="Preview" style="display:none;">
+                        <div id="departmentPhotoPlaceholder" class="photo-placeholder">D</div>
+                    </div>
+                    <div class="avatar-action-container">
+                        <label for="department_photo" class="btn-upload-label">Choose Photo</label>
+                        <input type="file" name="department_photo" id="department_photo" accept="image/*" class="file-input-hidden">
+                        <small class="input-hint">JPEG, PNG, GIF, or WEBP. Max ~2MB.</small>
+                    </div>
+                </div>
+
+                <hr class="form-divider">
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="department_name">Department Name</label>
+                        <input type="text" name="department_name" id="department_name" placeholder="e.g. College of Information Technology" required maxlength="150">
+                    </div>
+                    <div class="form-group">
+                        <label for="department_abbreviation">Abbreviation</label>
+                        <input type="text" name="department_abbreviation" id="department_abbreviation" placeholder="e.g. CICTE" required maxlength="20" pattern="[A-Za-z0-9\-_]+" title="Letters, numbers, hyphens, and underscores only">
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="department_type">Department Type</label>
+                        <select name="department_type" id="department_type" required>
+                            <option value="">Select Type</option>
+                            <option value="Academic">Academic</option>
+                            <option value="Administrative">Administrative</option>
+                            <option value="Executive">Executive</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="department_status">Status</label>
+                        <select name="department_status" id="department_status" required>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+
+                <hr class="form-divider">
+
+                <div class="form-group">
+                    <label for="department_username">Username</label>
+                    <input type="text" name="department_username" id="department_username" placeholder="e.g. cicte_dept" required maxlength="50" pattern="[A-Za-z0-9._-]+" title="Letters, numbers, dots, hyphens, and underscores only" autocomplete="username">
+                    <small class="input-hint">Used for department login. Must be unique.</small>
+                </div>
+
+                <hr class="form-divider">
+
+                <h4 id="deptChangePasswordHeading" class="change-password-heading" hidden>Change Password</h4>
+                <p id="deptChangePasswordHint" class="change-password-hint" hidden>Leave blank to keep current password</p>
+
+                <div class="form-grid">
+                    <div class="form-group password-group">
+                        <label for="department_password">Password</label>
+                        <div class="input-icon-wrapper">
+                            <input type="password" name="department_password" id="department_password" placeholder="e.g. SecureP@ssw0rd2025" required autocomplete="new-password">
+                            <i class="fas fa-eye toggle-password" aria-hidden="true"></i>
+                        </div>
+                    </div>
+                    <div class="form-group password-group">
+                        <label for="department_confirm_password">Confirm Password</label>
+                        <div class="input-icon-wrapper">
+                            <input type="password" name="department_confirm_password" id="department_confirm_password" placeholder="Re-type password" required autocomplete="new-password">
+                            <i class="fas fa-eye toggle-password" aria-hidden="true"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="password-feedback-container">
+                    <div class="password-requirements" id="departmentPasswordRequirements">
+                        <div id="dept-length" class="requirement-item">• At least 8 characters</div>
+                        <div id="dept-uppercase" class="requirement-item">• One uppercase letter</div>
+                        <div id="dept-lowercase" class="requirement-item">• One lowercase letter</div>
+                        <div id="dept-number" class="requirement-item">• One number</div>
+                        <div id="dept-special" class="requirement-item">• One special char (@$!%*?&#-_.)</div>
+                    </div>
+                    <div class="password-strength" id="departmentPasswordStrength"></div>
+                    <div class="password-match-status" id="departmentPasswordMatchStatus" aria-live="polite"></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" id="cancelDepartmentModalBtn">Cancel</button>
+                    <button type="submit" class="btn-save" id="saveDepartmentBtn">Save</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- User Modal -->
@@ -340,6 +445,66 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
     </div>
 </div>
 
+<!-- View department details modal -->
+<div id="viewDepartmentModal" class="view-user-modal" aria-hidden="true">
+    <div class="view-user-backdrop" id="viewDepartmentBackdrop"></div>
+    <div class="view-user-card" role="dialog" aria-modal="true" aria-labelledby="viewDepartmentTitle">
+        <div class="view-user-header">
+            <div class="view-user-header-text">
+                <i class="fas fa-building" aria-hidden="true"></i>
+                <h3 id="viewDepartmentTitle">Department Details</h3>
+            </div>
+            <button type="button" id="viewDepartmentCloseBtn" class="view-user-close-btn" aria-label="Close">&times;</button>
+        </div>
+
+        <div class="view-user-hero">
+            <div class="view-user-avatar">
+                <img id="view_dept_photo" class="view-user-avatar-img" alt="" hidden>
+                <div id="view_dept_photo_placeholder" class="view-user-avatar-placeholder">D</div>
+            </div>
+            <div class="view-user-hero-meta">
+                <p id="view_dept_hero_name" class="view-user-hero-name">—</p>
+                <p id="view_dept_hero_abbrev" class="view-user-hero-email">—</p>
+                <span id="view_dept_hero_type" class="view-user-role-badge">—</span>
+            </div>
+        </div>
+
+        <div class="view-user-body">
+            <section class="view-user-section">
+                <h4 class="view-user-section-title"><i class="fas fa-user" aria-hidden="true"></i> Account</h4>
+                <div class="view-user-grid">
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-at" aria-hidden="true"></i> Username</span>
+                        <p id="view_dept_username" class="view-user-value">—</p>
+                    </div>
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-toggle-on" aria-hidden="true"></i> Status</span>
+                        <p id="view_dept_status" class="view-user-value view-user-value--status">—</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="view-user-section">
+                <h4 class="view-user-section-title"><i class="fas fa-clock" aria-hidden="true"></i> Activity</h4>
+                <div class="view-user-grid">
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-calendar-plus" aria-hidden="true"></i> Created At</span>
+                        <p id="view_dept_created_at" class="view-user-value">—</p>
+                    </div>
+                    <div class="view-user-field">
+                        <span class="view-user-label"><i class="fas fa-calendar-check" aria-hidden="true"></i> Updated At</span>
+                        <p id="view_dept_updated_at" class="view-user-value">—</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="view-user-footer">
+            <button type="button" class="btn-cancel" id="viewDepartmentCloseFooterBtn">Close</button>
+        </div>
+    </div>
+</div>
+
 <!-- Delete user confirmation -->
 <div id="deleteConfirmModal" class="delete-confirm-modal" aria-hidden="true">
     <div class="delete-confirm-backdrop" id="deleteConfirmBackdrop"></div>
@@ -440,7 +605,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 </div>
 
 <script src="../assets/js/logout.js?v=wlc1"></script>
-<script src="../assets/js/account_management.js?v=wlc33"></script>
+<script src="../assets/js/account_management.js?v=wlc40"></script>
 
 <?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 </body>

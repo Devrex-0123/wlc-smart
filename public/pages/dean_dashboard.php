@@ -5,15 +5,33 @@ require_once __DIR__ . '/partials/session_access_guard.php';
 require_once __DIR__ . '/../../app/classes/db.php';
 
 $db = Database::connect();
-$stmt = $db->prepare("SELECT * FROM user WHERE user_id = ?");
-$stmt->execute([$_SESSION['user_id']]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
+$isDepartmentLogin = isset($_SESSION['login_type']) && $_SESSION['login_type'] === 'department';
 
-$username = trim((string)($user['full_name'] ?? ''));
-if ($username === '') {
-    $username = explode('@', (string)($user['Email'] ?? ''))[0] ?? 'Dean';
+if ($isDepartmentLogin) {
+    $stmt = $db->prepare("SELECT * FROM departments WHERE department_id = ? LIMIT 1");
+    $stmt->execute([(int) $_SESSION['department_id']]);
+    $department = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $user = [
+        'full_name' => $department['department_name'] ?? 'Department',
+        'department_abbreviation' => $department['department_abbreviation'] ?? '',
+        'Email' => $department['department_username'] ?? '',
+        'role' => 'Department',
+        'photo_url' => $department['department_photo_url'] ?? null,
+    ];
+    $username = trim((string) ($department['department_name'] ?? 'Department'));
+    $initials = strtoupper(substr((string) ($department['department_abbreviation'] ?? 'D'), 0, 1));
+} else {
+    $stmt = $db->prepare("SELECT * FROM user WHERE user_id = ?");
+    $stmt->execute([$_SESSION['user_id']]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $username = trim((string)($user['full_name'] ?? ''));
+    if ($username === '') {
+        $username = explode('@', (string)($user['Email'] ?? ''))[0] ?? 'Dean';
+    }
+    $initials = strtoupper(substr($user['Email'], 0, 1));
 }
-$initials = strtoupper(substr($user['Email'], 0, 1));
 ?>
 
 <!DOCTYPE html>
@@ -194,7 +212,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <?php require __DIR__ . '/partials/dean_sidebar_scripts.php'; ?>
 
 <!-- Logout Script -->
-<script src="../assets/js/logout.js?v=wlc1"></script>
+<script src="../assets/js/logout.js?v=wlc2"></script>
 <script src="../assets/js/dean_dashboard.js?v=4"></script>
 </body>
 </html>

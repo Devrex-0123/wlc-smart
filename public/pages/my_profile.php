@@ -1,6 +1,12 @@
 <?php
 session_start();
 require_once __DIR__ . '/partials/session_access_guard.php';
+
+if (isset($_SESSION['login_type']) && $_SESSION['login_type'] === 'department') {
+    header('Location: department_profile.php');
+    exit;
+}
+
 require_once __DIR__ . '/../../app/classes/db.php';
 require_once __DIR__ . '/../../app/view_models/my_profile_page.php';
 

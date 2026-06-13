@@ -1,3 +1,6 @@
+<?php
+require_once __DIR__ . '/../../app/config/consent.php';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,6 +93,14 @@
             opacity: 0.95;
             max-width: 800px;
             margin: 0 auto;
+        }
+
+        .policy-header-meta {
+            font-size: 0.95rem;
+            font-weight: 500;
+            opacity: 0.92;
+            margin: 14px auto 0;
+            letter-spacing: 0.02em;
         }
 
         /* --- Content Layout Structure --- */
@@ -490,14 +501,14 @@
         <div class="header-container">
             <h1>Terms and Conditions</h1>
             <h2>Please read our terms and conditions carefully to understand the policies, acceptable uses, and liabilities associated with our institutional framework operations.</h2>
+            <p class="policy-header-meta">Version <?php echo htmlspecialchars(CONSENT_VERSION); ?></p>
         </div>
     </header>
 
     <div class="policy-container">
         
         <main class="policy-content">
-            <div class="meta-info">Last Updated: April 29, 2026</div>
-            <div class="meta-info" style="margin-bottom: 20px;">Please review the usage conditions before proceeding.</div>
+            <div class="meta-info" style="margin-bottom: 20px;"><?php echo htmlspecialchars(CONSENT_EFFECTIVE_DATE); ?></div>
 
             <h2 class="system-title-sub">System Terms of Service</h2>
             <p class="intro-text">
@@ -570,6 +581,7 @@
             <section id="acceptance" class="policy-section">
                 <h2>Acceptance of Terms</h2>
                 <p>By accessing and using the system, users acknowledge that they have read, understood, and agreed to abide by these Terms and Conditions. Continued use of the system constitutes full acceptance of these terms. If a user does not agree with any part of these Terms and Conditions, they must discontinue use of the system immediately.</p>
+                <p>These Terms and Conditions are Version <strong><?php echo htmlspecialchars(CONSENT_VERSION); ?></strong>, last updated on <strong><?php echo htmlspecialchars(CONSENT_EFFECTIVE_DATE); ?></strong>.</p>
             </section>
 
         </main>

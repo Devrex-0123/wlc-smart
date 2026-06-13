@@ -102,7 +102,8 @@ document.addEventListener("DOMContentLoaded", function () {
     refreshConsentUI();
 
     /* ---------------------------------------------------------
-       PERSISTENT CONSENT: look up has_consented by email.
+       PERSISTENT CONSENT: look up had_consented / has_consented
+       by email or department username.
        has_consented = 1  -> skip workflow (box pre-checked/locked)
        has_consented = 0  -> require the open-both-documents workflow
        (The server re-verifies this on authentication.)
@@ -112,10 +113,17 @@ document.addEventListener("DOMContentLoaded", function () {
     let consentLookupTimer = null;
     let consentLookupSeq = 0;
 
-    async function fetchConsentStatus(email) {
+    function isLoginIdentifier(value) {
+        const trimmed = value.trim().toLowerCase();
+        if (!trimmed) return false;
+        if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return true;
+        return /^[a-z0-9._-]{3,50}$/.test(trimmed);
+    }
+
+    async function fetchConsentStatus(identifier) {
         try {
             const body = new URLSearchParams({
-                email: email.trim().toLowerCase(),
+                identifier: identifier.trim().toLowerCase(),
                 consent_version: CONSENT_VERSION
             });
             const res = await fetch("app/api/consent_status.php", {
@@ -173,29 +181,25 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (emailInput) {
         emailInput.addEventListener("input", function () {
-            const email = this.value.trim().toLowerCase();
-            const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+            const identifier = this.value.trim().toLowerCase();
 
             if (consentLookupTimer) clearTimeout(consentLookupTimer);
 
-            if (!validEmail) {
-                // Reverting to an incomplete email re-locks a previously skipped workflow.
+            if (!isLoginIdentifier(identifier)) {
                 if (consentOnFile) applyConsentRequired();
                 return;
             }
 
             consentLookupTimer = setTimeout(async () => {
                 const seq = ++consentLookupSeq;
-                const consented = await fetchConsentStatus(email);
+                const consented = await fetchConsentStatus(identifier);
 
-                // Ignore stale responses / changed input.
                 if (seq !== consentLookupSeq) return;
-                if (emailInput.value.trim().toLowerCase() !== email) return;
+                if (emailInput.value.trim().toLowerCase() !== identifier) return;
 
                 if (consented) {
                     applyConsentOnFile();
                 } else if (consentOnFile) {
-                    // Switched from a consented account to one that still needs the workflow.
                     applyConsentRequired();
                 }
             }, 300);
@@ -346,8 +350,13 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         // Basic input validation (friendly UX)
-        const emailValue = emailInput.value.trim();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
+        const loginValue = emailInput.value.trim();
+        if (!loginValue) {
+            showMessage("Please enter your email or department username.", "error");
+            return;
+        }
+
+        if (loginValue.includes('@') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginValue)) {
             showMessage("Please enter a valid email address.", "error");
             return;
         }
@@ -361,10 +370,15 @@ document.addEventListener("DOMContentLoaded", function () {
         loginBtn.disabled = true;
         loginBtn.textContent = "Logging in...";
 
-        const normalizedEmail = emailInput.value.trim().toLowerCase();
-        emailInput.value = normalizedEmail;
+        const normalizedLogin = emailInput.value.trim();
+        if (normalizedLogin.includes('@')) {
+            emailInput.value = normalizedLogin.toLowerCase();
+        } else {
+            emailInput.value = normalizedLogin;
+        }
 
         const formData = new FormData(loginForm);
+        const loginIdentifier = emailInput.value;
 
         try {
             const response = await fetch("app/api/login.php", {
@@ -401,12 +415,24 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
+            if (result.consent_required) {
+                showMessage(result.message || "You must agree to the Privacy Notice and Terms & Conditions to continue.", "error");
+                applyConsentRequired();
+                loginBtn.textContent = "Login";
+                unlockInputs();
+                refreshLoginButton();
+                return;
+            }
+
             // SUCCESS + ROLE-BASED REDIRECT
             if (result.success) {
                 const role = (result.role || '').toLowerCase().trim();
-                let redirectUrl = "public/pages/dashboard.php"; // default
+                const loginType = (result.login_type || 'user').toLowerCase().trim();
+                let redirectUrl = "public/pages/dashboard.php";
 
-                if (role === "dean") {
+                if (loginType === 'department' || role === 'department') {
+                    redirectUrl = "public/pages/dean_dashboard.php";
+                } else if (role === "dean") {
                     redirectUrl = "public/pages/dean_dashboard.php";
                 } else if (
                     role === "employee" ||
@@ -440,10 +466,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 showLoadingScreen("Logging in");
 
-                fetch("app/api/time_in.php", { method: "POST", credentials: "include" })
-                    .then(r => r.json())
-                    .then(data => console.log("Time in recorded:", data))
-                    .catch(err => console.error("Time in error:", err));
+                if (loginType !== 'department') {
+                    fetch("app/api/time_in.php", { method: "POST", credentials: "include" })
+                        .then(r => r.json())
+                        .then(data => console.log("Time in recorded:", data))
+                        .catch(err => console.error("Time in error:", err));
+                }
 
                 setTimeout(() => {
                     // Replace the login page in history so Back can't return to it.
@@ -462,7 +490,8 @@ document.addEventListener("DOMContentLoaded", function () {
             // FAILED ATTEMPT
             const remaining = result.remaining !== undefined ? result.remaining : 0;
             if (remaining > 0) {
-                showMessage(`Wrong email or password. ${remaining} attempt(s) left.`, "error");
+                const label = loginIdentifier.includes('@') ? 'email or password' : 'username or password';
+                showMessage(`Wrong ${label}. ${remaining} attempt(s) left.`, "error");
                 loginBtn.textContent = "Login";
                 unlockInputs();
                 refreshLoginButton();

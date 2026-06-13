@@ -10,7 +10,10 @@ header("Pragma: no-cache");
 header("Expires: Thu, 01 Jan 1970 00:00:00 GMT");
 
 // If already logged in, bounce straight to the user's dashboard.
-if (!empty($_SESSION['user_id'])) {
+$isLoggedIn = !empty($_SESSION['user_id'])
+    || (isset($_SESSION['login_type']) && $_SESSION['login_type'] === 'department' && !empty($_SESSION['department_id']));
+
+if ($isLoggedIn) {
     $dashboardUrl = $_SESSION['dashboard_url'] ?? 'public/pages/dashboard.php';
     header("Location: " . $dashboardUrl);
     exit;
@@ -350,8 +353,8 @@ if (!empty($_SESSION['user_id'])) {
 
         <form id="loginForm">
           <div class="input-group">
-            <i class="fa-solid fa-envelope input-icon"></i>
-            <input type="email" id="email" name="email" placeholder="Email Address" required>
+            <i class="fa-solid fa-user input-icon"></i>
+            <input type="text" id="email" name="email" placeholder="Email or Department Username" required autocomplete="username">
           </div>
 
           <div class="input-group">
@@ -383,7 +386,7 @@ if (!empty($_SESSION['user_id'])) {
 
   <script src="public/assets/js/landing_nav.js?v=wlc1"></script>
   <script src="public/assets/js/modal.js?v=wlc6"></script>
-  <script src="public/assets/js/login.js?v=wlc6"></script>
+  <script src="public/assets/js/login.js?v=wlc8"></script>
   <script src="public/assets/js/about_preview.js?v=wlc8"></script>
 
 </body>

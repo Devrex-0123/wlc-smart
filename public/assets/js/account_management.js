@@ -25,8 +25,18 @@ function showToast(msg, type='success') {
 const modal = document.getElementById('userModal');
 const closeModal = document.getElementById('closeModal');
 const addUserBtn = document.getElementById('addUserBtn');
+const addDepartmentBtn = document.getElementById('addDepartmentBtn');
 const modalTitle = document.getElementById('modalTitle');
 const userForm = document.getElementById('userForm');
+const departmentModal = document.getElementById('departmentModal');
+const departmentForm = document.getElementById('departmentForm');
+const closeDepartmentModal = document.getElementById('closeDepartmentModal');
+const saveDepartmentBtn = document.getElementById('saveDepartmentBtn');
+const departmentPasswordInput = document.getElementById('department_password');
+const departmentConfirmPasswordInput = document.getElementById('department_confirm_password');
+const departmentPhotoInput = document.getElementById('department_photo');
+const departmentPhotoPreview = document.getElementById('departmentPhotoPreview');
+const departmentPhotoPlaceholder = document.getElementById('departmentPhotoPlaceholder');
 const adminUsersTableBody = document.getElementById('adminUsersTableBody');
 const deptUsersTableBody = document.getElementById('deptUsersTableBody');
 const accountManagementRoot = document.getElementById('accountManagementRoot');
@@ -45,7 +55,6 @@ const USERS_PER_PAGE = 5;
 let adminCurrentPage = 1;
 let deptCurrentPage = 1;
 let filteredAdminUsers = [];
-let filteredDeptUsers = [];
 const photoInput = document.getElementById('photo');
 const photoPreview = document.getElementById('photoPreview');
 const photoPlaceholder = document.getElementById('photoPlaceholder');
@@ -64,7 +73,11 @@ const deleteConfirmBackdrop = document.getElementById('deleteConfirmBackdrop');
 const deleteConfirmCancel = document.getElementById('deleteConfirmCancel');
 const deleteConfirmOk = document.getElementById('deleteConfirmOk');
 const deleteConfirmEmail = document.getElementById('deleteConfirmEmail');
+const deleteConfirmTitle = document.getElementById('deleteConfirmTitle');
+const deleteConfirmDesc = document.getElementById('deleteConfirmDesc');
+const deleteConfirmIcon = document.querySelector('#deleteConfirmModal .delete-confirm-icon i');
 let pendingDeleteUserId = null;
+let pendingDeleteDepartmentId = null;
 
 // ---------------- Disable account confirmation (same UX as delete modal) ----------------
 const disableConfirmModal = document.getElementById('disableConfirmModal');
@@ -87,6 +100,7 @@ const saveConfirmModal = document.getElementById('saveConfirmModal');
 const saveConfirmBackdrop = document.getElementById('saveConfirmBackdrop');
 const saveConfirmCancel = document.getElementById('saveConfirmCancel');
 const saveConfirmOk = document.getElementById('saveConfirmOk');
+let pendingDepartmentSave = false;
 
 const accountSuccessModal = document.getElementById('accountSuccessModal');
 const accountSuccessBackdrop = document.getElementById('accountSuccessBackdrop');
@@ -120,6 +134,7 @@ function openSaveConfirmModal() {
 }
 
 function closeSaveConfirmModal() {
+    pendingDepartmentSave = false;
     if (saveConfirmModal) {
         saveConfirmModal.classList.remove('is-open');
         saveConfirmModal.setAttribute('aria-hidden', 'true');
@@ -129,6 +144,10 @@ function closeSaveConfirmModal() {
 const viewUserModal = document.getElementById('viewUserModal');
 const viewUserBackdrop = document.getElementById('viewUserBackdrop');
 const viewUserCloseBtn = document.getElementById('viewUserCloseBtn');
+const viewDepartmentModal = document.getElementById('viewDepartmentModal');
+const viewDepartmentBackdrop = document.getElementById('viewDepartmentBackdrop');
+const viewDepartmentCloseBtn = document.getElementById('viewDepartmentCloseBtn');
+const departmentModalTitle = document.getElementById('departmentModalTitle');
 
 function formatDateTime(value) {
     if (!value) return '—';
@@ -198,6 +217,13 @@ function closeViewUserModal() {
 
 function openDeleteConfirmModal(userId, email) {
     pendingDeleteUserId = userId;
+    pendingDeleteDepartmentId = null;
+    if (deleteConfirmTitle) deleteConfirmTitle.textContent = 'Delete this user?';
+    if (deleteConfirmDesc) {
+        deleteConfirmDesc.textContent = 'This will soft-delete the account (can be restored from database records if needed).';
+    }
+    if (deleteConfirmIcon) deleteConfirmIcon.className = 'fas fa-user-slash';
+    if (deleteConfirmOk) deleteConfirmOk.innerHTML = '<i class="fas fa-trash-alt"></i> Delete user';
     if (deleteConfirmEmail && email) {
         deleteConfirmEmail.textContent = email;
         deleteConfirmEmail.hidden = false;
@@ -212,8 +238,32 @@ function openDeleteConfirmModal(userId, email) {
     }
 }
 
+function openDeleteDepartmentConfirmModal(departmentId, label) {
+    pendingDeleteDepartmentId = departmentId;
+    pendingDeleteUserId = null;
+    if (deleteConfirmTitle) deleteConfirmTitle.textContent = 'Delete this department?';
+    if (deleteConfirmDesc) {
+        deleteConfirmDesc.textContent = 'This will permanently remove the department from the system.';
+    }
+    if (deleteConfirmIcon) deleteConfirmIcon.className = 'fas fa-building';
+    if (deleteConfirmOk) deleteConfirmOk.innerHTML = '<i class="fas fa-trash-alt"></i> Delete department';
+    if (deleteConfirmEmail && label) {
+        deleteConfirmEmail.textContent = label;
+        deleteConfirmEmail.hidden = false;
+    } else if (deleteConfirmEmail) {
+        deleteConfirmEmail.textContent = '';
+        deleteConfirmEmail.hidden = true;
+    }
+    if (deleteConfirmModal) {
+        deleteConfirmModal.classList.add('is-open');
+        deleteConfirmModal.setAttribute('aria-hidden', 'false');
+        deleteConfirmOk?.focus();
+    }
+}
+
 function closeDeleteConfirmModal() {
     pendingDeleteUserId = null;
+    pendingDeleteDepartmentId = null;
     if (deleteConfirmModal) {
         deleteConfirmModal.classList.remove('is-open');
         deleteConfirmModal.setAttribute('aria-hidden', 'true');
@@ -280,6 +330,31 @@ async function postToggleStatus(userId, nextStatus) {
 deleteConfirmBackdrop?.addEventListener('click', closeDeleteConfirmModal);
 deleteConfirmCancel?.addEventListener('click', closeDeleteConfirmModal);
 deleteConfirmOk?.addEventListener('click', async () => {
+    if (pendingDeleteDepartmentId) {
+        const departmentId = pendingDeleteDepartmentId;
+        deleteConfirmOk.disabled = true;
+        try {
+            const res = await fetch('../../app/api/department_actions.php', {
+                method: 'POST',
+                body: new URLSearchParams({ action: 'delete', department_id: String(departmentId) }),
+                credentials: 'include',
+            });
+            const data = await res.json();
+            if (data.success) {
+                closeDeleteConfirmModal();
+                loadDepartments();
+                openAccountSuccessModal('The department has been deleted successfully.');
+            } else {
+                showToast(data.message || 'Failed to delete department', 'error');
+            }
+        } catch (_) {
+            showToast('Network error', 'error');
+        } finally {
+            deleteConfirmOk.disabled = false;
+        }
+        return;
+    }
+
     if (!pendingDeleteUserId) return;
     const userId = pendingDeleteUserId;
     deleteConfirmOk.disabled = true;
@@ -352,6 +427,11 @@ saveConfirmBackdrop?.addEventListener('click', closeSaveConfirmModal);
 saveConfirmCancel?.addEventListener('click', closeSaveConfirmModal);
 saveConfirmOk?.addEventListener('click', () => {
     closeSaveConfirmModal();
+    if (pendingDepartmentSave) {
+        pendingDepartmentSave = false;
+        submitDepartmentForm();
+        return;
+    }
     submitUserForm();
 });
 
@@ -359,6 +439,12 @@ accountSuccessBackdrop?.addEventListener('click', closeAccountSuccessModal);
 accountSuccessOk?.addEventListener('click', closeAccountSuccessModal);
 
 document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && departmentModal?.style.display === 'flex') {
+        closeDepartmentModalView();
+    }
+    if (e.key === 'Escape' && viewDepartmentModal?.classList.contains('is-open')) {
+        closeViewDepartmentModal();
+    }
     if (e.key === 'Escape' && deleteConfirmModal?.classList.contains('is-open')) {
         closeDeleteConfirmModal();
     }
@@ -381,6 +467,64 @@ document.addEventListener('keydown', e => {
 viewUserBackdrop?.addEventListener('click', closeViewUserModal);
 viewUserCloseBtn?.addEventListener('click', closeViewUserModal);
 document.getElementById('viewUserCloseFooterBtn')?.addEventListener('click', closeViewUserModal);
+
+function openViewDepartmentModal(dept) {
+    if (!viewDepartmentModal || !dept) return;
+
+    const name = dept.department_name || '—';
+    const abbrev = dept.department_abbreviation || '—';
+    const statusRaw = (dept.department_status || 'Active').toLowerCase();
+    const statusClass = statusRaw === 'active' ? 'active' : 'disabled';
+    const photoUrl = dept.department_photo_url || '';
+
+    const heroName = document.getElementById('view_dept_hero_name');
+    const heroAbbrev = document.getElementById('view_dept_hero_abbrev');
+    const heroType = document.getElementById('view_dept_hero_type');
+    const viewPhoto = document.getElementById('view_dept_photo');
+    const viewPhotoPlaceholder = document.getElementById('view_dept_photo_placeholder');
+    const statusEl = document.getElementById('view_dept_status');
+
+    if (heroName) heroName.textContent = name;
+    if (heroAbbrev) heroAbbrev.textContent = abbrev;
+    if (heroType) heroType.textContent = dept.department_type || '—';
+
+    if (viewPhoto && viewPhotoPlaceholder) {
+        if (photoUrl) {
+            viewPhoto.src = `../${photoUrl}`;
+            viewPhoto.alt = `Photo of ${abbrev}`;
+            viewPhoto.hidden = false;
+            viewPhotoPlaceholder.style.display = 'none';
+        } else {
+            viewPhoto.hidden = true;
+            viewPhoto.src = '';
+            viewPhotoPlaceholder.textContent = (abbrev !== '—' ? abbrev : 'D').charAt(0).toUpperCase();
+            viewPhotoPlaceholder.style.display = 'flex';
+        }
+    }
+
+    const usernameEl = document.getElementById('view_dept_username');
+    if (usernameEl) usernameEl.textContent = dept.department_username || '—';
+    if (statusEl) {
+        statusEl.innerHTML = `<span class="status-pill status-${statusClass}">${dept.department_status || 'Active'}</span>`;
+    }
+    const createdEl = document.getElementById('view_dept_created_at');
+    if (createdEl) createdEl.textContent = formatDateTime(dept.department_created_at);
+    const updatedEl = document.getElementById('view_dept_updated_at');
+    if (updatedEl) updatedEl.textContent = formatDateTime(dept.department_updated_at);
+
+    viewDepartmentModal.classList.add('is-open');
+    viewDepartmentModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeViewDepartmentModal() {
+    if (!viewDepartmentModal) return;
+    viewDepartmentModal.classList.remove('is-open');
+    viewDepartmentModal.setAttribute('aria-hidden', 'true');
+}
+
+viewDepartmentBackdrop?.addEventListener('click', closeViewDepartmentModal);
+viewDepartmentCloseBtn?.addEventListener('click', closeViewDepartmentModal);
+document.getElementById('viewDepartmentCloseFooterBtn')?.addEventListener('click', closeViewDepartmentModal);
 
 // ---------------- Strict Password Validation ----------------
 function validatePasswordStrict(pwd) {
@@ -501,21 +645,38 @@ photoInput?.addEventListener('change', () => {
     reader.readAsDataURL(file);
 });
 
-// ---------------- Load Users & Offices (unchanged) ----------------
+// ---------------- Load Users & Departments ----------------
 let allUsers = [];
+let allDepartments = [];
+let filteredDepartments = [];
+
 async function loadUsers() {
     try {
         const res = await fetch('../../app/api/get_users.php', { credentials: 'include' });
         const data = await res.json();
         allUsers = data.users || [];
-        
+
         searchInput.value = '';
         adminCurrentPage = 1;
-        deptCurrentPage = 1;
-
-        renderSplitUserTables(allUsers);
-    } catch(err){
+        renderAdminUsersTable(getFilteredUsers());
+    } catch (err) {
         console.error(err);
+    }
+}
+
+async function loadDepartments() {
+    try {
+        const res = await fetch('../../app/api/department.php', { credentials: 'include' });
+        const data = await res.json();
+        allDepartments = data.departments || [];
+        deptCurrentPage = 1;
+        filteredDepartments = getFilteredDepartments();
+        renderDepartmentPanel();
+    } catch (err) {
+        console.error(err);
+        if (deptUsersTableBody) {
+            deptUsersTableBody.innerHTML = '<tr><td colspan="6" class="users-table-loading">Failed to load departments.</td></tr>';
+        }
     }
 }
 
@@ -525,15 +686,15 @@ async function populateOfficeDropdown() {
         const data = await res.json();
         const officeDropdown = document.getElementById('office_id');
         officeDropdown.innerHTML = '<option value="">Select Office</option>';
-        if(data.success && data.offices.length > 0){
-            data.offices.forEach(dept => {
+        if (data.success && data.offices?.length > 0) {
+            data.offices.forEach(office => {
                 const opt = document.createElement('option');
-                opt.value = dept.office_id;
-                opt.textContent = dept.office_name;
+                opt.value = office.office_id;
+                opt.textContent = office.office_name;
                 officeDropdown.appendChild(opt);
             });
         }
-    } catch(err){
+    } catch (err) {
         console.error(err);
     }
 }
@@ -643,6 +804,330 @@ function validateCreateUserForm() {
 function validateEditUserForm() {
     return validateProfileFields();
 }
+
+// ---------------- Department Modal ----------------
+function validateDepartmentPasswordStrict(pwd) {
+    const tests = {
+        length: pwd.length >= 8,
+        uppercase: /[A-Z]/.test(pwd),
+        lowercase: /[a-z]/.test(pwd),
+        number: /\d/.test(pwd),
+        special: /[@$!%*?&#\-_.]/.test(pwd),
+    };
+
+    document.getElementById('dept-length')?.classList.toggle('requirement-met', tests.length);
+    document.getElementById('dept-uppercase')?.classList.toggle('requirement-met', tests.uppercase);
+    document.getElementById('dept-lowercase')?.classList.toggle('requirement-met', tests.lowercase);
+    document.getElementById('dept-number')?.classList.toggle('requirement-met', tests.number);
+    document.getElementById('dept-special')?.classList.toggle('requirement-met', tests.special);
+
+    const met = Object.values(tests).filter(Boolean).length;
+    let strength = '';
+    if (met === 5) strength = 'Strong password';
+    else if (met >= 3) strength = 'Medium password';
+    else strength = 'Weak password';
+
+    const strengthEl = document.getElementById('departmentPasswordStrength');
+    if (strengthEl) {
+        strengthEl.textContent = strength;
+        strengthEl.style.color = met === 5 ? '#10b981' : met >= 3 ? '#f59e0b' : '#ef4444';
+    }
+
+    return tests;
+}
+
+function resetDepartmentPasswordFieldStyles() {
+    [departmentPasswordInput, departmentConfirmPasswordInput].forEach(input => {
+        input?.closest('.input-icon-wrapper')?.classList.remove('password-input--match', 'password-input--mismatch');
+    });
+    const matchEl = document.getElementById('departmentPasswordMatchStatus');
+    if (matchEl) {
+        matchEl.textContent = '';
+        matchEl.className = 'password-match-status';
+    }
+}
+
+function updateDepartmentPasswordFeedback() {
+    const pwd = departmentPasswordInput?.value || '';
+    const confirmPwd = departmentConfirmPasswordInput?.value || '';
+
+    validateDepartmentPasswordStrict(pwd);
+
+    const matchEl = document.getElementById('departmentPasswordMatchStatus');
+    const confirmWrap = departmentConfirmPasswordInput?.closest('.input-icon-wrapper');
+    const pwdWrap = departmentPasswordInput?.closest('.input-icon-wrapper');
+
+    confirmWrap?.classList.remove('password-input--match', 'password-input--mismatch');
+    pwdWrap?.classList.remove('password-input--match', 'password-input--mismatch');
+
+    if (!pwd && !confirmPwd) {
+        if (matchEl) {
+            matchEl.textContent = '';
+            matchEl.className = 'password-match-status';
+        }
+        return;
+    }
+
+    if (!confirmPwd) {
+        if (matchEl) {
+            matchEl.textContent = pwd ? 'Confirm the password above' : '';
+            matchEl.className = 'password-match-status password-match-status--pending';
+        }
+        return;
+    }
+
+    if (pwd === confirmPwd) {
+        if (matchEl) {
+            matchEl.textContent = 'Passwords match';
+            matchEl.className = 'password-match-status password-match-status--match';
+        }
+        confirmWrap?.classList.add('password-input--match');
+        if (pwd) pwdWrap?.classList.add('password-input--match');
+    } else {
+        if (matchEl) {
+            matchEl.textContent = 'Passwords do not match';
+            matchEl.className = 'password-match-status password-match-status--mismatch';
+        }
+        confirmWrap?.classList.add('password-input--mismatch');
+        if (pwd) pwdWrap?.classList.add('password-input--mismatch');
+    }
+}
+
+function getDepartmentPlaceholderInitial() {
+    const abbreviation = (document.getElementById('department_abbreviation')?.value || '').trim();
+    if (abbreviation) return abbreviation.charAt(0).toUpperCase();
+    const name = (document.getElementById('department_name')?.value || '').trim();
+    if (name) return name.charAt(0).toUpperCase();
+    return 'D';
+}
+
+function resetDepartmentPhotoPreview() {
+    if (departmentPhotoPreview && departmentPhotoPlaceholder) {
+        departmentPhotoPreview.src = '';
+        departmentPhotoPreview.style.display = 'none';
+        departmentPhotoPlaceholder.textContent = getDepartmentPlaceholderInitial();
+        departmentPhotoPlaceholder.style.display = 'flex';
+    }
+}
+
+function setDepartmentFormMode(mode) {
+    const isAdd = mode === 'add';
+    if (departmentModalTitle) {
+        departmentModalTitle.textContent = isAdd ? 'Add Department' : 'Edit Department';
+    }
+    if (departmentPasswordInput) departmentPasswordInput.required = isAdd;
+    if (departmentConfirmPasswordInput) departmentConfirmPasswordInput.required = isAdd;
+    const changePasswordHeading = document.getElementById('deptChangePasswordHeading');
+    if (changePasswordHeading) changePasswordHeading.hidden = isAdd;
+    const changePasswordHint = document.getElementById('deptChangePasswordHint');
+    if (changePasswordHint) changePasswordHint.hidden = isAdd;
+    departmentModal?.classList.toggle('user-modal--edit', !isAdd);
+}
+
+function openDepartmentModal() {
+    departmentForm?.reset();
+    const deptIdInput = document.getElementById('department_id');
+    if (deptIdInput) deptIdInput.value = '';
+    const statusSelect = document.getElementById('department_status');
+    if (statusSelect) statusSelect.value = 'Active';
+    setDepartmentFormMode('add');
+    resetDepartmentPhotoPreview();
+    resetDepartmentPasswordFieldStyles();
+    updateDepartmentPasswordFeedback();
+    if (departmentModal) departmentModal.style.display = 'flex';
+}
+
+function openDepartmentEditModal(dept) {
+    if (!dept) return;
+    departmentForm?.reset();
+    setDepartmentFormMode('edit');
+    document.getElementById('department_id').value = dept.department_id;
+    document.getElementById('department_name').value = dept.department_name || '';
+    document.getElementById('department_abbreviation').value = dept.department_abbreviation || '';
+    document.getElementById('department_type').value = dept.department_type || '';
+    document.getElementById('department_status').value = dept.department_status || 'Active';
+    document.getElementById('department_username').value = dept.department_username || '';
+    if (departmentPasswordInput) departmentPasswordInput.value = '';
+    if (departmentConfirmPasswordInput) departmentConfirmPasswordInput.value = '';
+    resetDepartmentPasswordFieldStyles();
+    updateDepartmentPasswordFeedback();
+
+    const photoUrl = dept.department_photo_url || '';
+    if (departmentPhotoPreview && departmentPhotoPlaceholder) {
+        if (photoUrl) {
+            departmentPhotoPreview.src = `../${photoUrl}`;
+            departmentPhotoPreview.style.display = 'block';
+            departmentPhotoPlaceholder.style.display = 'none';
+        } else {
+            resetDepartmentPhotoPreview();
+        }
+    }
+
+    if (departmentModal) departmentModal.style.display = 'flex';
+}
+
+function closeDepartmentModalView() {
+    if (departmentModal) departmentModal.style.display = 'none';
+}
+
+function validateDepartmentForm(isEdit = false) {
+    const checks = [
+        { id: 'department_name', label: 'Department Name' },
+        { id: 'department_abbreviation', label: 'Abbreviation' },
+        { id: 'department_type', label: 'Department Type' },
+        { id: 'department_status', label: 'Status' },
+        { id: 'department_username', label: 'Username' },
+    ];
+
+    for (const { id, label } of checks) {
+        const el = document.getElementById(id);
+        if (!(el?.value || '').trim()) {
+            showToast(`Please fill in ${label}`, 'error');
+            el?.focus();
+            return false;
+        }
+    }
+
+    const abbreviationEl = document.getElementById('department_abbreviation');
+    const abbreviation = (abbreviationEl?.value || '').trim().toUpperCase();
+    if (!/^[A-Z0-9\-_]+$/.test(abbreviation)) {
+        showToast('Abbreviation may only contain letters, numbers, hyphens, and underscores', 'error');
+        abbreviationEl?.focus();
+        return false;
+    }
+    if (abbreviationEl) abbreviationEl.value = abbreviation;
+
+    const usernameEl = document.getElementById('department_username');
+    const username = (usernameEl?.value || '').trim();
+    if (!/^[A-Za-z0-9._-]+$/.test(username)) {
+        showToast('Username may only contain letters, numbers, dots, hyphens, and underscores', 'error');
+        usernameEl?.focus();
+        return false;
+    }
+    if (usernameEl) usernameEl.value = username;
+
+    const pwd = departmentPasswordInput?.value || '';
+    const confirmPwd = departmentConfirmPasswordInput?.value || '';
+
+    if (!isEdit) {
+        if (!pwd || !confirmPwd) {
+            showToast('Please fill in Password and Confirm Password', 'error');
+            (pwd ? departmentConfirmPasswordInput : departmentPasswordInput)?.focus();
+            return false;
+        }
+    }
+
+    if (pwd || confirmPwd) {
+        if (pwd !== confirmPwd) {
+            showToast('Passwords do not match', 'error');
+            departmentConfirmPasswordInput?.focus();
+            return false;
+        }
+        const tests = validateDepartmentPasswordStrict(pwd);
+        if (!Object.values(tests).every(Boolean)) {
+            showToast('Password must meet all requirements!', 'error');
+            departmentPasswordInput?.focus();
+            return false;
+        }
+    }
+
+    return true;
+}
+
+async function submitDepartmentForm() {
+    const deptId = document.getElementById('department_id')?.value || '';
+    const isEdit = !!deptId;
+    if (!validateDepartmentForm(isEdit)) return;
+
+    saveDepartmentBtn.disabled = true;
+    saveDepartmentBtn.textContent = 'Saving...';
+
+    const formData = new FormData(departmentForm);
+    formData.append('action', isEdit ? 'edit' : 'add');
+    if (isEdit) formData.append('department_id', deptId);
+
+    try {
+        const res = await fetch('../../app/api/department_actions.php', {
+            method: 'POST',
+            body: formData,
+            credentials: 'include',
+        });
+        const data = await res.json();
+        if (data.success) {
+            closeDepartmentModalView();
+            loadDepartments();
+            openAccountSuccessModal(
+                isEdit
+                    ? 'Your department changes have been successfully saved.'
+                    : 'The new department has been added successfully.'
+            );
+        } else {
+            showToast(data.message || 'Failed to add department', 'error');
+        }
+    } catch (_) {
+        showToast('An error occurred', 'error');
+    } finally {
+        saveDepartmentBtn.disabled = false;
+        saveDepartmentBtn.textContent = 'Save';
+    }
+}
+
+addDepartmentBtn?.addEventListener('click', openDepartmentModal);
+closeDepartmentModal?.addEventListener('click', closeDepartmentModalView);
+document.getElementById('cancelDepartmentModalBtn')?.addEventListener('click', closeDepartmentModalView);
+window.addEventListener('click', e => {
+    if (e.target === departmentModal) closeDepartmentModalView();
+});
+
+document.getElementById('department_abbreviation')?.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/[^A-Za-z0-9\-_]/g, '').toUpperCase().slice(0, 20);
+    if (departmentPhotoPreview?.style.display !== 'block' && departmentPhotoPlaceholder) {
+        departmentPhotoPlaceholder.textContent = getDepartmentPlaceholderInitial();
+    }
+});
+
+document.getElementById('department_name')?.addEventListener('input', () => {
+    if (departmentPhotoPreview?.style.display !== 'block' && departmentPhotoPlaceholder) {
+        departmentPhotoPlaceholder.textContent = getDepartmentPlaceholderInitial();
+    }
+});
+
+departmentPhotoInput?.addEventListener('change', () => {
+    const file = departmentPhotoInput.files?.[0];
+    if (!file) {
+        resetDepartmentPhotoPreview();
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = e => {
+        if (departmentPhotoPreview && departmentPhotoPlaceholder) {
+            departmentPhotoPreview.src = e.target.result;
+            departmentPhotoPreview.style.display = 'block';
+            departmentPhotoPlaceholder.style.display = 'none';
+        }
+    };
+    reader.readAsDataURL(file);
+});
+
+document.getElementById('department_username')?.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 50);
+});
+
+departmentPasswordInput?.addEventListener('input', updateDepartmentPasswordFeedback);
+departmentConfirmPasswordInput?.addEventListener('input', updateDepartmentPasswordFeedback);
+
+departmentForm?.addEventListener('submit', e => {
+    e.preventDefault();
+    const isEdit = !!(document.getElementById('department_id')?.value || '').trim();
+    if (!validateDepartmentForm(isEdit)) return;
+    if (isEdit) {
+        pendingDepartmentSave = true;
+        openSaveConfirmModal();
+        return;
+    }
+    submitDepartmentForm();
+});
 
 // ---------------- Modal & Submit (STRICT VALIDATION) ----------------
 addUserBtn.addEventListener('click', () => {
@@ -790,11 +1275,15 @@ function formatUsersLabel(count) {
     return `${count} User${count === 1 ? '' : 's'}`;
 }
 
-function formatPageInfo(total, page, perPage) {
-    if (total <= 0) return 'Showing 0 to 0 of 0 users';
+function formatDepartmentsLabel(count) {
+    return `${count} Department${count === 1 ? '' : 's'}`;
+}
+
+function formatPageInfo(total, page, perPage, nounSingular = 'user', nounPlural = 'users') {
+    if (total <= 0) return `Showing 0 to 0 of 0 ${nounPlural}`;
     const start = (page - 1) * perPage + 1;
     const end = Math.min(page * perPage, total);
-    const noun = total === 1 ? 'user' : 'users';
+    const noun = total === 1 ? nounSingular : nounPlural;
     return `Showing ${start} to ${end} of ${total} ${noun}`;
 }
 
@@ -810,7 +1299,9 @@ function updatePanelPagination(panel, total, currentPage, perPage) {
         return safePage;
     }
 
-    if (deptPageInfo) deptPageInfo.textContent = formatPageInfo(total, safePage, perPage);
+    if (deptPageInfo) {
+        deptPageInfo.textContent = formatPageInfo(total, safePage, perPage, 'department', 'departments');
+    }
     if (deptPageNum) deptPageNum.textContent = String(safePage);
     if (deptPrevBtn) deptPrevBtn.disabled = safePage <= 1;
     if (deptNextBtn) deptNextBtn.disabled = safePage >= totalPages || total === 0;
@@ -836,6 +1327,38 @@ accountManagementRoot?.addEventListener('click', async e => {
     const deleteBtn = e.target.closest('.action-btn.delete');
     const statusBtn = e.target.closest('.action-btn.status-toggle');
     const viewBtn = e.target.closest('.action-btn.view');
+    const inDeptTable = !!e.target.closest('.users-management-table--dept');
+
+    if (viewBtn && inDeptTable) {
+        const dept = allDepartments.find(d => String(d.department_id) === String(viewBtn.dataset.id));
+        if (!dept) {
+            showToast('Department not found', 'error');
+            return;
+        }
+        openViewDepartmentModal(dept);
+        return;
+    }
+
+    if (editBtn && inDeptTable) {
+        const dept = allDepartments.find(d => String(d.department_id) === String(editBtn.dataset.id));
+        if (!dept) {
+            showToast('Department not found', 'error');
+            return;
+        }
+        openDepartmentEditModal(dept);
+        return;
+    }
+
+    if (deleteBtn && inDeptTable) {
+        const dept = allDepartments.find(d => String(d.department_id) === String(deleteBtn.dataset.id));
+        if (!dept) {
+            showToast('Department not found', 'error');
+            return;
+        }
+        const label = `${dept.department_name || ''} (${dept.department_abbreviation || ''})`.trim();
+        openDeleteDepartmentConfirmModal(dept.department_id, label);
+        return;
+    }
 
     if (statusBtn) {
         const uid = statusBtn.dataset.id;
@@ -912,10 +1435,6 @@ const ADMIN_ROLE_DEFS = [
     { role: 'User', label: 'User' },
 ];
 
-const DEPT_ROLE_DEFS = [
-    { role: 'Dean', label: 'Dean' },
-];
-
 function normalizeUserRole(role) {
     return String(role || '').trim().toLowerCase();
 }
@@ -937,10 +1456,6 @@ function usersForRoleDef(users, roleDef) {
 function isAdminPanelUser(user) {
     const role = normalizeUserRole(user.role);
     return role !== 'dean' && role !== 'inventory manager';
-}
-
-function isDeptPanelUser(user) {
-    return (user.role || '').trim() === 'Dean';
 }
 
 function flattenPanelUsers(users, roleDefs) {
@@ -1021,17 +1536,82 @@ function renderUserPanel(tbody, users, panelConfig) {
     return safePage;
 }
 
-function renderSplitUserTables(users) {
-    if (!adminUsersTableBody || !deptUsersTableBody) return;
+function buildDepartmentRowHtml(dept, rowNum) {
+    const abbrev = (dept.department_abbreviation || '—').trim();
+    const photoUrl = dept.department_photo_url || '';
+    const hasPhoto = !!photoUrl;
+    const photoSrc = hasPhoto ? `../${photoUrl}` : '';
+    const statusRaw = (dept.department_status || 'Active').toLowerCase();
+    const statusClass = statusRaw === 'active' ? 'active' : 'disabled';
+    const statusLabel = dept.department_status || 'Active';
+    const name = (dept.department_name || abbrev).trim();
+
+    return `
+        <td>${rowNum}</td>
+        <td>
+            <div class="user-photo-wrapper" data-email="${name}" data-photo="${photoSrc}">
+                ${hasPhoto
+                    ? `<img src="${photoSrc}" alt="Photo of ${abbrev}" class="user-photo-thumb">`
+                    : `<div class="user-photo-placeholder">${(abbrev.charAt(0) || 'D').toUpperCase()}</div>`
+                }
+            </div>
+        </td>
+        <td class="users-col-abbrev" title="${abbrev}">${abbrev}</td>
+        <td>${dept.department_type || '—'}</td>
+        <td class="users-col-status"><span class="status-pill status-${statusClass}">${statusLabel}</span></td>
+        <td>
+            <div class="user-action-cell">
+                <button type="button" class="action-btn view" data-id="${dept.department_id}" title="View details">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button type="button" class="action-btn edit" data-id="${dept.department_id}" title="Edit department">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button type="button" class="action-btn delete" data-id="${dept.department_id}" title="Delete department">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </td>
+    `;
+}
+
+function renderDepartmentPanel() {
+    if (!deptUsersTableBody) return;
+
+    const departments = filteredDepartments;
+    const total = departments.length;
+    const perPage = USERS_PER_PAGE;
+    const totalPages = Math.max(1, Math.ceil(total / perPage) || 1);
+    const safePage = Math.min(Math.max(1, deptCurrentPage), totalPages);
+    const start = (safePage - 1) * perPage;
+    const pageDepartments = departments.slice(start, start + perPage);
+
+    deptUsersTableBody.innerHTML = '';
+
+    if (!pageDepartments.length) {
+        deptUsersTableBody.innerHTML = '<tr><td colspan="6" class="users-table-loading">No departments found.</td></tr>';
+    } else {
+        pageDepartments.forEach((dept, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = buildDepartmentRowHtml(dept, start + index + 1);
+            deptUsersTableBody.appendChild(tr);
+        });
+    }
+
+    if (deptUsersCountBadge) {
+        deptUsersCountBadge.textContent = formatDepartmentsLabel(total);
+    }
+
+    deptCurrentPage = updatePanelPagination('dept', total, safePage, perPage);
+}
+
+function renderAdminUsersTable(users) {
+    if (!adminUsersTableBody) return;
 
     filteredAdminUsers = flattenPanelUsers(users.filter(isAdminPanelUser), ADMIN_ROLE_DEFS);
-    filteredDeptUsers = flattenPanelUsers(users.filter(isDeptPanelUser), DEPT_ROLE_DEFS);
 
     if (adminUsersCountBadge) {
         adminUsersCountBadge.textContent = formatUsersLabel(filteredAdminUsers.length);
-    }
-    if (deptUsersCountBadge) {
-        deptUsersCountBadge.textContent = formatUsersLabel(filteredDeptUsers.length);
     }
 
     adminCurrentPage = renderUserPanel(adminUsersTableBody, filteredAdminUsers, {
@@ -1042,15 +1622,31 @@ function renderSplitUserTables(users) {
         perPage: USERS_PER_PAGE,
     });
     adminCurrentPage = updatePanelPagination('admin', filteredAdminUsers.length, adminCurrentPage, USERS_PER_PAGE);
+}
 
-    deptCurrentPage = renderUserPanel(deptUsersTableBody, filteredDeptUsers, {
-        colspan: 7,
-        showRole: false,
-        showOffice: true,
-        page: deptCurrentPage,
-        perPage: USERS_PER_PAGE,
+function renderSplitUserTables(users) {
+    renderAdminUsersTable(users);
+    filteredDepartments = getFilteredDepartments();
+    renderDepartmentPanel();
+}
+
+function getFilteredDepartments() {
+    const searchTerm = (searchInput?.value || '').toLowerCase().trim();
+
+    return allDepartments.filter((dept) => {
+        if (!searchTerm) return true;
+        const name = (dept.department_name || '').toLowerCase();
+        const abbrev = (dept.department_abbreviation || '').toLowerCase();
+        const username = (dept.department_username || '').toLowerCase();
+        const type = (dept.department_type || '').toLowerCase();
+        const status = (dept.department_status || '').toLowerCase();
+
+        return name.includes(searchTerm)
+            || abbrev.includes(searchTerm)
+            || username.includes(searchTerm)
+            || type.includes(searchTerm)
+            || status.includes(searchTerm);
     });
-    deptCurrentPage = updatePanelPagination('dept', filteredDeptUsers.length, deptCurrentPage, USERS_PER_PAGE);
 }
 
 function getFilteredUsers() {
@@ -1121,16 +1717,17 @@ adminNextBtn?.addEventListener('click', () => {
 deptPrevBtn?.addEventListener('click', () => {
     if (deptCurrentPage > 1) {
         deptCurrentPage -= 1;
-        renderSplitUserTables(getFilteredUsers());
+        renderDepartmentPanel();
     }
 });
 
 deptNextBtn?.addEventListener('click', () => {
-    const totalPages = Math.max(1, Math.ceil(filteredDeptUsers.length / USERS_PER_PAGE));
+    const totalPages = Math.max(1, Math.ceil(filteredDepartments.length / USERS_PER_PAGE));
     if (deptCurrentPage < totalPages) {
         deptCurrentPage += 1;
-        renderSplitUserTables(getFilteredUsers());
+        renderDepartmentPanel();
     }
 });
 
 loadUsers();
+loadDepartments();

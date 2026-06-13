@@ -19,10 +19,15 @@
             if (userProfile.querySelector('.user-profile-popout')) return;
             userProfile.style.position = 'relative';
 
+            const isDepartment = document.body.dataset.loginType === 'department';
+            const profileHref = isDepartment ? 'department_profile.php' : 'my_profile.php';
+            const profileLabel = isDepartment ? 'Department Profile' : 'Edit Profile';
+            const profileIcon = isDepartment ? 'fa-building' : 'fa-user';
+
             const popout = document.createElement('div');
             popout.className = 'user-profile-popout';
             popout.innerHTML = `
-                <a class="user-profile-popout-link" href="my_profile.php"><i class="fas fa-user"></i> Edit Profile</a>
+                <a class="user-profile-popout-link" href="${profileHref}"><i class="fas ${profileIcon}"></i> ${profileLabel}</a>
                 <button type="button" class="user-profile-popout-link" data-action="logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
             `;
             userProfile.appendChild(popout);
