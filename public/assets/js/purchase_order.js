@@ -1081,9 +1081,15 @@
         } catch (err) {
             console.error('Failed to finalize tax computation:', err);
             showToast(err instanceof Error ? err.message : 'Could not finalize tax computation.');
+            // Reset status on error - don't show finalized panel if save failed
+            currentTaxStatus = 'draft';
         } finally {
             taxFinalizeSaving = false;
-            applyTaxWorkflowUi({ taxComputed: true, finalizedAt: lastTaxFinalizedAt });
+            // Only show finalized panel if status is actually 'finalized'
+            applyTaxWorkflowUi({ 
+                taxComputed: Boolean(currentTaxStatus === 'finalized' && lastTaxFinalizedAt), 
+                finalizedAt: lastTaxFinalizedAt 
+            });
         }
     }
 
@@ -1131,6 +1137,14 @@
     function initComptrollerTaxUi() {
         if (!isComptroller || !taxSection) {
             return;
+        }
+
+        // Ensure finalized panel is hidden initially, draft row is shown
+        if (taxFinalizedPanel) {
+            taxFinalizedPanel.hidden = true;
+        }
+        if (taxDraftRow) {
+            taxDraftRow.hidden = false;
         }
 
         addEwtBtn = document.getElementById('poTaxAddEwtBtn');
