@@ -424,41 +424,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
 
-            // SUCCESS + ROLE-BASED REDIRECT
+            // =========================================================
+            // SUCCESS + TRUST THE SERVER FOR REDIRECT
+            // =========================================================
             if (result.success) {
-                const role = (result.role || '').toLowerCase().trim();
-                const loginType = (result.login_type || 'user').toLowerCase().trim();
-                let redirectUrl = "public/pages/dashboard.php";
-
-                if (loginType === 'department' || role === 'department') {
-                    redirectUrl = "public/pages/dean_dashboard.php";
-                } else if (role === "dean") {
-                    redirectUrl = "public/pages/dean_dashboard.php";
-                } else if (
-                    role === "employee" ||
-                    role === "user" ||
-                    role === "laboratory manager" ||
-                    role === "canvasser"
-                ) {
-                    if (result.canvasser_workspace) {
-                        redirectUrl = "public/pages/canvasser_dashboard.php";
-                    } else {
-                        redirectUrl = "public/pages/employee_dashboard.php";
-                    }
-                } else if (role === "inventory_manager" || role === "inventory manager") {
-                    redirectUrl = "public/pages/dashboard.php";
-                } else if (role === "comptroller") {
-                    redirectUrl = "public/pages/comptroller_dashboard.php";
-                } else if (role === "gsd officer") {
-                    redirectUrl = "public/pages/gsd_dashboard.php";
-                } else if (
-                    role === "president" ||
-                    role === "president verifier" ||
-                    role === "verifier president" ||
-                    role === "president_verifier"
-                ) {
-                    redirectUrl = "public/pages/president_dashboard.php";
-                }
+                // ✅ Use the dashboard_url from the server (AuthController)
+                // ✅ Fallback to default dashboard if server doesn't provide one
+                const redirectUrl = result.dashboard_url || "index.php";
 
                 // Hide the login modal so only the loading screen shows.
                 const loginModalEl = document.getElementById("loginModal");
@@ -466,7 +438,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 showLoadingScreen("Logging in");
 
-                if (loginType !== 'department') {
+                // Record time-in for regular users (not department accounts)
+                if (result.login_type !== 'department') {
                     fetch("app/api/time_in.php", { method: "POST", credentials: "include" })
                         .then(r => r.json())
                         .then(data => console.log("Time in recorded:", data))
