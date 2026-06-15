@@ -94,8 +94,8 @@
                 console.error('Logout error:', err);
             } finally {
                 setTimeout(() => {
-                    window.location.href = '../../index.php';
-                }, 3000);
+                    window.location.href = 'index.php';
+                }, 1500);
             }
         },
         false
