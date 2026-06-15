@@ -174,17 +174,27 @@ function loadValidatedPreferredSuggestedSupplierForDetail(PDO $db, int $requestI
     $sortOrder = (int) ($sortStmt->fetchColumn() ?: 0);
 
     require_once __DIR__ . '/../approval_tables.php';
-    $prefStmt = $db->prepare(
-        'SELECT s.supplier_id, s.supplier_name
-         FROM requisition_preferred_suppliers rps
-         INNER JOIN suppliers s ON s.supplier_id = rps.supplier_id
-         WHERE rps.request_id = ? AND rps.supplier_id = ?
+    ensurePreferredSupplierItemQuotesTable($db);
+    
+    // Check that supplier exists in the preferred supplier list (requisition_preferred_supplier_item)
+    $dupChk = $db->prepare(
+        'SELECT 1 FROM requisition_preferred_supplier_item
+         WHERE request_id = ? AND supplier_id = ?
          LIMIT 1'
     );
-    $prefStmt->execute([$requestId, $supplierId]);
+    $dupChk->execute([$requestId, $supplierId]);
+    if (!$dupChk->fetchColumn()) {
+        return [null, 'Selected supplier must come from the requester preferred supplier matrix.'];
+    }
+    
+    // Get supplier details from suppliers table
+    $prefStmt = $db->prepare(
+        'SELECT supplier_id, supplier_name FROM suppliers WHERE supplier_id = ? LIMIT 1'
+    );
+    $prefStmt->execute([$supplierId]);
     $prefRow = $prefStmt->fetch(PDO::FETCH_ASSOC);
     if (!$prefRow) {
-        return [null, 'Selected supplier must come from the requester preferred supplier matrix.'];
+        return [null, 'Supplier not found.'];
     }
     $quotedPrice = cwirmsPreferredQuotedPriceForSortOrder($db, $requestId, $supplierId, $sortOrder);
     if ($quotedPrice === null) {
