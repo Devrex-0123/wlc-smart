@@ -15,6 +15,68 @@ function sendJson($payload) {
 }
 
 /**
+ * @return array{is_department: bool, user_id: int, office_id: ?int}
+ */
+function resolveDeanRequestScope(PDO $db, int $userId): array
+{
+    $stmt = $db->prepare('SELECT role, office_id FROM user WHERE user_id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return ['is_department' => false, 'user_id' => $userId, 'office_id' => null];
+    }
+
+    $isDepartment = strtolower(trim((string) ($row['role'] ?? ''))) === 'department';
+    $officeId = (int) ($row['office_id'] ?? 0);
+
+    return [
+        'is_department' => $isDepartment,
+        'user_id' => $userId,
+        'office_id' => $officeId > 0 ? $officeId : null,
+    ];
+}
+
+function fetchOwnedRequisition(PDO $db, int $requestId, array $scope): ?array
+{
+    if ($requestId <= 0) {
+        return null;
+    }
+
+    if (!empty($scope['is_department'])) {
+        $officeId = (int) ($scope['office_id'] ?? 0);
+        if ($officeId <= 0) {
+            return null;
+        }
+        $stmt = $db->prepare('SELECT * FROM requisition_item WHERE request_id = ? AND office_id = ? LIMIT 1');
+        $stmt->execute([$requestId, $officeId]);
+    } else {
+        $stmt = $db->prepare('SELECT * FROM requisition_item WHERE request_id = ? AND user_id = ? LIMIT 1');
+        $stmt->execute([$requestId, (int) $scope['user_id']]);
+    }
+
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row ?: null;
+}
+
+function deleteOwnedRequisition(PDO $db, int $requestId, array $scope): int
+{
+    if (!empty($scope['is_department'])) {
+        $officeId = (int) ($scope['office_id'] ?? 0);
+        if ($officeId <= 0) {
+            return 0;
+        }
+        $stmt = $db->prepare('DELETE FROM requisition_item WHERE request_id = ? AND office_id = ?');
+        $stmt->execute([$requestId, $officeId]);
+    } else {
+        $stmt = $db->prepare('DELETE FROM requisition_item WHERE request_id = ? AND user_id = ?');
+        $stmt->execute([$requestId, (int) $scope['user_id']]);
+    }
+
+    return $stmt->rowCount();
+}
+
+/**
  * @param array<int, mixed> $items
  * @param array<int, mixed> $suppliers
  */
@@ -33,6 +95,7 @@ function insertRequisitionBatch(PDO $db, int $userId, int $officeId, int $facili
 
 try {
     $db = Database::connect();
+    $requestScope = resolveDeanRequestScope($db, (int) $_SESSION['user_id']);
     $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
     if ($action === 'bootstrap') {
@@ -128,7 +191,7 @@ try {
 
     if ($action === 'list_requests') {
         $agg = requisitionSqlSelectListAggregates();
-        $stmt = $db->prepare("
+        $listSql = "
             SELECT r.request_id, r.created_at, r.status, r.message,
                    u.Email, d.`office_name` AS office_name, rfa.requisition_status, rfa.requisition_note, cva.canvas_status, cva.gsd_status, cva.comp_status, cva.pres_status,
                    COALESCE(pra.pr_inv_status, 'pending') AS pr_inv_status,
@@ -136,6 +199,9 @@ try {
                    po.id AS purchase_order_id,
                    po.po_number AS purchase_order_number,
                    po.status AS purchase_order_status,
+                   po.requested_by_user_id AS po_requested_by_user_id,
+                   po.payment_released_at,
+                   po.items_received_at,
                    {$agg}
             FROM requisition_item r
             LEFT JOIN user u ON u.user_id = r.user_id
@@ -144,10 +210,20 @@ try {
             LEFT JOIN canvass_verification_approval cva ON cva.request_id = r.request_id
             LEFT JOIN purchase_requisition_approval pra ON pra.request_id = r.request_id
             LEFT JOIN purchase_orders po ON po.requisition_id = r.request_id AND po.deleted_at IS NULL
-            WHERE r.user_id = ?
-            ORDER BY r.created_at DESC, r.request_id DESC
-        ");
-        $stmt->execute([$_SESSION['user_id']]);
+            WHERE ";
+        if (!empty($requestScope['is_department'])) {
+            $officeId = (int) ($requestScope['office_id'] ?? 0);
+            if ($officeId <= 0) {
+                sendJson(['success' => true, 'requests' => []]);
+            }
+            $listSql .= 'r.office_id = ? ORDER BY r.created_at DESC, r.request_id DESC';
+            $stmt = $db->prepare($listSql);
+            $stmt->execute([$officeId]);
+        } else {
+            $listSql .= 'r.user_id = ? ORDER BY r.created_at DESC, r.request_id DESC';
+            $stmt = $db->prepare($listSql);
+            $stmt->execute([(int) $requestScope['user_id']]);
+        }
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $requests = array_map(function ($row) {
@@ -174,6 +250,11 @@ try {
                 'purchase_order_id' => !empty($row['purchase_order_id']) ? (int) $row['purchase_order_id'] : null,
                 'purchase_order_number' => (string)($row['purchase_order_number'] ?? ''),
                 'purchase_order_status' => (string)($row['purchase_order_status'] ?? ''),
+                'purchase_order_requested_by_user_id' => !empty($row['po_requested_by_user_id'])
+                    ? (int) $row['po_requested_by_user_id']
+                    : null,
+                'payment_released_at' => $row['payment_released_at'] ?? null,
+                'items_received_at' => $row['items_received_at'] ?? null,
                 'requester' => $requester,
                 'office' => $row['office_name'] ?? '—',
             ];
@@ -198,14 +279,19 @@ try {
             sendJson(['success' => false, 'message' => 'Invalid status value.']);
         }
 
-        $checkStmt = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $checkStmt->execute([$requestId, $_SESSION['user_id']]);
-        if (!$checkStmt->fetch(PDO::FETCH_ASSOC)) {
+        $anchor = fetchOwnedRequisition($db, $requestId, $requestScope);
+        if (!$anchor) {
             sendJson(['success' => false, 'message' => 'Request not found.']);
         }
 
-        $updateStmt = $db->prepare('UPDATE requisition_item SET status = ?, message = ? WHERE request_id = ? AND user_id = ?');
-        $updateStmt->execute([$status, ($message !== '' ? $message : null), $requestId, $_SESSION['user_id']]);
+        if (!empty($requestScope['is_department'])) {
+            $officeId = (int) ($requestScope['office_id'] ?? 0);
+            $updateStmt = $db->prepare('UPDATE requisition_item SET status = ?, message = ? WHERE request_id = ? AND office_id = ?');
+            $updateStmt->execute([$status, ($message !== '' ? $message : null), $requestId, $officeId]);
+        } else {
+            $updateStmt = $db->prepare('UPDATE requisition_item SET status = ?, message = ? WHERE request_id = ? AND user_id = ?');
+            $updateStmt->execute([$status, ($message !== '' ? $message : null), $requestId, (int) $requestScope['user_id']]);
+        }
 
         sendJson(['success' => true, 'message' => 'Request updated successfully.']);
     }
@@ -216,10 +302,7 @@ try {
             sendJson(['success' => false, 'message' => 'Invalid request id.']);
         }
 
-        $deleteStmt = $db->prepare('DELETE FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $deleteStmt->execute([$requestId, $_SESSION['user_id']]);
-
-        if ($deleteStmt->rowCount() === 0) {
+        if (deleteOwnedRequisition($db, $requestId, $requestScope) === 0) {
             sendJson(['success' => false, 'message' => 'Request not found or already deleted.']);
         }
 
@@ -232,9 +315,7 @@ try {
             sendJson(['success' => false, 'message' => 'Invalid request id.']);
         }
 
-        $anchorStmt = $db->prepare('SELECT * FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $anchorStmt->execute([$requestId, $_SESSION['user_id']]);
-        $anchor = $anchorStmt->fetch(PDO::FETCH_ASSOC);
+        $anchor = fetchOwnedRequisition($db, $requestId, $requestScope);
         if (!$anchor) {
             sendJson(['success' => false, 'message' => 'Request not found.']);
         }
@@ -267,9 +348,7 @@ try {
             sendJson(['success' => false, 'message' => 'Invalid request id.']);
         }
 
-        $anchorStmt = $db->prepare('SELECT * FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $anchorStmt->execute([$requestId, $_SESSION['user_id']]);
-        $anchor = $anchorStmt->fetch(PDO::FETCH_ASSOC);
+        $anchor = fetchOwnedRequisition($db, $requestId, $requestScope);
         if (!$anchor) {
             sendJson(['success' => false, 'message' => 'Request not found.']);
         }

@@ -41,7 +41,8 @@ if ($isDepartmentLogin) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dean Dashboard - IMRMS</title>
 <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc34">
-<link rel="stylesheet" href="../assets/css/dean_dashboard.css?v=12">
+<link rel="stylesheet" href="../assets/css/dean_dashboard.css?v=13">
+<link rel="stylesheet" href="../assets/css/requester_notifications.css?v=1">
 <link rel="stylesheet" href="../assets/css/loading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -52,9 +53,14 @@ if ($isDepartmentLogin) {
 
 <!-- Main Content -->
 <main class="main-content dean-dashboard-home">
-    <section class="dashboard-welcome">
-        <h1 class="dashboard-welcome__title">Welcome back!</h1>
-        <p class="dashboard-welcome__subtitle">Manage and request resources for your department.</p>
+    <section class="dashboard-welcome dashboard-welcome--with-bell">
+        <div class="dashboard-welcome__row">
+            <div class="dashboard-welcome__copy">
+                <h1 class="dashboard-welcome__title">Welcome back!</h1>
+                <p class="dashboard-welcome__subtitle">Manage and request resources for your department.</p>
+            </div>
+            <?php require __DIR__ . '/partials/requester_notifications_bell.php'; ?>
+        </div>
     </section>
 
     <section class="dean-summary-grid" aria-label="Request summary">
@@ -213,6 +219,7 @@ if ($isDepartmentLogin) {
 
 <!-- Logout Script -->
 <script src="../assets/js/logout.js?v=wlc2"></script>
+<script src="../assets/js/requester_notifications.js?v=2"></script>
 <script src="../assets/js/dean_dashboard.js?v=4"></script>
 </body>
 </html>

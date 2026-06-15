@@ -31,7 +31,7 @@ $rspBackAriaLabel = 'Back to Requisition Management';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Requisition Progress — President — IMRMS</title>
     <link rel="stylesheet" href="../assets/css/dashboard.css">
-    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css?v=wlc10">
+    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css?v=wlc12">
     <link rel="stylesheet" href="../assets/css/president_verifier.css">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -48,6 +48,6 @@ $rspBackAriaLabel = 'Back to Requisition Management';
 
 <script src="../assets/js/logout.js?v=wlc1"></script>
 <script src="../assets/js/president_shell.js"></script>
-<script src="../assets/js/requisition_status_progress.js?v=wlc10"></script>
+<script src="../assets/js/requisition_status_progress.js?v=wlc12"></script>
 </body>
 </html>

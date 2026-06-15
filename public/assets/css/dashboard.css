@@ -1290,6 +1290,41 @@ optgroup {
     font-size: 0.82rem;
 }
 
+.dashboard-panel--awaiting-receipt {
+    margin-top: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.dashboard-awaiting-receipt__item {
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.dashboard-awaiting-receipt__btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    background: #16a34a;
+    color: #fff;
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.dashboard-awaiting-receipt__btn:hover:not(:disabled) {
+    background: #15803d;
+}
+
+.dashboard-awaiting-receipt__btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
 @media (max-width: 1100px) {
     .dashboard-panels {
         grid-template-columns: 1fr;
