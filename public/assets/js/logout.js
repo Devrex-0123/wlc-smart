@@ -59,6 +59,10 @@
         });
     });
 
+    function resolveLoginUrl() {
+        return new URL('../../index.php', window.location.href).href;
+    }
+
     document.addEventListener(
         'click',
         async (e) => {
@@ -94,7 +98,7 @@
                 console.error('Logout error:', err);
             } finally {
                 setTimeout(() => {
-                    window.location.href = 'index.php';
+                    window.location.replace(resolveLoginUrl());
                 }, 1500);
             }
         },
