@@ -27,10 +27,12 @@ class AuthController {
     private function resolveDashboardUrl($roleNorm, $canvasserWorkspace) {
         switch ($roleNorm) {
             case 'department':
+                return 'public/pages/department_dashboard.php';
             case 'dean':
                 return 'public/pages/dean_dashboard.php';
-            case 'employee':
             case 'user':
+                return 'public/pages/dean_dashboard.php';
+            case 'employee':
             case 'laboratory manager':
             case 'canvasser':
                 return $canvasserWorkspace
@@ -73,15 +75,11 @@ class AuthController {
         $this->ensureSessionStarted();
 
         $identifier = trim((string) $identifier);
-        $isEmail = str_contains($identifier, '@');
 
-        if ($isEmail) {
-            $email = strtolower($identifier);
-            $userModel = new User();
-            $user = $userModel->findByEmail($email);
-            if ($user) {
-                return $this->authenticateUser($user, $email, $password, $consentAccepted);
-            }
+        $userModel = new User();
+        $user = $userModel->findByUsername($identifier);
+        if ($user) {
+            return $this->authenticateUser($user, $identifier, $password, $consentAccepted);
         }
 
         $departmentResult = $this->authenticateDepartment($identifier, $password, $consentAccepted);
@@ -89,19 +87,10 @@ class AuthController {
             return $departmentResult;
         }
 
-        if ($isEmail) {
-            return [
-                'success' => false,
-                'message' => 'Account does not exist',
-                'account_missing' => true,
-            ];
-        }
-
         return [
             'success' => false,
-            'message' => 'Invalid username or password',
-            'attempts' => 1,
-            'remaining' => $this->maxAttempts - 1,
+            'message' => 'Account does not exist',
+            'account_missing' => true,
         ];
     }
 
@@ -274,7 +263,7 @@ class AuthController {
             $_SESSION['consent_version_current'] = CONSENT_VERSION;
 
             $roleNorm = strtolower(trim((string) ($user['role'] ?? 'employee')));
-            $employeeLike = in_array($roleNorm, ['employee', 'user', 'laboratory manager', 'canvasser'], true);
+            $employeeLike = in_array($roleNorm, ['employee', 'laboratory manager', 'canvasser'], true);
             $canvasserWorkspace = $employeeLike;
 
             $_SESSION['dashboard_url'] = $this->resolveDashboardUrl($roleNorm, $canvasserWorkspace);

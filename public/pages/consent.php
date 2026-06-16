@@ -9,9 +9,9 @@ if (!$isUserLogin && !$isDepartmentLogin) {
     header("Location: ../../index.php");
     exit;
 }
-$next = $_GET['next'] ?? ($isDepartmentLogin ? 'public/pages/dean_dashboard.php' : 'public/pages/dashboard.php');
+$next = $_GET['next'] ?? ($isDepartmentLogin ? 'public/pages/department_dashboard.php' : 'public/pages/dashboard.php');
 if (!is_string($next) || strpos($next, 'public/pages/') !== 0) {
-    $next = $isDepartmentLogin ? 'public/pages/dean_dashboard.php' : 'public/pages/dashboard.php';
+    $next = $isDepartmentLogin ? 'public/pages/department_dashboard.php' : 'public/pages/dashboard.php';
 }
 ?>
 <!DOCTYPE html>

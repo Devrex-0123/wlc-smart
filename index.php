@@ -386,7 +386,7 @@ if ($isLoggedIn) {
 
   <script src="public/assets/js/landing_nav.js?v=wlc1"></script>
   <script src="public/assets/js/modal.js?v=wlc6"></script>
-  <script src="public/assets/js/login.js?v=wlc8"></script>
+  <script src="public/assets/js/login.js?v=wlc9"></script>
   <script src="public/assets/js/about_preview.js?v=wlc8"></script>
 
 </body>

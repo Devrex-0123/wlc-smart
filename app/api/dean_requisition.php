@@ -2,12 +2,8 @@
 session_start();
 header('Content-Type: application/json');
 require_once __DIR__ . '/../classes/db.php';
+require_once __DIR__ . '/../helpers/dean_office_context.php';
 require_once __DIR__ . '/requisition_detail_payload.php';
-
-if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
-    exit;
-}
 
 function sendJson($payload) {
     echo json_encode($payload);
@@ -33,22 +29,45 @@ function insertRequisitionBatch(PDO $db, int $userId, int $officeId, int $facili
 
 try {
     $db = Database::connect();
+    $deanApiCtx = cwirms_dean_api_require_context($db);
+    $deanOwnerUserId = cwirms_dean_requisition_owner_id($deanApiCtx);
+    $deanOfficeScopeId = (int) $deanApiCtx['office_id'];
+    $itemScope = cwirms_dean_requisition_item_scope_sql($deanApiCtx);
     $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
     if ($action === 'bootstrap') {
-        $userStmt = $db->prepare("SELECT u.user_id, u.Email, u.role, u.office_id, d.`office_name` AS office_name
-            FROM user u
-            LEFT JOIN offices d ON d.office_id = u.office_id
-            WHERE u.user_id = ?");
-        $userStmt->execute([$_SESSION['user_id']]);
-        $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+        $bootstrapUser = [
+            'user_id' => $deanOwnerUserId,
+            'Email' => $deanApiCtx['user']['Email'] ?? '',
+            'role' => $deanApiCtx['user']['role'] ?? '',
+            'office_id' => $deanOfficeScopeId,
+            'office_name' => $deanApiCtx['office_name'] ?? '',
+        ];
 
-        $deptStmt = $db->query("SELECT office_id, `office_name` AS office_name FROM offices ORDER BY `office_name` ASC");
-        $offices = $deptStmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!empty($deanApiCtx['is_department_login'])) {
+            $deptStmt = $db->prepare('SELECT office_id, `office_name` AS office_name FROM offices WHERE office_id = ?');
+            $deptStmt->execute([$deanOfficeScopeId]);
+            $offices = $deptStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $facStmt = $db->query("SELECT facility_id, office_id, building, room, laboratory, code
-            FROM facilities ORDER BY building ASC, room ASC");
-        $facilities = $facStmt->fetchAll(PDO::FETCH_ASSOC);
+            $facStmt = $db->prepare('SELECT facility_id, office_id, building, room, laboratory, code
+                FROM facilities WHERE office_id = ? ORDER BY building ASC, room ASC');
+            $facStmt->execute([$deanOfficeScopeId]);
+            $facilities = $facStmt->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $userStmt = $db->prepare("SELECT u.user_id, u.Email, u.role, u.office_id, d.`office_name` AS office_name
+                FROM user u
+                LEFT JOIN offices d ON d.office_id = u.office_id
+                WHERE u.user_id = ?");
+            $userStmt->execute([(int) $_SESSION['user_id']]);
+            $bootstrapUser = $userStmt->fetch(PDO::FETCH_ASSOC) ?: $bootstrapUser;
+
+            $deptStmt = $db->query("SELECT office_id, `office_name` AS office_name FROM offices ORDER BY `office_name` ASC");
+            $offices = $deptStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $facStmt = $db->query("SELECT facility_id, office_id, building, room, laboratory, code
+                FROM facilities ORDER BY building ASC, room ASC");
+            $facilities = $facStmt->fetchAll(PDO::FETCH_ASSOC);
+        }
 
         // Facilities marked as new can be configured here.
         // Add facility_id values to this array to show a "New" badge in the dean requisition form.
@@ -79,7 +98,7 @@ try {
 
         sendJson([
             'success' => true,
-            'user' => $user,
+            'user' => $bootstrapUser,
             'offices' => $offices,
             'facilities' => $facilities,
             'suppliers' => $suppliers,
@@ -128,6 +147,7 @@ try {
 
     if ($action === 'list_requests') {
         $agg = requisitionSqlSelectListAggregates();
+        $scope = cwirms_dean_requisition_scope_sql($deanApiCtx);
         $stmt = $db->prepare("
             SELECT r.request_id, r.created_at, r.status, r.message,
                    u.Email, d.`office_name` AS office_name, rfa.requisition_status, rfa.requisition_note, cva.canvas_status, cva.gsd_status, cva.comp_status, cva.pres_status,
@@ -144,10 +164,10 @@ try {
             LEFT JOIN canvass_verification_approval cva ON cva.request_id = r.request_id
             LEFT JOIN purchase_requisition_approval pra ON pra.request_id = r.request_id
             LEFT JOIN purchase_orders po ON po.requisition_id = r.request_id AND po.deleted_at IS NULL
-            WHERE r.user_id = ?
+            WHERE {$scope['sql']}
             ORDER BY r.created_at DESC, r.request_id DESC
         ");
-        $stmt->execute([$_SESSION['user_id']]);
+        $stmt->execute([$scope['param']]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $requests = array_map(function ($row) {
@@ -198,14 +218,14 @@ try {
             sendJson(['success' => false, 'message' => 'Invalid status value.']);
         }
 
-        $checkStmt = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $checkStmt->execute([$requestId, $_SESSION['user_id']]);
+        $checkStmt = $db->prepare("SELECT request_id FROM requisition_item WHERE request_id = ? AND {$itemScope['sql']}");
+        $checkStmt->execute([$requestId, $itemScope['param']]);
         if (!$checkStmt->fetch(PDO::FETCH_ASSOC)) {
             sendJson(['success' => false, 'message' => 'Request not found.']);
         }
 
-        $updateStmt = $db->prepare('UPDATE requisition_item SET status = ?, message = ? WHERE request_id = ? AND user_id = ?');
-        $updateStmt->execute([$status, ($message !== '' ? $message : null), $requestId, $_SESSION['user_id']]);
+        $updateStmt = $db->prepare("UPDATE requisition_item SET status = ?, message = ? WHERE request_id = ? AND {$itemScope['sql']}");
+        $updateStmt->execute([$status, ($message !== '' ? $message : null), $requestId, $itemScope['param']]);
 
         sendJson(['success' => true, 'message' => 'Request updated successfully.']);
     }
@@ -216,8 +236,8 @@ try {
             sendJson(['success' => false, 'message' => 'Invalid request id.']);
         }
 
-        $deleteStmt = $db->prepare('DELETE FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $deleteStmt->execute([$requestId, $_SESSION['user_id']]);
+        $deleteStmt = $db->prepare("DELETE FROM requisition_item WHERE request_id = ? AND {$itemScope['sql']}");
+        $deleteStmt->execute([$requestId, $itemScope['param']]);
 
         if ($deleteStmt->rowCount() === 0) {
             sendJson(['success' => false, 'message' => 'Request not found or already deleted.']);
@@ -232,9 +252,7 @@ try {
             sendJson(['success' => false, 'message' => 'Invalid request id.']);
         }
 
-        $anchorStmt = $db->prepare('SELECT * FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $anchorStmt->execute([$requestId, $_SESSION['user_id']]);
-        $anchor = $anchorStmt->fetch(PDO::FETCH_ASSOC);
+        $anchor = cwirms_dean_fetch_requisition_item($db, $deanApiCtx, $requestId);
         if (!$anchor) {
             sendJson(['success' => false, 'message' => 'Request not found.']);
         }
@@ -267,9 +285,7 @@ try {
             sendJson(['success' => false, 'message' => 'Invalid request id.']);
         }
 
-        $anchorStmt = $db->prepare('SELECT * FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $anchorStmt->execute([$requestId, $_SESSION['user_id']]);
-        $anchor = $anchorStmt->fetch(PDO::FETCH_ASSOC);
+        $anchor = cwirms_dean_fetch_requisition_item($db, $deanApiCtx, $requestId);
         if (!$anchor) {
             sendJson(['success' => false, 'message' => 'Request not found.']);
         }
@@ -282,12 +298,14 @@ try {
 
         $payload = buildRequisitionDetailPayload($anchor, $rows, $requestId);
         requisitionAttachApprovalToPayload($db, $requestId, $payload);
-        $ownerStmt = $db->prepare('SELECT Email, role FROM user WHERE user_id = ?');
+        $ownerStmt = $db->prepare('SELECT Email, role, contact_number FROM user WHERE user_id = ?');
         $ownerStmt->execute([(int)$anchor['user_id']]);
         $owner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
         $emailOwn = (string)($owner['Email'] ?? '');
         $payload['requester_display'] = $emailOwn !== '' ? (explode('@', $emailOwn)[0] ?? '—') : '—';
         $payload['requester_role'] = (string)($owner['role'] ?? '');
+        $payload['requester_email'] = $emailOwn;
+        $payload['requester_contact'] = (string)($owner['contact_number'] ?? '');
         $payload['dean_edit_locked'] = requisitionVerifierChainLocked($payload['approval'] ?? null);
         sendJson($payload);
     }
@@ -313,9 +331,7 @@ try {
             sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
         }
 
-        $anchorStmt = $db->prepare('SELECT * FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $anchorStmt->execute([$anchorId, $_SESSION['user_id']]);
-        $anchor = $anchorStmt->fetch(PDO::FETCH_ASSOC);
+        $anchor = cwirms_dean_fetch_requisition_item($db, $deanApiCtx, $anchorId);
         if (!$anchor) {
             sendJson(['success' => false, 'message' => 'Request not found.']);
         }
@@ -351,8 +367,8 @@ try {
         $msgVal = $message !== '' ? $message : null;
         $db->beginTransaction();
         try {
-            $updStmt = $db->prepare('UPDATE requisition_item SET office_id = ?, facility_id = ?, created_at = ?, message = ?, purpose = ?, urgent_note = ? WHERE request_id = ? AND user_id = ?');
-            $updStmt->execute([$officeId, $facilityId, $createdAt, $msgVal, ($purpose !== '' ? $purpose : null), ($urgentNote !== '' ? $urgentNote : null), $anchorId, (int) $_SESSION['user_id']]);
+            $updStmt = $db->prepare("UPDATE requisition_item SET office_id = ?, facility_id = ?, created_at = ?, message = ?, purpose = ?, urgent_note = ? WHERE request_id = ? AND {$itemScope['sql']}");
+            $updStmt->execute([$officeId, $facilityId, $createdAt, $msgVal, ($purpose !== '' ? $purpose : null), ($urgentNote !== '' ? $urgentNote : null), $anchorId, $itemScope['param']]);
 
             $delLines = $db->prepare('DELETE FROM requisition_line WHERE request_id = ?');
             $delLines->execute([$anchorId]);
@@ -388,12 +404,17 @@ try {
         if (!is_array($items) || count($items) === 0) {
             sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
         }
+        if (!empty($deanApiCtx['is_department_login']) && $officeId !== $deanOfficeScopeId) {
+            sendJson(['success' => false, 'message' => 'You can only submit requisitions for your office.']);
+        }
+
+        $ownerUserId = cwirms_dean_require_requisition_owner_id($deanApiCtx);
 
         $db->beginTransaction();
         try {
             insertRequisitionBatch(
                 $db,
-                (int)$_SESSION['user_id'],
+                $ownerUserId,
                 $officeId,
                 $facilityId,
                 $requestDate,
@@ -437,6 +458,11 @@ try {
         if (!is_array($items) || count($items) === 0) {
             sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
         }
+        if (!empty($deanApiCtx['is_department_login']) && $officeId !== $deanOfficeScopeId) {
+            sendJson(['success' => false, 'message' => 'You can only save requisitions for your office.']);
+        }
+
+        $ownerUserId = cwirms_dean_require_requisition_owner_id($deanApiCtx);
 
         $db->beginTransaction();
         try {
@@ -444,7 +470,7 @@ try {
                 // Create new draft requisition
                 insertRequisitionBatch(
                     $db,
-                    (int)$_SESSION['user_id'],
+                    $ownerUserId,
                     $officeId,
                     $facilityId,
                     $requestDate,
@@ -460,8 +486,8 @@ try {
                 sendJson(['success' => true, 'message' => 'Draft saved successfully.', 'request_id' => $newRequestId]);
             } else {
                 // Update existing draft requisition
-                $checkStmt = $db->prepare('SELECT request_id, submission_status FROM requisition_item WHERE request_id = ? AND user_id = ?');
-                $checkStmt->execute([$requestId, $_SESSION['user_id']]);
+                $checkStmt = $db->prepare("SELECT request_id, submission_status FROM requisition_item WHERE request_id = ? AND {$itemScope['sql']}");
+                $checkStmt->execute([$requestId, $itemScope['param']]);
                 $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
                 
                 if (!$existing) {
@@ -478,8 +504,8 @@ try {
                 $purposeVal = $purpose !== '' ? $purpose : null;
                 $urgentNoteVal = $urgentNote !== '' ? $urgentNote : null;
 
-                $updateStmt = $db->prepare('UPDATE requisition_item SET office_id = ?, facility_id = ?, message = ?, purpose = ?, urgent_note = ?, submission_status = ? WHERE request_id = ? AND user_id = ?');
-                $updateStmt->execute([$officeId, $facilityId, $msgVal, $purposeVal, $urgentNoteVal, $targetSubmissionStatus, $requestId, $_SESSION['user_id']]);
+                $updateStmt = $db->prepare("UPDATE requisition_item SET office_id = ?, facility_id = ?, message = ?, purpose = ?, urgent_note = ?, submission_status = ? WHERE request_id = ? AND {$itemScope['sql']}");
+                $updateStmt->execute([$officeId, $facilityId, $msgVal, $purposeVal, $urgentNoteVal, $targetSubmissionStatus, $requestId, $itemScope['param']]);
 
                 // Delete old items and re-insert
                 $delItemsStmt = $db->prepare('DELETE FROM requisition_line WHERE request_id = ?');
@@ -512,8 +538,8 @@ try {
             sendJson(['success' => false, 'message' => 'Invalid request or status.']);
         }
 
-        $checkStmt = $db->prepare('SELECT request_id, submission_status FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $checkStmt->execute([$requestId, $_SESSION['user_id']]);
+        $checkStmt = $db->prepare("SELECT request_id, submission_status FROM requisition_item WHERE request_id = ? AND {$itemScope['sql']}");
+        $checkStmt->execute([$requestId, $itemScope['param']]);
         $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$existing) {
@@ -524,8 +550,8 @@ try {
             sendJson(['success' => false, 'message' => 'Requisition is already submitted.']);
         }
 
-        $updateStmt = $db->prepare('UPDATE requisition_item SET submission_status = ? WHERE request_id = ? AND user_id = ?');
-        $updateStmt->execute([$newStatus, $requestId, $_SESSION['user_id']]);
+        $updateStmt = $db->prepare("UPDATE requisition_item SET submission_status = ? WHERE request_id = ? AND {$itemScope['sql']}");
+        $updateStmt->execute([$newStatus, $requestId, $itemScope['param']]);
 
         sendJson(['success' => true, 'message' => 'Status updated successfully.', 'new_status' => $newStatus]);
     }

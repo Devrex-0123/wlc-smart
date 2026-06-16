@@ -1,18 +1,6 @@
 <?php
-session_start();
-
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../../index.php');
-    exit;
-}
-
-require_once __DIR__ . '/../../app/classes/db.php';
+require_once __DIR__ . '/partials/requisition_workspace_page_context.php';
 require_once __DIR__ . '/../../app/api/requisition_detail_payload.php';
-
-$db = Database::connect();
-$stmt = $db->prepare('SELECT u.*, d.`office_name` AS office_name FROM user u LEFT JOIN offices d ON d.office_id = u.office_id WHERE u.user_id = ?');
-$stmt->execute([$_SESSION['user_id']]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 $displayName = trim((string)($user['full_name'] ?? ''));
 if ($displayName === '') {
@@ -34,6 +22,8 @@ $isPresidentCanvassReview = false;
 $isComptrollerCanvassHistory = false;
 $isPresidentCanvassHistory = false;
 $isRequesterOwnedCanvass = false;
+$isDepartmentCanvassView = false;
+$isDeanCanvassView = false;
 $requesterDisplayName = $displayName;
 $requesterRoleDisplay = (string) ($user['role'] ?? '');
 $accessError = null;
@@ -229,6 +219,70 @@ if ($requestId <= 0) {
             }
         }
     }
+} elseif ($from === 'department') {
+    $backHref = 'department_approval_workflow.php';
+    $accessErrorReturnHref = 'department_approval_workflow.php';
+    if (!$isDepartmentLogin) {
+        $accessError = 'Only department users can open this view.';
+    } else {
+        $req = $db->prepare('SELECT request_id, user_id FROM requisition_item WHERE request_id = ?');
+        $req->execute([$requestId]);
+        $reqRow = $req->fetch(PDO::FETCH_ASSOC);
+        if (!$reqRow) {
+            $accessError = 'This requisition was not found.';
+        } else {
+            $rsStmt = $db->prepare(
+                'SELECT LOWER(TRIM(COALESCE(requisition_status, \'\'))) FROM requisition_form_approval WHERE request_id = ? LIMIT 1'
+            );
+            $rsStmt->execute([$requestId]);
+            $rs = strtolower(trim((string) ($rsStmt->fetchColumn() ?: '')));
+            if ($rs !== 'accept') {
+                $accessError = 'Open the canvass sheet only after the inventory manager accepts the requisition.';
+            } else {
+                $isDepartmentCanvassView = true;
+                $uStmt = $db->prepare('SELECT Email, role FROM user WHERE user_id = ?');
+                $uStmt->execute([(int) $reqRow['user_id']]);
+                $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
+                $em = (string) ($owner['Email'] ?? '');
+                $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                $requesterRoleDisplay = (string) ($owner['role'] ?? '');
+            }
+        }
+    }
+} elseif ($from === 'dean') {
+    $deanProgressQs = $requestId > 0
+        ? ('rid=' . $requestId . ($progressFrom === 'status' ? '&from=status' : ''))
+        : '';
+    $backHref = 'dean_requisition_status_progress.php' . ($deanProgressQs !== '' ? ('?' . $deanProgressQs) : '');
+    $accessErrorReturnHref = $backHref;
+    $isDeanRole = (strtolower(trim((string) ($user['role'] ?? ''))) === 'dean');
+    if (!$isDeanRole) {
+        $accessError = 'Only dean users can open this view.';
+    } else {
+        $req = $db->prepare('SELECT request_id, user_id FROM requisition_item WHERE request_id = ?');
+        $req->execute([$requestId]);
+        $reqRow = $req->fetch(PDO::FETCH_ASSOC);
+        if (!$reqRow) {
+            $accessError = 'This requisition was not found.';
+        } else {
+            $rsStmt = $db->prepare(
+                'SELECT LOWER(TRIM(COALESCE(requisition_status, \'\'))) FROM requisition_form_approval WHERE request_id = ? LIMIT 1'
+            );
+            $rsStmt->execute([$requestId]);
+            $rs = strtolower(trim((string) ($rsStmt->fetchColumn() ?: '')));
+            if ($rs !== 'accept') {
+                $accessError = 'Open the canvass sheet only after the inventory manager accepts the requisition.';
+            } else {
+                $isDeanCanvassView = true;
+                $uStmt = $db->prepare('SELECT Email, role FROM user WHERE user_id = ?');
+                $uStmt->execute([(int) $reqRow['user_id']]);
+                $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
+                $em = (string) ($owner['Email'] ?? '');
+                $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                $requesterRoleDisplay = (string) ($owner['role'] ?? '');
+            }
+        }
+    }
 } else {
     $backHref =
         'dean_requisition_status_progress.php?rid=' .
@@ -257,7 +311,8 @@ $isReviewerCanvassReadonly = $isGsdCanvassReview
     || $isComptrollerCanvassReview
     || $isPresidentCanvassReview
     || $isComptrollerCanvassHistory
-    || $isPresidentCanvassHistory;
+    || $isPresidentCanvassHistory
+    || $isDepartmentCanvassView;
 $gsdVerificationStatus = 'pending';
 $showCanvassPricingOverview = $isGsdCanvassReview;
 
@@ -267,7 +322,8 @@ $canViewQtyPricingOverview = $isComptrollerCanvassReview
     || $isInventoryManagerCanvassReview
     || $isRequesterOwnedCanvass
     || $isPresidentCanvassReview
-    || $isPresidentCanvassHistory;
+    || $isPresidentCanvassHistory
+    || $isDepartmentCanvassView;
 $showComptrollerPricingOverview = false;
 $pricingOverviewViewerRole = '';
 $pricingOverviewInteractive = false;
@@ -381,6 +437,10 @@ if ($rfRequestId > 0 && $accessError === null) {
         $rfStepLine = 'Step 2 of 2 · Abstract of quotation';
         $rfLinkUrl = 'dean_requisition_form.php?view=1&from=requisition&request_id=' . $requestId;
         $rfLinkText = 'Back to requisition';
+    } elseif ($isDepartmentCanvassView) {
+        $rfStepLine = 'Abstract of quotation · department (read-only)';
+        $rfLinkUrl = '';
+        $rfLinkText = '';
     }
 }
 $cvWfCanvasStatus = 'pending';

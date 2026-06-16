@@ -721,6 +721,12 @@
     overflow-x: hidden;
 }
 
+/* Workflow page has no stat cards so content is short — don't force full viewport height */
+.main-content.requisition-management-container[data-req-scope="workflow"] {
+    min-height: auto;
+    padding-bottom: 1.5rem;
+}
+
 .requisition-management-container .table-container {
     background: #fff;
     border: 1px solid #e2e8f0;

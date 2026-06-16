@@ -8,6 +8,7 @@
 session_start();
 header('Content-Type: application/json; charset=UTF-8');
 require_once __DIR__ . '/../classes/db.php';
+require_once __DIR__ . '/../helpers/dean_office_context.php';
 
 function sendJson(array $p): void
 {
@@ -17,25 +18,13 @@ function sendJson(array $p): void
 
 function assertDeanWithOffice(PDO $db): array
 {
-    if (!isset($_SESSION['user_id'])) {
-        sendJson(['success' => false, 'message' => 'Unauthorized']);
-    }
-    $stmt = $db->prepare('SELECT user_id, role, office_id FROM user WHERE user_id = ?');
-    $stmt->execute([(int) $_SESSION['user_id']]);
-    $u = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$u) {
-        sendJson(['success' => false, 'message' => 'Unauthorized']);
-    }
-    $role = strtolower(trim((string) ($u['role'] ?? '')));
-    if ($role !== 'dean') {
-        sendJson(['success' => false, 'message' => 'Dean access only']);
-    }
-    $deptId = (int) ($u['office_id'] ?? 0);
-    if ($deptId <= 0) {
-        sendJson(['success' => false, 'message' => 'Dean is not assigned to a office']);
-    }
+    $ctx = cwirms_dean_api_require_context($db);
 
-    return ['user_id' => (int) $u['user_id'], 'office_id' => $deptId];
+    return [
+        'user_id' => cwirms_dean_api_actor_user_id($ctx),
+        'office_id' => (int) $ctx['office_id'],
+        'is_department_login' => !empty($ctx['is_department_login']),
+    ];
 }
 
 function facilityBelongsToOffice(PDO $db, int $facilityId, int $officeId): bool

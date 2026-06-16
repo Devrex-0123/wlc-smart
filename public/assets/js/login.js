@@ -432,11 +432,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 if (loginType === 'department' || role === 'department') {
                     redirectUrl = "public/pages/dean_dashboard.php";
-                } else if (role === "dean") {
+                } else if (role === "dean" || role === "user") {
                     redirectUrl = "public/pages/dean_dashboard.php";
                 } else if (
                     role === "employee" ||
-                    role === "user" ||
                     role === "laboratory manager" ||
                     role === "canvasser"
                 ) {

@@ -5,7 +5,7 @@
  * assignments on the Request page. Expects $user with role.
  */
 $roleLc = strtolower(trim((string) ($user['role'] ?? '')));
-$allowedRoles = ['employee', 'user', 'laboratory manager', 'canvasser'];
+$allowedRoles = ['employee', 'laboratory manager', 'canvasser'];
 if (!in_array($roleLc, $allowedRoles, true)) {
     header('Location: ../../index.php');
     exit;

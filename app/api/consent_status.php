@@ -22,14 +22,18 @@ if ($identifier === '') {
 }
 
 try {
-    if (str_contains($identifier, '@')) {
-        $userModel = new User();
-        $hasConsented = $userModel->hasConsentedByEmail($identifier);
-        $hasCurrentConsent = $userModel->hasCurrentConsentByEmail($identifier, $version);
-    } else {
+    $userModel = new User();
+    $hasConsented = $userModel->hasConsentedByEmail($identifier);
+    $hasCurrentConsent = $userModel->hasCurrentConsentByEmail($identifier, $version);
+
+    // If not found in user table, check departments table (legacy department accounts).
+    if (!$hasConsented && !str_contains($identifier, '@')) {
         $departmentModel = new Department();
-        $hasConsented = $departmentModel->hasConsentedByUsername($identifier);
-        $hasCurrentConsent = $departmentModel->hasCurrentConsentByUsername($identifier, $version);
+        $deptConsented = $departmentModel->hasConsentedByUsername($identifier);
+        if ($deptConsented) {
+            $hasConsented = true;
+            $hasCurrentConsent = $departmentModel->hasCurrentConsentByUsername($identifier, $version);
+        }
     }
 
     echo json_encode([

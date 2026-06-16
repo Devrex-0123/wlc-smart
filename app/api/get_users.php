@@ -33,6 +33,8 @@ try {
             u.updated_at,
             u.office_id,
             u.photo_url,
+            u.abbreviation,
+            u.department_type,
             d.`office_name` AS office_name,
             (
                 LOWER(TRIM(u.role)) = 'canvasser'
