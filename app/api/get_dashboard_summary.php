@@ -4,6 +4,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../classes/db.php';
 require_once __DIR__ . '/requisition_detail_payload.php';
+require_once __DIR__ . '/approval_tables.php';
 
 if (!isset($_SESSION['user_id'])) {
     echo json_encode(['success' => false, 'message' => 'Not logged in']);
@@ -48,6 +49,7 @@ function dashboardRecentStage(array $row): array
 }
 
 $db = Database::connect();
+ensureCanvassVerificationCanvasSubmissionStatusColumn($db);
 
 try {
     $totalAssets = (int) $db->query('SELECT COUNT(*) FROM inventory')->fetchColumn();
@@ -235,6 +237,36 @@ try {
         ];
     }, $recentRows);
 
+    $awaitingReceiptStmt = $db->query("
+        SELECT po.id, po.po_number, po.payment_released_at, po.requested_by_name,
+               po.location_facility, po.requisition_id
+        FROM purchase_orders po
+        WHERE po.deleted_at IS NULL
+          AND po.payment_released_at IS NOT NULL
+          AND po.items_received_at IS NULL
+        ORDER BY po.payment_released_at DESC, po.id DESC
+        LIMIT 20
+    ");
+    $awaitingReceiptRows = $awaitingReceiptStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $awaitingItemReceipt = array_map(static function (array $row): array {
+        $location = trim((string) ($row['location_facility'] ?? ''));
+        if ($location === '') {
+            $location = trim((string) ($row['requested_by_name'] ?? ''));
+        }
+        if ($location === '') {
+            $location = '—';
+        }
+
+        return [
+            'purchase_order_id' => (int) ($row['id'] ?? 0),
+            'po_number' => (string) ($row['po_number'] ?? ''),
+            'requisition_id' => isset($row['requisition_id']) ? (int) $row['requisition_id'] : null,
+            'location' => $location,
+            'payment_released_at' => $row['payment_released_at'] ?? null,
+        ];
+    }, $awaitingReceiptRows);
+
     echo json_encode([
         'success' => true,
         'summary' => [
@@ -254,6 +286,7 @@ try {
             'delivery' => ['in_transit' => $deliveryInTransit, 'pending_receiving' => $deliveryPendingReceiving],
         ],
         'recent_requisitions' => $recentRequisitions,
+        'awaiting_item_receipt' => $awaitingItemReceipt,
     ]);
 } catch (Exception $e) {
     echo json_encode([

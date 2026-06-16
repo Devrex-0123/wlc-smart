@@ -75,11 +75,22 @@ class AuthController {
         $this->ensureSessionStarted();
 
         $identifier = trim((string) $identifier);
+        $isEmail = str_contains($identifier, '@');
 
         $userModel = new User();
         $user = $userModel->findByUsername($identifier);
         if ($user) {
-            return $this->authenticateUser($user, $identifier, $password, $consentAccepted);
+            $loginKey = (string) ($user['Email'] ?? $identifier);
+
+            return $this->authenticateUser($user, $loginKey, $password, $consentAccepted);
+        }
+
+        if ($isEmail) {
+            return [
+                'success' => false,
+                'message' => 'Account does not exist',
+                'account_missing' => true,
+            ];
         }
 
         $departmentResult = $this->authenticateDepartment($identifier, $password, $consentAccepted);
@@ -185,6 +196,44 @@ class AuthController {
         ];
     }
 
+    private function applyDepartmentSessionFromUser(array $user): void {
+        $_SESSION['login_type'] = 'department';
+        $_SESSION['user_id'] = (int) $user['user_id'];
+        $_SESSION['user_email'] = $user['Email'];
+        $_SESSION['user_name'] = $user['full_name'] ?? 'Department';
+        $_SESSION['user_role'] = 'department';
+        $_SESSION['department_id'] = (int) ($user['department_id'] ?? 0);
+        $_SESSION['consent_version_current'] = CONSENT_VERSION;
+        $_SESSION['dashboard_url'] = $this->resolveDashboardUrl('department', false);
+        $_SESSION['has_consented'] = true;
+        $_SESSION['consent_required'] = false;
+
+        $_SESSION['department_name'] = null;
+        $_SESSION['department_abbreviation'] = null;
+        $_SESSION['department_type'] = null;
+
+        if ($_SESSION['department_id'] > 0) {
+            try {
+                $db = Database::connect();
+                $stmt = $db->prepare(
+                    'SELECT department_name, department_abbreviation, department_type
+                     FROM departments
+                     WHERE department_id = ?
+                     LIMIT 1'
+                );
+                $stmt->execute([$_SESSION['department_id']]);
+                $department = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($department) {
+                    $_SESSION['department_name'] = $department['department_name'];
+                    $_SESSION['department_abbreviation'] = $department['department_abbreviation'];
+                    $_SESSION['department_type'] = $department['department_type'];
+                }
+            } catch (Throwable $e) {
+                // Non-blocking metadata load.
+            }
+        }
+    }
+
     private function authenticateUser(array $user, string $email, $password, $consentAccepted) {
         $userModel = new User();
         $this->clearDepartmentSessionFlags();
@@ -255,6 +304,28 @@ class AuthController {
 
             $userModel->markLoginSuccess((int) $user['user_id']);
 
+            $roleNorm = strtolower(trim((string) ($user['role'] ?? 'employee')));
+
+            if ($roleNorm === 'department') {
+                $this->applyDepartmentSessionFromUser($user);
+
+                $rememberToken = bin2hex(random_bytes(32));
+                $userModel->updateRememberTokenByUserId((int) $user['user_id'], hash('sha256', $rememberToken));
+                $_SESSION['remember_token'] = $rememberToken;
+
+                if (!$hasConsented && $consentAccepted) {
+                    $userModel->updateConsent((int) $user['user_id'], CONSENT_VERSION);
+                }
+
+                return [
+                    'success' => true,
+                    'message' => 'Login successful',
+                    'role' => 'department',
+                    'login_type' => 'department',
+                    'consent_version' => CONSENT_VERSION,
+                ];
+            }
+
             $_SESSION['login_type'] = 'user';
             $_SESSION['user_id'] = $user['user_id'];
             $_SESSION['user_email'] = $user['Email'];
@@ -262,8 +333,7 @@ class AuthController {
             $_SESSION['user_role'] = strtolower(trim($user['role'] ?? 'employee'));
             $_SESSION['consent_version_current'] = CONSENT_VERSION;
 
-            $roleNorm = strtolower(trim((string) ($user['role'] ?? 'employee')));
-            $employeeLike = in_array($roleNorm, ['employee', 'laboratory manager', 'canvasser'], true);
+            $employeeLike = in_array($roleNorm, ['employee', 'user', 'laboratory manager', 'canvasser'], true);
             $canvasserWorkspace = $employeeLike;
 
             $_SESSION['dashboard_url'] = $this->resolveDashboardUrl($roleNorm, $canvasserWorkspace);

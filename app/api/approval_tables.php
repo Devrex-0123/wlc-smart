@@ -29,6 +29,50 @@ function ensureCanvassVerificationApprovalRow(PDO $db, int $requestId): void
     $st->execute([$requestId]);
 }
 
+function ensureCanvassVerificationCanvasSubmissionStatusColumn(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $colCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'canvass_verification_approval'
+           AND COLUMN_NAME = 'canvas_submission_status'"
+    );
+    $colCheck->execute();
+    if (((int) $colCheck->fetchColumn()) === 0) {
+        $db->exec(
+            "ALTER TABLE canvass_verification_approval
+             ADD COLUMN canvas_submission_status ENUM('draft', 'submitted') DEFAULT 'draft' AFTER pres_status"
+        );
+        $db->exec(
+            "UPDATE canvass_verification_approval
+             SET canvas_submission_status = 'submitted'
+             WHERE canvas_status = 'accept'
+                OR gsd_status IS NOT NULL
+                OR comp_status IS NOT NULL
+                OR pres_status IS NOT NULL"
+        );
+        $db->exec(
+            "UPDATE canvass_verification_approval
+             SET canvas_submission_status = 'draft'
+             WHERE canvas_status NOT IN ('accept', 'reject')
+               AND comp_status IS NULL
+               AND gsd_status IS NULL
+               AND pres_status IS NULL
+               AND checked_by IS NULL"
+        );
+        $db->exec(
+            'CREATE INDEX idx_canvass_submission_status
+             ON canvass_verification_approval (canvas_submission_status)'
+        );
+    }
+}
+
 function ensurePurchaseRequisitionApprovalRow(PDO $db, int $requestId): void
 {
     $st = $db->prepare('INSERT IGNORE INTO purchase_requisition_approval (request_id) VALUES (?)');
@@ -86,42 +130,16 @@ function ensureRequisitionCanvassSubmissionColumn(PDO $db): void
 
 function ensureRequisitionPreferredQuoteColumns(PDO $db): void
 {
+    // DEPRECATED: This function is no longer needed as of 2025-04-15
+    // The requisition_preferred_suppliers table has been completely eliminated
+    // See migration: 20260615_drop_requisition_preferred_suppliers_table.sql
+    // All preferred supplier data now uses only requisition_preferred_supplier_item table
     static $checked = false;
     if ($checked) {
         return;
     }
     $checked = true;
-
-    $db->exec(
-        'CREATE TABLE IF NOT EXISTS requisition_preferred_suppliers (
-            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            request_id INT NOT NULL,
-            supplier_id INT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
-    );
-
-    $quotedPricesCheck = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'requisition_preferred_suppliers'
-           AND COLUMN_NAME = 'quoted_prices'"
-    );
-    $quotedPricesCheck->execute();
-    if (((int) $quotedPricesCheck->fetchColumn()) === 0) {
-        $db->exec('ALTER TABLE requisition_preferred_suppliers ADD COLUMN quoted_prices TEXT NULL AFTER supplier_id');
-    }
-
-    $quotePhotosCheck = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'requisition_preferred_suppliers'
-           AND COLUMN_NAME = 'quote_photos'"
-    );
-    $quotePhotosCheck->execute();
-    if (((int) $quotePhotosCheck->fetchColumn()) === 0) {
-        $db->exec('ALTER TABLE requisition_preferred_suppliers ADD COLUMN quote_photos TEXT NULL AFTER quoted_prices');
-    }
+    // Do nothing - table no longer exists
 }
 
 function dropRequisitionCanvassDetailPhotoColumns(PDO $db): void
@@ -453,6 +471,10 @@ function ensurePurchaseOrderTables(PDO $db): void
             $db->exec("ALTER TABLE purchase_order_taxes {$ddl}");
         }
     }
+
+    require_once __DIR__ . '/../helpers/user_notifications.php';
+    cwirmsEnsurePoTaxStatusColumns($db);
+    ensureUserNotificationsTable($db);
 }
 
 function ensurePreferredSupplierItemQuotesTable(PDO $db): void
@@ -605,37 +627,11 @@ function cwirmsLoadPreferredSupplierQuoteMapsForRequest(PDO $db, int $requestId)
 
 function cwirmsSyncPreferredSupplierQuoteJsonColumns(PDO $db, int $requestId, int $supplierId): void
 {
-    ensureRequisitionPreferredQuoteColumns($db);
-    $stmt = $db->prepare(
-        'SELECT sort_order, price, quote_photo
-         FROM requisition_preferred_supplier_item
-         WHERE request_id = ? AND supplier_id = ?
-         ORDER BY sort_order ASC'
-    );
-    $stmt->execute([$requestId, $supplierId]);
-    $prices = [];
-    $photos = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $sortOrder = (int) ($row['sort_order'] ?? 0);
-        if ($sortOrder < 0) {
-            continue;
-        }
-        if (isset($row['price']) && $row['price'] !== null && $row['price'] !== '') {
-            $prices[(string) $sortOrder] = (string) $row['price'];
-        }
-        $photo = trim((string) ($row['quote_photo'] ?? ''));
-        if ($photo !== '') {
-            $photos[(string) $sortOrder] = $photo;
-        }
-    }
-    $encodedPrices = $prices === [] ? null : json_encode($prices);
-    $encodedPhotos = $photos === [] ? null : json_encode($photos);
-    $upd = $db->prepare(
-        'UPDATE requisition_preferred_suppliers
-         SET quoted_prices = ?, quote_photos = ?
-         WHERE request_id = ? AND supplier_id = ?'
-    );
-    $upd->execute([$encodedPrices, $encodedPhotos, $requestId, $supplierId]);
+    // DEPRECATED: This function is no longer needed as of 2025-04-15
+    // The requisition_preferred_suppliers table with JSON columns has been completely eliminated
+    // See migration: 20260615_drop_requisition_preferred_suppliers_table.sql
+    // Quote data is now stored directly in requisition_preferred_supplier_item table
+    // Do nothing - no synchronization needed
 }
 
 function cwirmsPreferredQuotedPriceForSortOrder(PDO $db, int $requestId, int $supplierId, int $sortOrder): ?string

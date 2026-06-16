@@ -80,7 +80,10 @@ function cwirmsPreferredSupplierIdSet(PDO $db, int $requestId): array
 {
     $set = [];
     try {
-        $stmt = $db->prepare('SELECT supplier_id FROM requisition_preferred_suppliers WHERE request_id = ?');
+        ensurePreferredSupplierItemQuotesTable($db);
+        $stmt = $db->prepare(
+            'SELECT DISTINCT supplier_id FROM requisition_preferred_supplier_item WHERE request_id = ?'
+        );
         $stmt->execute([$requestId]);
         while ($sid = $stmt->fetchColumn()) {
             $id = (int) $sid;
@@ -130,12 +133,16 @@ function cwirmsPreferredSupplierPhotosByRequest(PDO $db, int $requestId): array
 
 function cwirmsPreferredSupplierLinkExists(PDO $db, int $requestId, int $supplierId): bool
 {
-    $stmt = $db->prepare(
-        'SELECT 1 FROM requisition_preferred_suppliers WHERE request_id = ? AND supplier_id = ? LIMIT 1'
-    );
-    $stmt->execute([$requestId, $supplierId]);
-
-    return (bool) $stmt->fetchColumn();
+    try {
+        ensurePreferredSupplierItemQuotesTable($db);
+        $stmt = $db->prepare(
+            'SELECT 1 FROM requisition_preferred_supplier_item WHERE request_id = ? AND supplier_id = ? LIMIT 1'
+        );
+        $stmt->execute([$requestId, $supplierId]);
+        return (bool) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 function cwirmsUpdatePreferredSupplierQuotePhoto(
@@ -166,8 +173,6 @@ function cwirmsUpdatePreferredSupplierQuotePhoto(
         );
         $upd->execute([$requestId, $supplierId, $itemIndex]);
     }
-
-    cwirmsSyncPreferredSupplierQuoteJsonColumns($db, $requestId, $supplierId);
 }
 
 /**
@@ -271,8 +276,6 @@ function cwirmsPersistPreferredSupplierQuotes(PDO $db, int $requestId, array $pr
 
                 $upsert->execute([$requestId, $sid, $sortOrder, $priceVal, $photoVal]);
             }
-
-            cwirmsSyncPreferredSupplierQuoteJsonColumns($db, $requestId, $sid);
         }
 
         $db->commit();
@@ -942,45 +945,21 @@ try {
         if ($action === 'get_preferred') {
             require_once __DIR__ . '/../helpers/supplier.php';
             ensureSupplierTinColumn($db);
+            ensurePreferredSupplierItemQuotesTable($db);
 
             $requestId = (int) ($_GET['request_id'] ?? 0);
             if ($requestId <= 0) {
                 sendJson(['success' => false, 'message' => 'Invalid request id.']);
             }
             loadCanvassGetRequest($db, $requestId, $uid);
-            // Create junction table if missing (no shop_url stored here)
-            $db->exec(
-                'CREATE TABLE IF NOT EXISTS requisition_preferred_suppliers (
-                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                    request_id INT NOT NULL,
-                    supplier_id INT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
-            );
 
-            // Detect if suppliers table has a shop_url column; prefer storing shop_url on suppliers
-            $hasShopUrl = false;
-            try {
-                $colChk = $db->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'suppliers' AND COLUMN_NAME = 'shop_url'");
-                $colChk->execute();
-                $hasShopUrl = ((int) $colChk->fetchColumn()) > 0;
-            } catch (Throwable $e) {
-                $hasShopUrl = false;
-            }
-
-            $selectCols = 'rps.supplier_id, rps.quoted_prices, rps.quote_photos, ' . ($hasShopUrl ? 's.shop_url, ' : '') . 's.supplier_name, s.contact_person, s.phone_number, s.email, s.address, s.city, s.country, s.postal_code, s.tin, s.supplier_image, s.is_preferred, s.preferred_request_id';
-            $orderClause = 'ORDER BY rps.request_id ASC, rps.supplier_id ASC';
-            try {
-                $colChkId = $db->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'requisition_preferred_suppliers' AND COLUMN_NAME = 'id'");
-                $colChkId->execute();
-                if (((int) $colChkId->fetchColumn()) > 0) {
-                    $orderClause = 'ORDER BY rps.id ASC';
-                }
-            } catch (Throwable $e) {
-                // ignore and use fallback order
-            }
+            // Get all distinct preferred suppliers for this request from requisition_preferred_supplier_item
             $stmt = $db->prepare(
-                "SELECT {$selectCols} FROM requisition_preferred_suppliers rps LEFT JOIN suppliers s ON s.supplier_id = rps.supplier_id WHERE rps.request_id = ? {$orderClause}"
+                'SELECT DISTINCT rpsi.supplier_id, s.supplier_name, s.contact_person, s.phone_number, s.email, s.address, s.city, s.country, s.postal_code, s.tin, s.supplier_image, s.is_preferred, s.preferred_request_id, s.shop_url
+                 FROM requisition_preferred_supplier_item rpsi
+                 LEFT JOIN suppliers s ON s.supplier_id = rpsi.supplier_id
+                 WHERE rpsi.request_id = ?
+                 ORDER BY rpsi.supplier_id ASC'
             );
             $stmt->execute([$requestId]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -988,12 +967,15 @@ try {
             $out = [];
             foreach ($rows as $r) {
                 $sid = isset($r['supplier_id']) ? (int) $r['supplier_id'] : 0;
+                if ($sid <= 0) {
+                    continue;
+                }
                 $quoteEntry = $quoteMaps[$sid] ?? ['sort_orders' => [], 'prices' => [], 'photos' => []];
                 $quotedPrices = $quoteEntry['prices'];
                 $quotePhotos = $quoteEntry['photos'];
                 $quotedItemIndices = $quoteEntry['sort_orders'];
                 $out[] = [
-                    'supplier_id' => isset($r['supplier_id']) ? (int) $r['supplier_id'] : 0,
+                    'supplier_id' => $sid,
                     'supplier_name' => (string) ($r['supplier_name'] ?? ''),
                     'contact_person' => (string) ($r['contact_person'] ?? ''),
                     'phone_number' => (string) ($r['phone_number'] ?? ''),
@@ -1086,18 +1068,15 @@ try {
             }
             $newSid = (int) $db->lastInsertId();
 
-            // Ensure junction exists (no shop_url stored on junction)
-            $db->exec(
-                'CREATE TABLE IF NOT EXISTS requisition_preferred_suppliers (
-                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                    request_id INT NOT NULL,
-                    supplier_id INT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+            // Insert a placeholder row into requisition_preferred_supplier_item to mark supplier as preferred
+            // This allows the supplier to appear in the preferred list even before any quotes are added
+            ensurePreferredSupplierItemQuotesTable($db);
+            $placeholder = $db->prepare(
+                'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, price, quote_photo)
+                 VALUES (?, ?, ?, NULL, NULL)
+                 ON DUPLICATE KEY UPDATE created_at = created_at'
             );
-
-            $ins2 = $db->prepare('INSERT INTO requisition_preferred_suppliers (request_id, supplier_id) VALUES (?, ?)');
-            $ins2->execute([$requestId, $newSid]);
+            $placeholder->execute([$requestId, $newSid, -1]);
 
             // If suppliers table includes shop_url, persist it there
             try {
@@ -1193,8 +1172,6 @@ try {
                 'DELETE FROM requisition_preferred_supplier_item WHERE request_id = ? AND supplier_id = ?'
             );
             $delItems->execute([$requestId, $supplierId]);
-            $del = $db->prepare('DELETE FROM requisition_preferred_suppliers WHERE request_id = ? AND supplier_id = ?');
-            $del->execute([$requestId, $supplierId]);
             sendJson(['success' => true, 'message' => 'Preferred supplier removed.']);
         }
 
@@ -1213,22 +1190,24 @@ try {
             if (!$sel->fetch(PDO::FETCH_ASSOC)) {
                 sendJson(['success' => false, 'message' => 'Supplier not found.']);
             }
-            // create junction table if missing
-            $db->exec(
-                'CREATE TABLE IF NOT EXISTS requisition_preferred_suppliers (
-                    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                    request_id INT NOT NULL,
-                    supplier_id INT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+            
+            ensurePreferredSupplierItemQuotesTable($db);
+            
+            // Check if supplier is already linked (has ANY row in requisition_preferred_supplier_item)
+            $dupChk = $db->prepare(
+                'SELECT 1 FROM requisition_preferred_supplier_item WHERE request_id = ? AND supplier_id = ? LIMIT 1'
             );
-            $dupChk = $db->prepare('SELECT 1 FROM requisition_preferred_suppliers WHERE request_id = ? AND supplier_id = ? LIMIT 1');
             $dupChk->execute([$requestId, $supplierId]);
             if ($dupChk->fetchColumn()) {
                 sendJson(['success' => false, 'message' => 'This supplier is already added.', 'already_added' => true]);
             }
-            $ins = $db->prepare('INSERT INTO requisition_preferred_suppliers (request_id, supplier_id) VALUES (?, ?)');
-            $ins->execute([$requestId, $supplierId]);
+            
+            // Insert a placeholder row to mark supplier as preferred
+            $ins = $db->prepare(
+                'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, price, quote_photo)
+                 VALUES (?, ?, ?, NULL, NULL)'
+            );
+            $ins->execute([$requestId, $supplierId, -1]);
             sendJson(['success' => true, 'message' => 'Preferred supplier added.']);
         }
 

@@ -116,6 +116,90 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+const PURCHASE_ORDER_API = '../../app/api/purchase_order.php';
+
+function formatPoDateTime(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function renderAwaitingItemReceipt(items = []) {
+  const list = document.getElementById('awaitingItemReceiptList');
+  if (!list) return;
+
+  if (!items.length) {
+    list.innerHTML = '<li class="dashboard-recent__empty">No purchase orders awaiting item receipt.</li>';
+    return;
+  }
+
+  list.innerHTML = items
+    .map((item) => {
+      const poNumber = escapeHtml(String(item.po_number || '—'));
+      const location = escapeHtml(String(item.location || '—'));
+      const released = escapeHtml(formatPoDateTime(item.payment_released_at));
+      const poId = Number(item.purchase_order_id || 0);
+
+      return `
+        <li class="dashboard-recent__item dashboard-awaiting-receipt__item">
+          <span class="dashboard-recent__icon dashboard-recent__icon--delivery" aria-hidden="true">
+            <i class="fas fa-box-open"></i>
+          </span>
+          <div class="dashboard-recent__body">
+            <p class="dashboard-recent__title">${poNumber}</p>
+            <p class="dashboard-recent__meta">${location} · Payment released ${released}</p>
+          </div>
+          <button type="button" class="dashboard-awaiting-receipt__btn" data-po-id="${poId}">
+            <i class="fas fa-circle-check" aria-hidden="true"></i> Mark items received
+          </button>
+        </li>
+      `;
+    })
+    .join('');
+
+  list.querySelectorAll('.dashboard-awaiting-receipt__btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      void handleMarkItemsReceivedDashboard(btn);
+    });
+  });
+}
+
+async function handleMarkItemsReceivedDashboard(btn) {
+  const poId = Number(btn.getAttribute('data-po-id') || 0);
+  if (poId <= 0) return;
+
+  const ok = window.confirm('Confirm the items for this PO have been received?');
+  if (!ok) return;
+
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Saving…';
+
+  try {
+    const body = new URLSearchParams();
+    body.append('action', 'mark_items_received');
+    body.append('purchase_order_id', String(poId));
+
+    const res = await fetch(PURCHASE_ORDER_API, {
+      method: 'POST',
+      credentials: 'include',
+      body,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Could not mark items as received.');
+    }
+
+    await loadDashboardSummary();
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    window.alert(err instanceof Error ? err.message : 'Could not mark items as received.');
+  }
+}
+
 async function loadDashboardSummary() {
   try {
     const res = await fetch('../../app/api/get_dashboard_summary.php', { credentials: 'include' });
@@ -124,6 +208,7 @@ async function loadDashboardSummary() {
       applySummary(data.summary || {});
       applyPipeline(data.pipeline || {});
       renderRecentRequisitions(data.recent_requisitions || []);
+      renderAwaitingItemReceipt(data.awaiting_item_receipt || []);
       return;
     }
   } catch (err) {
@@ -133,6 +218,7 @@ async function loadDashboardSummary() {
   applySummary({});
   applyPipeline({});
   renderRecentRequisitions([]);
+  renderAwaitingItemReceipt([]);
 }
 
 document.addEventListener('DOMContentLoaded', loadDashboardSummary);

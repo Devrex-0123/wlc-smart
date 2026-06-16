@@ -17,7 +17,7 @@ $rspBackAriaLabel = ($progressPageFrom === 'status') ? 'Back to Status list' : '
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Requisition Progress - IMRMS</title>
     <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc44">
-    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css?v=wlc11">
+    <link rel="stylesheet" href="../assets/css/requisition_status_progress.css?v=wlc12">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -26,7 +26,7 @@ $rspBackAriaLabel = ($progressPageFrom === 'status') ? 'Back to Status list' : '
 <?php require __DIR__ . '/partials/dean_sidebar.php'; ?>
 
 <main class="main-content">
-    <div id="rspRoot" data-readonly="1" data-dean-flow="1" data-back-href="<?php echo htmlspecialchars($rspProgressBackHref, ENT_QUOTES, 'UTF-8'); ?>" data-back-aria-label="<?php echo htmlspecialchars($rspBackAriaLabel, ENT_QUOTES, 'UTF-8'); ?>" data-progress-from="<?php echo htmlspecialchars($progressPageFrom, ENT_QUOTES, 'UTF-8'); ?>"></div>
+    <div id="rspRoot" data-readonly="1" data-dean-flow="1" data-user-id="<?php echo (int) $_SESSION['user_id']; ?>" data-back-href="<?php echo htmlspecialchars($rspProgressBackHref, ENT_QUOTES, 'UTF-8'); ?>" data-back-aria-label="<?php echo htmlspecialchars($rspBackAriaLabel, ENT_QUOTES, 'UTF-8'); ?>" data-progress-from="<?php echo htmlspecialchars($progressPageFrom, ENT_QUOTES, 'UTF-8'); ?>"></div>
 </main>
 
 <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>

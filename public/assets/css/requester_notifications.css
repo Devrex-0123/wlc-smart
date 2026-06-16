@@ -1,0 +1,194 @@
+/* Requester notification bell — dean dashboard header + notifications page */
+
+.requester-notifications {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.requester-notifications-bell {
+    position: relative;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #16a34a;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.requester-notifications-bell:hover {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.requester-notifications-badge {
+    position: absolute;
+    top: -0.25rem;
+    right: -0.25rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.25rem;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.requester-notifications-panel {
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    right: 0;
+    width: min(22rem, calc(100vw - 2rem));
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+    z-index: 1200;
+    overflow: hidden;
+}
+
+.requester-notifications-panel-header {
+    padding: 0.75rem 0.9rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.requester-notifications-panel-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #1e293b;
+}
+
+.requester-notifications-list {
+    max-height: 18rem;
+    overflow-y: auto;
+}
+
+.requester-notification-item {
+    width: 100%;
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+    text-align: left;
+    padding: 0.75rem 0.9rem;
+    border: none;
+    border-bottom: 1px solid #e5e7eb;
+    background: #ffffff;
+    cursor: pointer;
+}
+
+.requester-notification-item.is-unread {
+    background: #ecfdf5;
+}
+
+.requester-notification-item:hover {
+    background: #f8fafc;
+}
+
+.requester-notification-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #16a34a;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.requester-notification-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.requester-notification-message {
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: #1e293b;
+}
+
+.requester-notification-message strong {
+    font-weight: 700;
+}
+
+.requester-notification-secondary {
+    font-size: 0.76rem;
+    color: #64748b;
+}
+
+.requester-notifications-empty {
+    margin: 0;
+    padding: 1rem 0.9rem;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.requester-notifications-panel-footer {
+    padding: 0.65rem 0.9rem;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+}
+
+.requester-notifications-view-all {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #16a34a;
+    text-decoration: none;
+}
+
+.requester-notifications-view-all:hover {
+    text-decoration: underline;
+}
+
+.dashboard-welcome--with-bell .dashboard-welcome__row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.dashboard-welcome--with-bell .dashboard-welcome__copy {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.dashboard-welcome--with-bell .dashboard-welcome__subtitle {
+    margin-bottom: 0;
+}
+
+.notifications-page-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.notifications-page-item {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+}
+
+.notifications-page-item.is-unread {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+}
+
+.notifications-page-item.is-read {
+    opacity: 0.92;
+}
