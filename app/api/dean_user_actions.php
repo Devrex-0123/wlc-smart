@@ -3,32 +3,12 @@ session_start();
 header('Content-Type: application/json');
 
 require_once __DIR__.'/../classes/db.php';
-
-if(!isset($_SESSION['user_id'])){
-    echo json_encode(['success'=>false,'message'=>'Unauthorized']);
-    exit;
-}
+require_once __DIR__ . '/../helpers/dean_office_context.php';
 
 $db = Database::connect();
-
-// Get current user (Dean)
-$stmt = $db->prepare("SELECT * FROM user WHERE user_id = ?");
-$stmt->execute([$_SESSION['user_id']]);
-$currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
-
-// Deans and GSD officers may manage users in their own office
-$actorRoleLc = strtolower(trim((string) ($currentUser['role'] ?? '')));
-if ($actorRoleLc !== 'dean' && $actorRoleLc !== 'gsd officer') {
-    echo json_encode(['success'=>false,'message'=>'You do not have access to this action']);
-    exit;
-}
-
-$deanOfficeId = $currentUser['office_id'];
-
-if (!$deanOfficeId) {
-    echo json_encode(['success'=>false,'message'=>'You are not assigned to any office']);
-    exit;
-}
+$deanApiCtx = cwirms_dean_api_require_context($db);
+$deanOfficeId = (int) $deanApiCtx['office_id'];
+$actorUserId = cwirms_dean_api_actor_user_id($deanApiCtx);
 
 // Handle profile photo upload
 function handlePhotoUpload($existingPhoto = null) {
@@ -119,7 +99,9 @@ try {
             }
         }
 
-        logActivity($_SESSION['user_id'], "Delete Office User", "Deleted user: {$userToDelete['Email']} from " . htmlspecialchars($_POST['dept_name'] ?? 'office'));
+        if ($actorUserId > 0) {
+            logActivity($actorUserId, "Delete Office User", "Deleted user: {$userToDelete['Email']} from " . htmlspecialchars($_POST['dept_name'] ?? 'office'));
+        }
         echo json_encode(['success'=>true,'message'=>'User deleted successfully']);
         exit;
     }
@@ -157,11 +139,15 @@ try {
             $hashed = password_hash($password, PASSWORD_BCRYPT);
             $stmt = $db->prepare("UPDATE user SET Email=?, password=?, role=?, photo_url=? WHERE user_id=?");
             $stmt->execute([$email, $hashed, $role, $newPhoto, $user_id]);
-            logActivity($_SESSION['user_id'], "Edit Office User", "Updated user ($oldEmail) → Email/Password/Role/Photo changed.");
+            if ($actorUserId > 0) {
+                logActivity($actorUserId, "Edit Office User", "Updated user ($oldEmail) → Email/Password/Role/Photo changed.");
+            }
         } else {
             $stmt = $db->prepare("UPDATE user SET Email=?, role=?, photo_url=? WHERE user_id=?");
             $stmt->execute([$email, $role, $newPhoto, $user_id]);
-            logActivity($_SESSION['user_id'], "Edit Office User", "Updated user ($oldEmail) → Email/Role/Photo changed.");
+            if ($actorUserId > 0) {
+                logActivity($actorUserId, "Edit Office User", "Updated user ($oldEmail) → Email/Role/Photo changed.");
+            }
         }
 
         echo json_encode(['success'=>true,'message'=>'User updated successfully']);
@@ -196,7 +182,9 @@ try {
         $stmt = $db->prepare("INSERT INTO user (Email,password,role,office_id,photo_url,created_at) VALUES (?,?,?,?,?,NOW())");
         $stmt->execute([$email, $hashed, $role, $deanOfficeId, $photoPath]);
 
-        logActivity($_SESSION['user_id'], "Add Office User", "Created new user: $email in their office");
+        if ($actorUserId > 0) {
+            logActivity($actorUserId, "Add Office User", "Created new user: $email in their office");
+        }
         echo json_encode(['success'=>true,'message'=>'User added successfully']);
         exit;
     }

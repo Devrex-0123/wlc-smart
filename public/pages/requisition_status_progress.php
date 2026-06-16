@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 
 if (!isset($_SESSION['user_id'])) {
@@ -69,3 +69,4 @@ if ($isComptroller) {
 <script src="../assets/js/requisition_status_progress.js?v=wlc12"></script>
 </body>
 </html>
+

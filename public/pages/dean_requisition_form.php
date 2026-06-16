@@ -1,17 +1,6 @@
 <?php
-session_start();
-
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../../index.php');
-    exit;
-}
-
-require_once __DIR__ . '/../../app/classes/db.php';
+require_once __DIR__ . '/partials/requisition_workspace_page_context.php';
 require_once __DIR__ . '/../../app/api/requisition_detail_payload.php';
-$db = Database::connect();
-$stmt = $db->prepare('SELECT u.*, d.`office_name` AS office_name FROM user u LEFT JOIN offices d ON d.office_id = u.office_id WHERE u.user_id = ?');
-$stmt->execute([$_SESSION['user_id']]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 $displayName = trim((string)($user['full_name'] ?? ''));
 if ($displayName === '') {
@@ -19,6 +8,12 @@ if ($displayName === '') {
 }
 $userEmail = trim((string)($user['Email'] ?? ''));
 $userContact = trim((string)($user['contact_number'] ?? ''));
+$unitsStmt = $db->query('SELECT unit_name, unit_abbreviation FROM units ORDER BY unit_name ASC');
+$unitsRows = $unitsStmt ? $unitsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+$unitsJson = json_encode(array_map(fn($r) => [
+    'value' => strtolower($r['unit_name']),
+    'label' => $r['unit_name'] . ' (' . $r['unit_abbreviation'] . ')',
+], $unitsRows));
 $from = $_GET['from'] ?? '';
 $progressFrom = trim((string) ($_GET['progress_from'] ?? ''));
 $viewOnly = isset($_GET['view']) && (string)$_GET['view'] === '1';
@@ -61,7 +56,25 @@ $canShowPurchaseRequisitionLink = $viewingRequest
     );
 
 $backUrl = 'dean_requisition_management.php';
-if ($from === 'progress' && $viewRequestId > 0) {
+if ($isDepartmentLogin) {
+    if ($from === 'progress' && $viewRequestId > 0) {
+        $progressQs = 'rid=' . $viewRequestId;
+        if ($progressFrom === 'status') {
+            $progressQs .= '&from=status';
+        } elseif ($progressFrom === 'workflow') {
+            $progressQs .= '&from=workflow';
+        } else {
+            $progressQs .= '&from=management';
+        }
+        $backUrl = 'department_requisition_status_progress.php?' . $progressQs;
+    } elseif ($from === 'department_requisition') {
+        $backUrl = 'department_requisition_management.php';
+    } elseif ($from === 'department_workflow') {
+        $backUrl = 'department_approval_workflow.php';
+    } elseif ($from === 'dashboard') {
+        $backUrl = 'dean_dashboard.php';
+    }
+} elseif (($from === 'progress' || $from === 'dean') && $viewRequestId > 0) {
     $progressQs = 'rid=' . $viewRequestId . ($progressFrom === 'status' ? '&from=status' : '');
     if ($isInventoryManager || $isComptroller) {
         $backUrl = 'requisition_status_progress.php?' . $progressQs;
@@ -168,7 +181,7 @@ if ($viewingRequest && $viewRequestId > 0) {
                 <img src="../assets/images/western-letye-logo.jpg" alt="College Logo" class="requisition-logo" />
             </div>
         </div>
-        <?php if ($rfRequestId > 0): ?>
+        <?php if ($rfRequestId > 0 && !$isInventoryManagerActiveReview): ?>
         <nav class="req-breadcrumb" aria-label="Request context">
             <div class="req-breadcrumb-track">
                 <span class="req-breadcrumb-pill req-breadcrumb-pill--id">Request #<?php echo (int) $rfRequestId; ?></span>
@@ -201,14 +214,14 @@ if ($viewingRequest && $viewRequestId > 0) {
             <div class="requisition-info requisition-meta-grid">
                 <div class="field-group">
                     <label for="requesterName">Requester name</label>
-                    <input type="text" id="requesterName" value="<?php echo htmlspecialchars($displayName); ?>" disabled>
+                    <input type="text" id="requesterName" value="">
                 </div>
                 <div class="field-group">
-                    <label for="facultyRole">Faculty / staff role</label>
-                    <input type="text" id="facultyRole" value="<?php echo htmlspecialchars($user['role'] ?? ''); ?>" disabled>
+                    <label for="facultyRole">Role</label>
+                    <input type="text" id="facultyRole" value="Requester" disabled>
                 </div>
                 <div class="field-group field-group--facility">
-                    <label for="facilitySelect">Office / facility location</label>
+                    <label for="facilitySelect">Location</label>
                     <select id="facilitySelect">
                         <option value="">Select location</option>
                     </select>
@@ -221,11 +234,11 @@ if ($viewingRequest && $viewRequestId > 0) {
                 </div>
                 <div class="field-group">
                     <label for="requesterEmail">Email address</label>
-                    <input type="email" id="requesterEmail" value="<?php echo htmlspecialchars($userEmail); ?>" disabled>
+                    <input type="email" id="requesterEmail" value="" placeholder="email@example.com">
                 </div>
                 <div class="field-group">
                     <label for="requesterContact">Contact number</label>
-                    <input type="text" id="requesterContact" value="<?php echo htmlspecialchars($userContact); ?>" placeholder="0917 123 4567" disabled>
+                    <input type="text" id="requesterContact" value="" placeholder="09XXXXXXXXX" maxlength="11" pattern="\d{11}" inputmode="numeric">
                 </div>
                 <div class="field-group field-group--date">
                     <label for="requestDate">Date needed</label>
@@ -279,8 +292,15 @@ if ($viewingRequest && $viewRequestId > 0) {
 
                 <div class="rf-section-note-block">
                     <div class="field-group field-group--note">
-                        <label for="requestMessage">Note / Message</label>
-                        <textarea id="requestMessage" rows="3" placeholder="Add note or message here... (use this for urgent/immediate requests)"></textarea>
+                        <label for="requestMessage">Note from requester <span style="font-weight:400;color:#94a3b8;font-size:0.8em;">(optional)</span></label>
+                        <textarea id="requestMessage" rows="3" placeholder="Add any notes or special instructions for this request..."></textarea>
+                    </div>
+                    <div id="rfMessageCallout" class="rf-message-callout" hidden>
+                        <span class="rf-message-callout__icon" aria-hidden="true"><i class="fas fa-circle-exclamation"></i></span>
+                        <div class="rf-message-callout__body">
+                            <strong class="rf-message-callout__title">Note from requester</strong>
+                            <p id="rfMessageCalloutText" class="rf-message-callout__text"></p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -325,17 +345,26 @@ if ($viewingRequest && $viewRequestId > 0) {
         </div>
         <?php endif; ?>
         <?php if ($isInventoryManagerActiveReview || $isComptrollerActiveReview || $isGsdActiveReview || $isPresidentActiveReview): ?>
-        <div class="comptroller-approve-wrapper verifier-decision-bar rf-form-actions">
-            <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> <?php echo $isInventoryManagerActiveReview ? 'Accept requisition' : 'Approve'; ?></button>
-            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
-            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
+        <div class="rf-action-card">
+            <div class="rf-action-card__head">
+                <span class="rf-action-card__label">ACTION</span>
+            </div>
+            <p class="rf-action-card__desc">Add a remark (optional) then approve or reject this request.</p>
+            <div class="rf-action-card__body">
+                <textarea id="inventoryRejectReason" class="rf-action-card__textarea" rows="3" placeholder="Add remark or reason..."></textarea>
+                <div class="rf-action-card__btns">
+                    <button type="button" id="comptrollerApproveBtn" class="rf-action-btn rf-action-btn--approve">
+                        <i class="fas fa-circle-check" aria-hidden="true"></i> <?php echo $isInventoryManagerActiveReview ? 'Accept' : 'Approve'; ?>
+                    </button>
+                    <button type="button" id="comptrollerRejectBtn" class="rf-action-btn rf-action-btn--reject">
+                        <i class="fas fa-circle-xmark" aria-hidden="true"></i> Reject
+                    </button>
+                    <button type="button" id="comptrollerUndoBtn" class="rf-action-btn rf-action-btn--undo" style="display:none;">
+                        <i class="fas fa-rotate-left" aria-hidden="true"></i> Undo
+                    </button>
+                </div>
+            </div>
         </div>
-        <?php if ($isInventoryManagerActiveReview): ?>
-        <div class="note-group">
-            <label for="inventoryRejectReason" class="note-label">Rejection note (required when rejecting)</label>
-            <textarea id="inventoryRejectReason" rows="2" placeholder="Add reason if requisition is rejected..."></textarea>
-        </div>
-        <?php endif; ?>
         <?php endif; ?>
 
     </div>
@@ -402,6 +431,7 @@ window.IMRMS_REQ_FORM_CONFIG = <?php echo json_encode([
     'canvassBannerEligible' => (bool) $canvassBannerEligible,
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS); ?>;
 </script>
+<script>window.RF_UNITS = <?= $unitsJson ?>;</script>
 <script src="../assets/js/requisition_form.js"></script>
 </body>
 </html>

@@ -428,9 +428,42 @@ document.addEventListener("DOMContentLoaded", function () {
             // SUCCESS + TRUST THE SERVER FOR REDIRECT
             // =========================================================
             if (result.success) {
-                // ✅ Use the dashboard_url from the server (AuthController)
-                // ✅ Fallback to default dashboard if server doesn't provide one
-                const redirectUrl = result.dashboard_url || "index.php";
+                const role = (result.role || '').toLowerCase().trim();
+                const loginType = (result.login_type || 'user').toLowerCase().trim();
+                let redirectUrl = result.dashboard_url || '';
+
+                if (!redirectUrl) {
+                    redirectUrl = "public/pages/dashboard.php";
+
+                    if (loginType === 'department' || role === 'department') {
+                        redirectUrl = "public/pages/dean_dashboard.php";
+                    } else if (role === "dean" || role === "user") {
+                        redirectUrl = "public/pages/dean_dashboard.php";
+                    } else if (
+                        role === "employee" ||
+                        role === "laboratory manager" ||
+                        role === "canvasser"
+                    ) {
+                        if (result.canvasser_workspace) {
+                            redirectUrl = "public/pages/canvasser_dashboard.php";
+                        } else {
+                            redirectUrl = "public/pages/employee_dashboard.php";
+                        }
+                    } else if (role === "inventory_manager" || role === "inventory manager") {
+                        redirectUrl = "public/pages/dashboard.php";
+                    } else if (role === "comptroller") {
+                        redirectUrl = "public/pages/comptroller_dashboard.php";
+                    } else if (role === "gsd officer") {
+                        redirectUrl = "public/pages/gsd_dashboard.php";
+                    } else if (
+                        role === "president" ||
+                        role === "president verifier" ||
+                        role === "verifier president" ||
+                        role === "president_verifier"
+                    ) {
+                        redirectUrl = "public/pages/president_dashboard.php";
+                    }
+                }
 
                 // Hide the login modal so only the loading screen shows.
                 const loginModalEl = document.getElementById("loginModal");

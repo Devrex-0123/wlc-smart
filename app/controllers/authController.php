@@ -27,10 +27,12 @@ class AuthController {
     private function resolveDashboardUrl($roleNorm, $canvasserWorkspace) {
         switch ($roleNorm) {
             case 'department':
+                return 'public/pages/department_dashboard.php';
             case 'dean':
                 return 'public/pages/dean_dashboard.php';
-            case 'employee':
             case 'user':
+                return 'public/pages/dean_dashboard.php';
+            case 'employee':
             case 'laboratory manager':
             case 'canvasser':
                 return $canvasserWorkspace
@@ -76,7 +78,7 @@ class AuthController {
         $isEmail = str_contains($identifier, '@');
 
         $userModel = new User();
-        $user = $userModel->findByEmail($identifier);
+        $user = $userModel->findByUsername($identifier);
         if ($user) {
             $loginKey = (string) ($user['Email'] ?? $identifier);
 
@@ -98,9 +100,8 @@ class AuthController {
 
         return [
             'success' => false,
-            'message' => 'Invalid username or password',
-            'attempts' => 1,
-            'remaining' => $this->maxAttempts - 1,
+            'message' => 'Account does not exist',
+            'account_missing' => true,
         ];
     }
 

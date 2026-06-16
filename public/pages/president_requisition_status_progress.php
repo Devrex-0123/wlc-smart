@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 session_start();
 
 if (!isset($_SESSION['user_id'])) {
@@ -29,7 +29,7 @@ $rspBackAriaLabel = 'Back to Requisition Management';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Requisition Progress — President — IMRMS</title>
+    <title>Requisition Progress â€” President â€” IMRMS</title>
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="../assets/css/requisition_status_progress.css?v=wlc12">
     <link rel="stylesheet" href="../assets/css/president_verifier.css">
@@ -51,3 +51,4 @@ $rspBackAriaLabel = 'Back to Requisition Management';
 <script src="../assets/js/requisition_status_progress.js?v=wlc12"></script>
 </body>
 </html>
+

@@ -1,40 +1,7 @@
 <?php
-session_start();
-if (!isset($_SESSION['user_id'])) {
-    header("Location: ../../index.php");
-    exit;
-}
+require_once __DIR__ . '/partials/dean_page_context.php';
 
-require_once __DIR__ . '/../../app/classes/db.php';
-
-$db = Database::connect();
-
-// Get current user (Dean)
-$stmt = $db->prepare("SELECT * FROM user WHERE user_id = ?");
-$stmt->execute([$_SESSION['user_id']]);
-$currentUser = $stmt->fetch(PDO::FETCH_ASSOC);
-
-// Check if user is a Dean
-if (strtolower($currentUser['role']) !== 'dean') {
-    header("Location: dashboard.php");
-    exit;
-}
-
-// Get dean's office
-$deanOfficeId = $currentUser['office_id'];
-
-if (!$deanOfficeId) {
-    echo "Dean is not assigned to any office.";
-    exit;
-}
-
-// Get office name
-$stmt = $db->prepare("SELECT `office_name` FROM offices WHERE office_id = ?");
-$stmt->execute([$deanOfficeId]);
-$dept = $stmt->fetch(PDO::FETCH_ASSOC);
-$deptName = $dept['office_name'] ?? 'Unknown Office';
-
-$initials = strtoupper(substr($currentUser['Email'], 0, 1));
+$initials = strtoupper(substr($currentUser['Email'] ?? 'D', 0, 1));
 ?>
 <!DOCTYPE html>
 <html lang="en">

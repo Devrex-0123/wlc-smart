@@ -1,17 +1,5 @@
-<?php
-session_start();
-
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../../index.php');
-    exit;
-}
-
-require_once __DIR__ . '/../../app/classes/db.php';
-
-$db = Database::connect();
-$stmt = $db->prepare('SELECT * FROM user WHERE user_id = ?');
-$stmt->execute([$_SESSION['user_id']]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
+﻿<?php
+require_once __DIR__ . '/partials/dean_page_context.php';
 
 $username = trim((string)($user['full_name'] ?? ''));
 if ($username === '') {
@@ -48,3 +36,4 @@ $rspBackAriaLabel = ($progressPageFrom === 'status') ? 'Back to Status list' : '
 <script src="../assets/js/requisition_status_progress.js?v=wlc12"></script>
 </body>
 </html>
+

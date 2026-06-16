@@ -15,6 +15,13 @@ class User {
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
+    public function findByUsername($username) {
+        $sql = "SELECT * FROM `user` WHERE LOWER(Email) = LOWER(?) LIMIT 1";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$username]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
     public function findById($userId) {
         $sql = "SELECT * FROM `user` WHERE user_id = ? LIMIT 1";
         $stmt = $this->db->prepare($sql);

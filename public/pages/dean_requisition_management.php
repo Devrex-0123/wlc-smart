@@ -1,32 +1,14 @@
 <?php
-session_start();
-
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../../index.php');
-    exit;
-}
-
-require_once __DIR__ . '/../../app/classes/db.php';
-
-$db = Database::connect();
-$stmt = $db->prepare('SELECT * FROM user WHERE user_id = ?');
-$stmt->execute([$_SESSION['user_id']]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-$username = trim((string)($user['full_name'] ?? ''));
-if ($username === '') {
-    $username = explode('@', (string)($user['Email'] ?? ''))[0] ?? 'Dean';
-}
-$initials = strtoupper(substr($user['Email'] ?? 'D', 0, 1));
+require_once __DIR__ . '/partials/dean_page_context.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dean Requisition Management</title>
+    <title>Requisition Management - Dean</title>
     <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc34">
-    <link rel="stylesheet" href="../assets/css/dean_requisition_management.css">
+    <link rel="stylesheet" href="../assets/css/dean_requisition_management.css?v=wlc56">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -34,83 +16,96 @@ $initials = strtoupper(substr($user['Email'] ?? 'D', 0, 1));
 <body>
 <?php require __DIR__ . '/partials/dean_sidebar.php'; ?>
 
-<main class="main-content">
-    <div class="page-header management-header">
-        <div>
-            <h1>Requisition Management</h1>
-            <p>Track your requests and manage them.</p>
+<main class="main-content requisition-management-container" data-req-scope="management">
+    <div class="req-page-header">
+        <div class="req-page-header__text">
+            <h1 class="req-page-header__title">Requisition Management</h1>
+            <p class="req-page-header__subtitle">Track your requests and manage them.</p>
         </div>
-        <button class="btn-green" onclick="window.location.href='dean_requisition_form.php?from=requisition';">
-            <i class="fas fa-plus"></i> New Requisition
-        </button>
-    </div>
-
-    <div class="summary-grid">
-        <div class="summary-card">
-            <p>Total Requests</p>
-            <h3 id="totalCount">0</h3>
-        </div>
-        <div class="summary-card">
-            <p>Pending</p>
-            <h3 id="pendingCount">0</h3>
-        </div>
-        <div class="summary-card">
-            <p>Ongoing</p>
-            <h3 id="ongoingCount">0</h3>
-        </div>
-        <div class="summary-card">
-            <p>Completed</p>
-            <h3 id="completedCount">0</h3>
-        </div>
-    </div>
-
-    <div class="filter-section">
-        <h3>Requisition Requests</h3>
-        <div class="filter-controls">
-            <div class="search-container">
+        <div class="req-page-header__actions">
+            <div class="search-container req-page-header__search">
                 <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" class="search-input" placeholder="Search request no, item, or supplier...">
+                <input type="text" id="searchInput" class="search-input" placeholder="Search" aria-label="Search requisitions">
             </div>
-            <select id="statusFilter" class="sort-dropdown">
-                <option value="all">All Status</option>
-                <option value="Pending">Pending</option>
-                <option value="Ongoing">Ongoing</option>
-                <option value="Completed">Completed</option>
-            </select>
-            <select id="sortDropdown" class="sort-dropdown">
-                <option value="">Sort By</option>
-                <option value="entry-desc">Entry No. (Newest First)</option>
-                <option value="entry-asc">Entry No. (Oldest First)</option>
-            </select>
+            <button type="button" class="btn-green" onclick="window.location.href='dean_requisition_form.php?from=requisition';">
+                <i class="fas fa-plus"></i> New Requisition
+            </button>
         </div>
     </div>
+
+    <section class="req-summary-stats" aria-label="Requisition summary">
+        <article class="req-summary-card req-summary-card--total">
+            <div class="req-summary-card__head">
+                <span class="req-summary-card__badge" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
+                <span class="req-summary-card__label">Total Requests</span>
+            </div>
+            <p class="req-summary-card__value" id="totalCount">0</p>
+            <p class="req-summary-card__meta">All requisition requests.</p>
+        </article>
+        <article class="req-summary-card req-summary-card--pending">
+            <div class="req-summary-card__head">
+                <span class="req-summary-card__badge" aria-hidden="true"><i class="fas fa-hourglass-half"></i></span>
+                <span class="req-summary-card__label">Pending</span>
+            </div>
+            <p class="req-summary-card__value" id="pendingCount">0</p>
+            <p class="req-summary-card__meta">Requests currently awaiting approval.</p>
+        </article>
+        <article class="req-summary-card req-summary-card--completed">
+            <div class="req-summary-card__head">
+                <span class="req-summary-card__badge" aria-hidden="true"><i class="fas fa-spinner"></i></span>
+                <span class="req-summary-card__label">Ongoing</span>
+            </div>
+            <p class="req-summary-card__value" id="ongoingCount">0</p>
+            <p class="req-summary-card__meta">Requests currently in progress.</p>
+        </article>
+        <article class="req-summary-card req-summary-card--rejected">
+            <div class="req-summary-card__head">
+                <span class="req-summary-card__badge" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+                <span class="req-summary-card__label">Completed</span>
+            </div>
+            <p class="req-summary-card__value" id="completedCount">0</p>
+            <p class="req-summary-card__meta">Requests that completed all workflow stages.</p>
+        </article>
+    </section>
 
     <div class="table-container">
-        <div class="table-wrapper">
-            <table>
+<div class="table-wrapper">
+            <table class="req-management-table">
+                <colgroup>
+                    <col style="width:4%">
+                    <col style="width:14%">
+                    <col style="width:11%">
+                    <col style="width:26%">
+                    <col style="width:10%">
+                    <col style="width:11%">
+                    <col style="width:24%">
+                </colgroup>
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Request No.</th>
-                        <th>Date</th>
-                        <th>Items</th>
-                        <th>Suppliers</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th scope="col">#</th>
+                        <th scope="col">Request No.</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Items</th>
+                        <th scope="col">Suppliers</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="requestTableBody"></tbody>
             </table>
         </div>
-        <div class="pagination-controls">
-            <button id="prevReqBtn" class="pagination-btn" disabled>
-                <i class="fas fa-chevron-left"></i> Previous
-            </button>
-            <span id="reqPageInfo" class="page-info">Page 1</span>
-            <button id="nextReqBtn" class="pagination-btn" disabled>
-                Next <i class="fas fa-chevron-right"></i>
-            </button>
-        </div>
+        <footer class="table-panel-footer" id="reqPagination" aria-label="Requisition list pages">
+            <p class="table-panel-footer__info" id="reqPageInfo">Showing 0 to 0 of 0 entries</p>
+            <div class="table-panel-footer__pagination">
+                <button type="button" class="table-panel-footer__page-btn" id="prevReqBtn" disabled aria-label="Previous page">
+                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                </button>
+                <span class="table-panel-footer__page-num" id="reqPageNum">1</span>
+                <button type="button" class="table-panel-footer__page-btn" id="nextReqBtn" disabled aria-label="Next page">
+                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                </button>
+            </div>
+        </footer>
     </div>
 </main>
 
@@ -132,6 +127,6 @@ $initials = strtoupper(substr($user['Email'] ?? 'D', 0, 1));
 
 <?php require __DIR__ . '/partials/dean_sidebar_scripts.php'; ?>
 <script src="../assets/js/logout.js?v=wlc2"></script>
-<script src="../assets/js/dean_requisition_management.js"></script>
+<script src="../assets/js/dean_requisition_management.js?v=wlc57"></script>
 </body>
 </html>

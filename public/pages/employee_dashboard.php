@@ -10,10 +10,10 @@ if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_role'])) {
 
 // Redirect non-employees to appropriate dashboard
 $role = strtolower(trim($_SESSION['user_role']));
-if ($role === 'dean') {
+if ($role === 'dean' || $role === 'user') {
     header("Location: dean_dashboard.php");
     exit;
-} elseif ($role !== 'employee' && $role !== 'user' && $role !== 'laboratory manager') {
+} elseif ($role !== 'employee' && $role !== 'laboratory manager') {
     header("Location: dashboard.php");
     exit;
 }

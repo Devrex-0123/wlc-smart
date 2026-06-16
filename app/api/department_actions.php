@@ -114,13 +114,18 @@ try {
     $action = trim((string) ($_POST['action'] ?? ''));
 
     if ($action === 'add') {
-        $name = trim((string) ($_POST['department_name'] ?? ''));
+        $name        = trim((string) ($_POST['department_name'] ?? ''));
         $abbreviation = strtoupper(trim((string) ($_POST['department_abbreviation'] ?? '')));
-        $type = normalizeDepartmentType($_POST['department_type'] ?? '');
-        $status = normalizeDepartmentStatus($_POST['department_status'] ?? 'Active') ?? 'Active';
-        $username = trim((string) ($_POST['department_username'] ?? ''));
-        $password = (string) ($_POST['department_password'] ?? '');
+        $type        = normalizeDepartmentType($_POST['department_type'] ?? '');
+        $statusRaw   = normalizeDepartmentStatus($_POST['department_status'] ?? 'Active') ?? 'Active';
+        $username    = trim((string) ($_POST['department_username'] ?? ''));
+        $password    = (string) ($_POST['department_password'] ?? '');
         $confirmPassword = (string) ($_POST['department_confirm_password'] ?? '');
+        $officeIdRaw = (int) ($_POST['department_office_id'] ?? 0);
+        $officeId    = $officeIdRaw > 0 ? $officeIdRaw : null;
+
+        // Map department status to user table account_status values
+        $accountStatus = (strtolower($statusRaw) === 'active') ? 'active' : 'disabled';
 
         if ($name === '') {
             echo json_encode(['success' => false, 'message' => 'Department name is required']);
@@ -131,7 +136,7 @@ try {
             exit;
         }
         if ($abbreviation === '') {
-            echo json_encode(['success' => false, 'message' => 'Department abbreviation is required']);
+            echo json_encode(['success' => false, 'message' => 'Abbreviation is required']);
             exit;
         }
         if (strlen($abbreviation) > 20) {
@@ -168,68 +173,152 @@ try {
             exit;
         }
 
-        $stmtUserDup = $db->prepare('SELECT department_id FROM departments WHERE department_username = ? LIMIT 1');
-        $stmtUserDup->execute([$username]);
-        if ($stmtUserDup->fetch(PDO::FETCH_ASSOC)) {
+        // Check for duplicate username (Email) in user table
+        $stmtDup = $db->prepare('SELECT user_id FROM user WHERE Email = ? LIMIT 1');
+        $stmtDup->execute([$username]);
+        if ($stmtDup->fetch(PDO::FETCH_ASSOC)) {
             echo json_encode(['success' => false, 'message' => 'That username is already in use']);
             exit;
         }
 
-        $stmtDup = $db->prepare('SELECT department_id FROM departments WHERE department_abbreviation = ? LIMIT 1');
-        $stmtDup->execute([$abbreviation]);
-        if ($stmtDup->fetch(PDO::FETCH_ASSOC)) {
-            echo json_encode(['success' => false, 'message' => 'That abbreviation is already in use']);
-            exit;
-        }
-
-        $stmtName = $db->prepare('SELECT department_id FROM departments WHERE department_name = ? LIMIT 1');
-        $stmtName->execute([$name]);
-        if ($stmtName->fetch(PDO::FETCH_ASSOC)) {
-            echo json_encode(['success' => false, 'message' => 'A department with this name already exists']);
-            exit;
-        }
-
         $passwordHash = password_hash($password, PASSWORD_BCRYPT);
-        $photoUrl = handleDepartmentPhotoUpload();
-        $hasPhotoColumn = departmentsHasPhotoColumn($db);
 
-        if ($hasPhotoColumn) {
-            $stmt = $db->prepare(
-                'INSERT INTO departments (
-                    department_name, department_abbreviation, department_type,
-                    department_username, department_password_hash, department_photo_url, department_status
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?)'
-            );
-            $stmt->execute([$name, $abbreviation, $type, $username, $passwordHash, $photoUrl, $status]);
-        } else {
-            $stmt = $db->prepare(
-                'INSERT INTO departments (
-                    department_name, department_abbreviation, department_type,
-                    department_username, department_password_hash, department_status
-                 ) VALUES (?, ?, ?, ?, ?, ?)'
-            );
-            $stmt->execute([$name, $abbreviation, $type, $username, $passwordHash, $status]);
-        }
-        $departmentId = (int) $db->lastInsertId();
+        $stmt = $db->prepare('
+            INSERT INTO user (
+                Email, password, role, full_name, abbreviation, department_type,
+                account_status, office_id, photo_url, contact_number,
+                has_consented, consent_version, consent_date,
+                last_login, failed_attempts, lock_time, remember_token,
+                password_updated_at, created_at, updated_at, deleted_at
+            ) VALUES (
+                ?, ?, \'User\', ?, ?, ?,
+                ?, ?, NULL, NULL,
+                0, NULL, NULL,
+                NULL, 0, NULL, NULL,
+                NOW(), NOW(), NOW(), NULL
+            )
+        ');
+        $stmt->execute([
+            $username,
+            $passwordHash,
+            $name,
+            $abbreviation,
+            $type,
+            $accountStatus,
+            $officeId,
+        ]);
+        $newUserId = (int) $db->lastInsertId();
 
         logActivity(
             $_SESSION['user_id'],
             'Add Department',
-            "Added department: $name ($abbreviation)"
+            "Added department account: $name ($abbreviation) — user #$newUserId"
         );
 
         echo json_encode([
             'success' => true,
-            'message' => 'Department added successfully.',
-            'department_id' => $departmentId,
+            'message' => 'Department account created successfully.',
+            'user_id'  => $newUserId,
         ]);
+        exit;
+    }
+
+    if ($action === 'edit_user_dept') {
+        $userId       = (int) ($_POST['department_id'] ?? 0);
+        $name         = trim((string) ($_POST['department_name'] ?? ''));
+        $abbreviation = strtoupper(trim((string) ($_POST['department_abbreviation'] ?? '')));
+        $type         = normalizeDepartmentType($_POST['department_type'] ?? '');
+        $statusRaw    = normalizeDepartmentStatus($_POST['department_status'] ?? 'Active') ?? 'Active';
+        $username     = trim((string) ($_POST['department_username'] ?? ''));
+        $password     = (string) ($_POST['department_password'] ?? '');
+        $confirmPassword = (string) ($_POST['department_confirm_password'] ?? '');
+        $officeIdRaw  = (int) ($_POST['department_office_id'] ?? 0);
+        $officeId     = $officeIdRaw > 0 ? $officeIdRaw : null;
+        $accountStatus = (strtolower($statusRaw) === 'active') ? 'active' : 'disabled';
+
+        if ($userId <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid account']);
+            exit;
+        }
+        if ($name === '') {
+            echo json_encode(['success' => false, 'message' => 'Department name is required']);
+            exit;
+        }
+        if ($abbreviation === '') {
+            echo json_encode(['success' => false, 'message' => 'Abbreviation is required']);
+            exit;
+        }
+        if (!preg_match('/^[A-Z0-9\-_]+$/', $abbreviation)) {
+            echo json_encode(['success' => false, 'message' => 'Abbreviation may only contain letters, numbers, hyphens, and underscores']);
+            exit;
+        }
+        if ($type === null) {
+            echo json_encode(['success' => false, 'message' => 'Valid department type is required']);
+            exit;
+        }
+        if ($username === '') {
+            echo json_encode(['success' => false, 'message' => 'Username is required']);
+            exit;
+        }
+        if (!preg_match('/^[A-Za-z0-9._-]+$/', $username)) {
+            echo json_encode(['success' => false, 'message' => 'Username may only contain letters, numbers, dots, hyphens, and underscores']);
+            exit;
+        }
+
+        // Duplicate username check (exclude current user)
+        $stmtDup = $db->prepare('SELECT user_id FROM user WHERE Email = ? AND user_id <> ? LIMIT 1');
+        $stmtDup->execute([$username, $userId]);
+        if ($stmtDup->fetch(PDO::FETCH_ASSOC)) {
+            echo json_encode(['success' => false, 'message' => 'That username is already in use']);
+            exit;
+        }
+
+        // Verify account exists and is a 'user' role
+        $stmtChk = $db->prepare("SELECT full_name FROM user WHERE user_id = ? AND LOWER(TRIM(role)) = 'user' LIMIT 1");
+        $stmtChk->execute([$userId]);
+        $existing = $stmtChk->fetch(PDO::FETCH_ASSOC);
+        if (!$existing) {
+            echo json_encode(['success' => false, 'message' => 'Department account not found']);
+            exit;
+        }
+        $oldName = $existing['full_name'];
+
+        $stmtUpd = $db->prepare('
+            UPDATE user SET full_name=?, abbreviation=?, department_type=?, Email=?,
+                            account_status=?, office_id=?, updated_at=NOW()
+            WHERE user_id=?
+        ');
+        $stmtUpd->execute([$name, $abbreviation, $type, $username, $accountStatus, $officeId, $userId]);
+
+        if ($password !== '' || $confirmPassword !== '') {
+            $passwordError = validateDepartmentPassword($password);
+            if ($passwordError !== null) {
+                echo json_encode(['success' => false, 'message' => $passwordError]);
+                exit;
+            }
+            if ($password !== $confirmPassword) {
+                echo json_encode(['success' => false, 'message' => 'Passwords do not match']);
+                exit;
+            }
+            $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+            $db->prepare('UPDATE user SET password=?, password_updated_at=NOW() WHERE user_id=?')
+               ->execute([$passwordHash, $userId]);
+        }
+
+        logActivity(
+            $_SESSION['user_id'],
+            'Edit Department',
+            "Updated department account: {$oldName} → {$name} ({$abbreviation})"
+        );
+
+        echo json_encode(['success' => true, 'message' => 'Department account updated successfully.']);
         exit;
     }
 
     if ($action === 'edit') {
         $departmentId = (int) ($_POST['department_id'] ?? 0);
         $name = trim((string) ($_POST['department_name'] ?? ''));
-        $abbreviation = strtoupper(trim((string) ($_POST['department_abbreviation'] ?? ''));
+        $abbreviation = strtoupper(trim((string) ($_POST['department_abbreviation'] ?? '')));
         $type = normalizeDepartmentType($_POST['department_type'] ?? '');
         $status = normalizeDepartmentStatus($_POST['department_status'] ?? 'Active') ?? 'Active';
         $username = trim((string) ($_POST['department_username'] ?? ''));

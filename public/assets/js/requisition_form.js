@@ -188,6 +188,12 @@ function getDetailViewApiUrl(requestId) {
     return `${base}?action=get_request_detail_view&request_id=${encodeURIComponent(String(requestId))}`;
 }
 
+function getBootstrapApiUrl() {
+    return formPageConfig.detailApi === 'admin'
+        ? '../../app/api/admin_requisition.php?action=bootstrap'
+        : '../../app/api/dean_requisition.php?action=bootstrap';
+}
+
 function approvalStepIsAccept(value) {
     return String(value || '').trim().toLowerCase() === 'accept';
 }
@@ -1321,6 +1327,19 @@ async function initInventoryReviewActions(requestId) {
     }
 }
 
+function showMessageCallout(msg) {
+    const callout = document.getElementById('rfMessageCallout');
+    const calloutText = document.getElementById('rfMessageCalloutText');
+    if (!callout || !calloutText) return;
+    const trimmed = (msg || '').trim();
+    if (trimmed) {
+        calloutText.textContent = trimmed;
+        callout.hidden = false;
+    } else {
+        callout.hidden = true;
+    }
+}
+
 function applyViewOnlyMode() {
     state.viewOnly = true;
     const card = document.querySelector('.requisition-card');
@@ -1330,7 +1349,7 @@ function applyViewOnlyMode() {
     officeSelect.disabled = true;
     facilitySelect.disabled = true;
     requestDateInput.disabled = true;
-    requestMessageInput.disabled = true;
+    if (requestMessageInput) requestMessageInput.disabled = true;
     if (requestPurposeInput) {
         requestPurposeInput.disabled = true;
     }
@@ -1425,7 +1444,7 @@ function resetFormToDefault() {
     if (supplierDropdown) {
         supplierDropdown.classList.remove('open');
     }
-    requestMessageInput.value = '';
+    if (requestMessageInput) requestMessageInput.value = '';
     if (requestPurposeInput) {
         requestPurposeInput.value = '';
     }
@@ -1477,11 +1496,9 @@ function serializeRequestedItemsForApi() {
 
 function buildUnitSelect(index, selectedValue, disabled) {
     const current = String(selectedValue || 'piece');
-    const units = [
-        { value: 'piece', label: 'Piece' },
-        { value: 'unit', label: 'Unit' },
-        { value: 'set', label: 'Set' },
-    ];
+    const units = (window.RF_UNITS && window.RF_UNITS.length)
+        ? window.RF_UNITS
+        : [{ value: 'piece', label: 'Piece' }, { value: 'unit', label: 'Unit' }, { value: 'set', label: 'Set' }];
     const options = units
         .map((unit) => {
             const selected = unit.value === current ? ' selected' : '';
@@ -1936,7 +1953,7 @@ function removeItemAt(index) {
 }
 
 async function loadBootstrapData() {
-    const response = await fetch('../../app/api/dean_requisition.php?action=bootstrap', { credentials: 'include' });
+    const response = await fetch(getBootstrapApiUrl(), { credentials: 'include' });
     const data = await response.json();
 
     if (!data.success) {
@@ -1982,7 +1999,8 @@ async function loadRequestForEdit(requestId) {
     facilitySelect.value = String(data.facility_id);
     requestDateInput.value = data.request_date || requestDateInput.value;
     state.defaultDate = requestDateInput.value;
-    requestMessageInput.value = data.message || '';
+    if (requestMessageInput) requestMessageInput.value = data.message || '';
+    showMessageCallout(data.message || '');
     if (requestPurposeInput) {
         requestPurposeInput.value = data.purpose || '';
     }
@@ -2054,7 +2072,8 @@ async function loadRequestForView(requestId) {
     }
     requestDateInput.value = data.request_date || requestDateInput.value;
     state.defaultDate = requestDateInput.value;
-    requestMessageInput.value = data.message || '';
+    if (requestMessageInput) requestMessageInput.value = data.message || '';
+    showMessageCallout(data.message || '');
     if (requestPurposeInput) {
         requestPurposeInput.value = data.purpose || '';
     }
@@ -2064,6 +2083,14 @@ async function loadRequestForView(requestId) {
     }
     if (data.requester_role != null && data.requester_role !== '' && facultyRoleInput) {
         facultyRoleInput.value = data.requester_role;
+    }
+    const requesterEmailInput = document.getElementById('requesterEmail');
+    if (data.requester_email != null && data.requester_email !== '' && requesterEmailInput) {
+        requesterEmailInput.value = data.requester_email;
+    }
+    const requesterContactInput = document.getElementById('requesterContact');
+    if (data.requester_contact != null && data.requester_contact !== '' && requesterContactInput) {
+        requesterContactInput.value = data.requester_contact;
     }
 
     state.requestedItems = asObjectArray(data.items).map((it) => normalizeRequestedItem(it));
@@ -2128,6 +2155,14 @@ officeSelect.addEventListener('change', () => {
         });
     }
 });
+
+const requesterContactField = document.getElementById('requesterContact');
+if (requesterContactField) {
+    requesterContactField.addEventListener('input', () => {
+        const digits = requesterContactField.value.replace(/\D/g, '').slice(0, 11);
+        requesterContactField.value = digits;
+    });
+}
 
 if (rfAddItemBtn) {
     rfAddItemBtn.addEventListener('click', (event) => {
@@ -2371,7 +2406,7 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
     payload.append('office_id', officeSelect.value);
     payload.append('facility_id', facilitySelect.value);
     payload.append('request_date', requestDateInput.value);
-    payload.append('message', requestMessageInput.value.trim());
+    payload.append('message', requestMessageInput ? requestMessageInput.value.trim() : '');
     payload.append('purpose', requestPurposeInput.value.trim());
     payload.append('urgent_note', '');
     payload.append('items', JSON.stringify(itemsToSubmit));
@@ -2398,76 +2433,17 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
 });
 }
 
-async function saveRequisitionDraft() {
-    if (formPageConfig.isComptrollerView || formPageConfig.isCanvasserView || formPageConfig.isInventoryManagerView || formPageConfig.isGsdView) {
-        showToast('You cannot save draft from this view.', 'error');
-        return false;
-    }
 
-    if (state.viewOnly) {
-        return false;
-    }
-
-    if (!officeSelect.value || !facilitySelect.value || !requestDateInput.value) {
-        showToast('Please set office, location, and date before saving.', 'error');
-        return false;
-    }
-
-    const isEdit = state.editRequestId != null;
-    const payload = new URLSearchParams();
-    payload.append('action', 'save_draft');
-    if (isEdit) {
-        payload.append('request_id', String(state.editRequestId));
-    }
-    payload.append('office_id', officeSelect.value);
-    payload.append('facility_id', facilitySelect.value);
-    payload.append('request_date', requestDateInput.value);
-    payload.append('message', requestMessageInput.value.trim());
-    payload.append('purpose', requestPurposeInput.value.trim());
-    payload.append('urgent_note', '');
-    payload.append('items', JSON.stringify(serializeRequestedItemsForApi()));
-    payload.append('suppliers', JSON.stringify(state.selectedSuppliers));
-
-    try {
-        const response = await fetch('../../app/api/dean_requisition.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: payload.toString(),
-            credentials: 'include'
-        });
-        const result = await response.json();
-        if (!result.success) {
-            showToast(result.message || 'Failed to save draft.', 'error');
-            return false;
-        }
-        showToast('Form saved as draft. You can edit it later.');
-        if (result.request_id) {
-            state.editRequestId = result.request_id;
-            setSubmitRequisitionBtnLabel('Update & Submit Request');
-        }
-        state.hasUnsavedChanges = false;
-        return true;
-    } catch (error) {
-        showToast('Save draft error. Please try again.', 'error');
-        return false;
-    }
-}
-
-// Close / cancel navigation with optional draft save
 async function handleRequisitionFormExit(event) {
     if (!state.viewOnly && state.hasUnsavedChanges) {
         event.preventDefault();
-        const confirmed = await showConfirmModal('Do you want to save the changes as draft?\n\nYes: Save as draft\nNo: Discard changes');
+        const confirmed = await showConfirmModal('Discard changes and cancel?');
         if (confirmed) {
-            const saved = await saveRequisitionDraft();
-            if (saved) {
-                if (event.currentTarget && event.currentTarget.href) {
-                    window.location.href = event.currentTarget.href;
-                } else {
-                    window.history.back();
-                }
+            if (event.currentTarget && event.currentTarget.href) {
+                window.location.href = event.currentTarget.href;
+            } else {
+                window.history.back();
             }
-            return;
         }
     }
 }

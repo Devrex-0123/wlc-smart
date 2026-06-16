@@ -8,6 +8,7 @@ const FORM_VIEWS_PREFIX = 'imrms_form_views_';
 const ADMIN_API = '../../app/api/admin_requisition.php';
 const ADMIN_LIST_API = '../../app/api/admin_requisition.php?action=list_requests';
 const DEAN_LIST_API = '../../app/api/dean_requisition.php?action=list_requests';
+const DEPARTMENT_LIST_API = '../../app/api/department_requisition.php?action=list_requests';
 const PRESIDENT_LIST_API = '../../app/api/president/requests.php?action=list_requests';
 const COMPTROLLER_LIST_API = '../../app/api/comptroller.php?action=list_requests';
 const PURCHASE_ORDER_API = '../../app/api/purchase_order.php';
@@ -64,6 +65,7 @@ function readRootConfig(root) {
             backHref: 'requisition_management.php',
             backAriaLabel: 'Back',
             deanFlow: false,
+            departmentFlow: false,
             progressFrom: '',
             viewer: '',
             userId: 0,
@@ -73,10 +75,11 @@ function readRootConfig(root) {
     const backHref = root.dataset.backHref || 'requisition_management.php';
     const backAriaLabel = root.dataset.backAriaLabel || 'Back';
     const deanFlow = root.dataset.deanFlow === '1' || root.dataset.deanFlow === 'true';
+    const departmentFlow = root.dataset.departmentFlow === '1' || root.dataset.departmentFlow === 'true';
     const progressFrom = root.dataset.progressFrom || '';
     const viewer = root.dataset.viewer || '';
     const userId = parseInt(root.dataset.userId || '0', 10) || 0;
-    return { readonly, backHref, backAriaLabel, deanFlow, progressFrom, viewer, userId };
+    return { readonly, backHref, backAriaLabel, deanFlow, departmentFlow, progressFrom, viewer, userId };
 }
 
 function loadRecord(requestId) {
@@ -138,9 +141,9 @@ function pctFromCurrentIndex(currentIndex) {
     if (currentIndex == null) {
         return 100;
     }
-    // Fill through the current milestone (index is 0-based); matches 10 evenly spaced steps.
+    // Fill up to the current milestone's circle (not past it to the next step).
     const n = STEP_DEFS.length;
-    return Math.max(0, Math.min(100, Math.round(((currentIndex + 1) / n) * 100)));
+    return Math.max(0, Math.min(100, Math.round((currentIndex / n) * 100)));
 }
 
 /** Inventory manager has accepted the initial requisition (requester may open canvass sheet). */
@@ -442,6 +445,28 @@ function getStepState(record) {
     return { currentIndex: idx, pct, fillPct: pct };
 }
 
+async function refreshDepartmentProgressRecordFromApi(requestId) {
+    try {
+        const res = await fetch(DEPARTMENT_LIST_API, { credentials: 'include' });
+        const data = await res.json();
+        if (!data.success || !Array.isArray(data.requests)) {
+            return null;
+        }
+        const fresh = data.requests.find((r) => Number(r.request_id) === Number(requestId));
+        if (!fresh) {
+            return null;
+        }
+        try {
+            sessionStorage.setItem(STORAGE_PREFIX + String(requestId), JSON.stringify(fresh));
+        } catch {
+            /* ignore */
+        }
+        return fresh;
+    } catch {
+        return null;
+    }
+}
+
 async function refreshDeanProgressRecordFromApi(requestId) {
     try {
         const res = await fetch(DEAN_LIST_API, { credentials: 'include' });
@@ -621,7 +646,7 @@ function renderApp(root, record, config) {
         `;
     }).join('');
 
-    const progressSubtitle = config.deanFlow
+    const progressSubtitle = config.departmentFlow || config.deanFlow
         ? 'View-only workflow for your request (you cannot change status here).'
         : 'Track the current status and approval progress of this requisition.';
 
@@ -642,7 +667,12 @@ function renderApp(root, record, config) {
                     <p id="rspStatusMsg" class="rsp-status-msg" role="status"></p>
                 </div>`;
 
-    const progressFromParam = config.progressFrom === 'status' ? '&progress_from=status' : '';
+    const progressFromParam =
+        config.progressFrom === 'status' ||
+        config.progressFrom === 'workflow' ||
+        config.progressFrom === 'management'
+            ? '&progress_from=' + encodeURIComponent(config.progressFrom)
+            : '';
     const reqNum = numericRequestId(record);
     let requisitionFormFrom = 'progress';
     if (config.viewer === 'president') {
@@ -651,6 +681,8 @@ function renderApp(root, record, config) {
         requisitionFormFrom = 'inventory';
     } else if (config.viewer === 'comptroller') {
         requisitionFormFrom = 'comptroller';
+    } else if (config.deanFlow && !config.departmentFlow) {
+        requisitionFormFrom = 'dean';
     }
     const formHref =
         reqNum != null
@@ -667,6 +699,10 @@ function renderApp(root, record, config) {
         canvassFromParam = '&from=comptroller';
     } else if (config.viewer === 'president') {
         canvassFromParam = '&from=president';
+    } else if (config.departmentFlow) {
+        canvassFromParam = '&from=department';
+    } else if (config.deanFlow) {
+        canvassFromParam = '&from=dean';
     }
     const canvassHref =
         reqNum != null
@@ -682,7 +718,7 @@ function renderApp(root, record, config) {
         purchaseFromParam = 'comptroller';
     } else if (config.viewer === 'president') {
         purchaseFromParam = 'president';
-    } else if (config.deanFlow) {
+    } else if (config.deanFlow || config.departmentFlow) {
         purchaseFromParam = 'progress';
     }
     const purchaseHref =
@@ -767,7 +803,7 @@ function renderApp(root, record, config) {
                             <h2 class="rsp-page-title">Requisition Progress</h2>
                             <p class="rsp-page-subtitle">${esc(progressSubtitle)}</p>
                         </div>
-                        <a href="${esc(config.backHref)}" class="rsp-back rsp-back-card" aria-label="${esc(config.backAriaLabel)}"><i class="fas fa-arrow-left"></i> Back</a>
+                        <a href="${esc(config.backHref)}" class="rsp-back rsp-back-card" aria-label="${esc(config.backAriaLabel)}"><i class="fas fa-chevron-left"></i> ${esc(config.backAriaLabel)}</a>
                     </div>
                 </div>
                 <div class="rsp-hero-top">
@@ -992,7 +1028,12 @@ async function initProgressView() {
     }
 
     let record = loadRecord(rid);
-    if (config.deanFlow) {
+    if (config.departmentFlow) {
+        const fresh = await refreshDepartmentProgressRecordFromApi(rid);
+        if (fresh) {
+            record = fresh;
+        }
+    } else if (config.deanFlow) {
         const fresh = await refreshDeanProgressRecordFromApi(rid);
         if (fresh) {
             record = fresh;

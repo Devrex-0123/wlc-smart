@@ -120,6 +120,73 @@ try {
     ensureRequisitionCanvassSubmissionColumn($db);
     $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
+    if ($action === 'bootstrap') {
+        assertRequestDetailViewAuth($db);
+        $sessionUid = (int) $_SESSION['user_id'];
+        $userStmt = $db->prepare(
+            'SELECT u.user_id, u.Email, u.role, u.office_id, d.office_name AS office_name
+             FROM user u
+             LEFT JOIN offices d ON d.office_id = u.office_id
+             WHERE u.user_id = ?'
+        );
+        $userStmt->execute([$sessionUid]);
+        $bootstrapUser = $userStmt->fetch(PDO::FETCH_ASSOC) ?: [
+            'user_id' => $sessionUid,
+            'Email' => '',
+            'role' => '',
+            'office_id' => null,
+            'office_name' => '',
+        ];
+
+        $deptStmt = $db->query('SELECT office_id, office_name AS office_name FROM offices ORDER BY office_name ASC');
+        $offices = $deptStmt ? $deptStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+        $facStmt = $db->query(
+            'SELECT facility_id, office_id, building, room, laboratory, code
+             FROM facilities ORDER BY building ASC, room ASC'
+        );
+        $facilities = $facStmt ? $facStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+        $newFacilityIds = [];
+        $newFacStmt = $db->query('SELECT facility_id FROM facilities WHERE date_created >= DATE_SUB(NOW(), INTERVAL 7 DAY)');
+        if ($newFacStmt) {
+            foreach ($newFacStmt->fetchAll(PDO::FETCH_COLUMN) as $nfId) {
+                $newFacilityIds[] = (int) $nfId;
+            }
+        }
+        foreach ($facilities as &$facility) {
+            $facility['is_new'] = in_array((int) $facility['facility_id'], $newFacilityIds, true);
+        }
+        unset($facility);
+
+        $supplierStmt = $db->query(
+            'SELECT supplier_id, supplier_name, supplier_image, contact_person, phone_number, email, address, city, country, postal_code
+             FROM suppliers ORDER BY supplier_name ASC'
+        );
+        $suppliers = $supplierStmt ? $supplierStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+        try {
+            $itemStmt = $db->query('SELECT item_id, item_name, brand, model, category FROM items ORDER BY item_name ASC');
+            $items = $itemStmt ? $itemStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        } catch (Throwable $e) {
+            $itemStmt = $db->query('SELECT item_id, item_name, brand, category FROM items ORDER BY item_name ASC');
+            $items = $itemStmt ? $itemStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+            foreach ($items as &$itRow) {
+                $itRow['model'] = null;
+            }
+            unset($itRow);
+        }
+
+        sendJson([
+            'success' => true,
+            'user' => $bootstrapUser,
+            'offices' => $offices,
+            'facilities' => $facilities,
+            'suppliers' => $suppliers,
+            'items' => $items,
+        ]);
+    }
+
     if ($action === 'get_request_detail_view') {
         assertRequestDetailViewAuth($db);
         $requestId = (int)($_GET['request_id'] ?? 0);
@@ -155,12 +222,14 @@ try {
 
         requisitionAttachApprovalToPayload($db, $requestId, $payload);
 
-        $ownerStmt = $db->prepare('SELECT Email, role FROM user WHERE user_id = ?');
+        $ownerStmt = $db->prepare('SELECT Email, role, contact_number FROM user WHERE user_id = ?');
         $ownerStmt->execute([(int) $anchor['user_id']]);
         $owner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
         $emailOwn = (string) ($owner['Email'] ?? '');
         $payload['requester_display'] = $emailOwn !== '' ? (explode('@', $emailOwn)[0] ?? '—') : '—';
         $payload['requester_role'] = (string) ($owner['role'] ?? '');
+        $payload['requester_email'] = $emailOwn;
+        $payload['requester_contact'] = (string) ($owner['contact_number'] ?? '');
         sendJson($payload);
     }
 

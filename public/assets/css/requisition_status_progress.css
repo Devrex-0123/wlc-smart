@@ -24,21 +24,18 @@
 .rsp-back {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.85rem;
-    border-radius: 10px;
-    border: 1px solid var(--rsp-border);
-    background: #f0fdf4;
+    gap: 0.35rem;
+    padding: 0;
+    border: none;
+    background: transparent;
     color: #166534;
     font-weight: 600;
     font-size: 0.9rem;
     text-decoration: none;
-    transition: background 0.2s, border-color 0.2s, color 0.2s;
+    transition: color 0.2s;
 }
 
 .rsp-back:hover {
-    background: #dcfce7;
-    border-color: #bbf7d0;
     color: #14532d;
 }
 

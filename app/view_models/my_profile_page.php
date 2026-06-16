@@ -102,7 +102,15 @@ function my_profile_nav_items_for_role(string $roleLc): array
         return $byExactRole[$roleLc];
     }
 
-    if (in_array($roleLc, ['employee', 'user', 'laboratory manager'], true)) {
+    if ($roleLc === 'user') {
+        return [
+            ['href' => 'dean_dashboard.php', 'icon' => 'fa-home', 'label' => 'Dashboard'],
+            ['href' => 'audit_trail.php', 'icon' => 'fa-shield-alt', 'label' => 'Audit Trail'],
+            $myProfile,
+        ];
+    }
+
+    if (in_array($roleLc, ['employee', 'laboratory manager'], true)) {
         return [
             ['href' => 'employee_dashboard.php', 'icon' => 'fa-home', 'label' => 'Dashboard'],
             ['href' => 'audit_trail.php', 'icon' => 'fa-shield-alt', 'label' => 'Audit Trail'],

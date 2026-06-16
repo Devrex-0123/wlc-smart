@@ -1,7 +1,5 @@
 const requestTableBody = document.getElementById('requestTableBody');
 const searchInput = document.getElementById('searchInput');
-const statusFilter = document.getElementById('statusFilter');
-const sortDropdown = document.getElementById('sortDropdown');
 const totalCount = document.getElementById('totalCount');
 const pendingCount = document.getElementById('pendingCount');
 const ongoingCount = document.getElementById('ongoingCount');
@@ -21,9 +19,14 @@ const sidebar = document.getElementById('sidebar');
 const REQ_PROGRESS_KEY = 'imrms_req_progress_';
 const REQ_VIEWS_PREFIX = 'imrms_request_views_';
 
+const reqContainer = document.querySelector('.requisition-management-container');
+const reqScope = reqContainer?.dataset.reqScope || 'management';
+const COL_COUNT = reqScope === 'workflow' ? 6 : 7;
+
 let requests = [];
 const reqPerPage = 5;
 let currentReqPage = 1;
+let activeStatusFilter = 'all';
 
 /** Get timestamp when request was last viewed */
 function getRequestViewedTime(requestId) {
@@ -55,9 +58,7 @@ function isRequestUnviewed(requestId) {
 function isRequestChanged(record) {
     if (!record || record.request_id == null) return false;
     const viewedTime = getRequestViewedTime(record.request_id);
-    if (viewedTime === null) return false; // Unviewed, doesn't matter if changed
-    
-    // Check if request has updated_at timestamp and if it's newer than view time
+    if (viewedTime === null) return false;
     if (record.updated_at) {
         const updatedTime = new Date(record.updated_at).getTime();
         return updatedTime > viewedTime;
@@ -128,10 +129,10 @@ function openConfirm(message) {
 }
 
 function updateStats(data) {
-    totalCount.textContent = data.length;
-    pendingCount.textContent = data.filter((r) => r.status === 'Pending').length;
-    ongoingCount.textContent = data.filter((r) => r.status === 'Ongoing').length;
-    completedCount.textContent = data.filter((r) => r.status === 'Completed').length;
+    if (totalCount) totalCount.textContent = data.length;
+    if (pendingCount) pendingCount.textContent = data.filter((r) => r.status === 'Pending').length;
+    if (ongoingCount) ongoingCount.textContent = data.filter((r) => r.status === 'Ongoing').length;
+    if (completedCount) completedCount.textContent = data.filter((r) => r.status === 'Completed').length;
 }
 
 function statusClass(status) {
@@ -140,55 +141,49 @@ function statusClass(status) {
 
 function filteredData() {
     const q = searchInput.value.trim().toLowerCase();
-    const status = statusFilter.value;
-    const data = requests.filter((r) => {
-        const matchesStatus = status === 'all' || r.status === status;
-        const hay = `${r.id} ${r.items.join(' ')} ${r.suppliers.join(' ')}`.toLowerCase();
-        const matchesQuery = q === '' || hay.includes(q);
-        return matchesStatus && matchesQuery;
+    return requests.filter((r) => {
+        const statusMatch = reqScope !== 'workflow'
+            || activeStatusFilter === 'all'
+            || r.status.toLowerCase() === activeStatusFilter;
+        const hay = `${r.id} ${r.items.join(' ')} ${r.suppliers.join(' ')} ${r.requester || ''}`.toLowerCase();
+        return statusMatch && (q === '' || hay.includes(q));
     });
-
-    const sort = sortDropdown.value;
-    if (sort === 'entry-asc') {
-        data.sort((a, b) => (a.request_id || 0) - (b.request_id || 0));
-    } else if (sort === 'entry-desc') {
-        data.sort((a, b) => (b.request_id || 0) - (a.request_id || 0));
-    }
-
-    return data;
 }
 
-function renderTable() {
-    const data = filteredData();
-    updateStats(requests);
-    const totalPages = Math.max(1, Math.ceil(data.length / reqPerPage));
-    if (currentReqPage > totalPages) {
-        currentReqPage = totalPages;
-    }
+function buildWorkflowRow(r, rowNum) {
+    const needsAttention = requestNeedsAttention(r);
+    const rowClass = needsAttention ? ' class="request-row-highlight"' : '';
+    const indicatorHtml = needsAttention ? '<span class="request-indicator" title="New or updated request"></span>' : '';
+    return `
+        <tr${rowClass}>
+            <td>${rowNum}</td>
+            <td class="req-requisition-cell">
+                <div class="req-requisition-stack">
+                    <span class="req-requisition-ref">${r.id}</span>
+                    <span class="req-requisition-item">${r.items.join(', ')}</span>
+                    <span class="req-requisition-dept">${r.office || ''}</span>
+                </div>
+            </td>
+            <td>${r.requester || '—'}</td>
+            <td><span class="status-pill ${statusClass(r.status)}">${r.status}</span></td>
+            <td>${new Date(r.date).toLocaleDateString()}</td>
+            <td>
+                <div class="actions-cell">
+                    <button type="button" class="view-progress" data-id="${r.id}" data-request-id="${r.request_id}" title="View status and workflow (read-only)">
+                        <i class="fas fa-eye"></i> View${indicatorHtml}
+                    </button>
+                </div>
+            </td>
+        </tr>`;
+}
 
-    if (!data.length) {
-        requestTableBody.innerHTML = `
-            <tr>
-                <td colspan="7" style="text-align:center;padding:2rem;color:#64748b;">No requests to display.</td>
-            </tr>
-        `;
-        reqPageInfo.textContent = 'Page 1 of 1';
-        prevReqBtn.disabled = true;
-        nextReqBtn.disabled = true;
-        return;
-    }
-
-    const start = (currentReqPage - 1) * reqPerPage;
-    const pageRows = data.slice(start, start + reqPerPage);
-
-    requestTableBody.innerHTML = pageRows.map((r, i) => {
-        const editable = canEditRequest(r);
-        const editTitle = editable ? 'Edit request' : 'Can edit after requisition acceptance only';
-        const rowNum = start + i + 1;
-        const needsAttention = requestNeedsAttention(r);
-        const rowClass = needsAttention ? ' class="request-row-highlight"' : '';
-        const indicatorHtml = needsAttention ? '<span class="request-indicator" title="New or updated request"></span>' : '';
-        return `
+function buildManagementRow(r, rowNum) {
+    const editable = canEditRequest(r);
+    const editTitle = editable ? 'Edit request' : 'Can edit after requisition acceptance only';
+    const needsAttention = requestNeedsAttention(r);
+    const rowClass = needsAttention ? ' class="request-row-highlight"' : '';
+    const indicatorHtml = needsAttention ? '<span class="request-indicator" title="New or updated request"></span>' : '';
+    return `
         <tr${rowClass}>
             <td>${rowNum}</td>
             <td><strong>${r.id}</strong></td>
@@ -209,9 +204,43 @@ function renderTable() {
                     </button>
                 </div>
             </td>
-        </tr>
-    `;
+        </tr>`;
+}
+
+function renderTable() {
+    const data = filteredData();
+    updateStats(requests);
+    const totalPages = Math.max(1, Math.ceil(data.length / reqPerPage));
+    if (currentReqPage > totalPages) {
+        currentReqPage = totalPages;
+    }
+
+    const start = (currentReqPage - 1) * reqPerPage;
+    const pageRows = data.slice(start, start + reqPerPage);
+
+    const dataRowsHtml = pageRows.map((r, i) => {
+        const rowNum = start + i + 1;
+        return reqScope === 'workflow'
+            ? buildWorkflowRow(r, rowNum)
+            : buildManagementRow(r, rowNum);
     }).join('');
+
+    const ghostCount = reqPerPage - pageRows.length;
+    const isAllPlaceholder = pageRows.length === 0;
+    const ghostRowsHtml = Array.from({ length: ghostCount }, (_, gi) => {
+        const emptyContent = isAllPlaceholder && gi === Math.floor(ghostCount / 2)
+            ? `<td colspan="${COL_COUNT}" style="text-align:center;color:#94a3b8;font-size:0.82rem;">No requests to display.</td>`
+            : Array.from({ length: COL_COUNT }, () => '<td></td>').join('');
+        return `<tr class="req-table-empty-row">${emptyContent}</tr>`;
+    }).join('');
+
+    if (isAllPlaceholder) {
+        requestTableBody.classList.add('is-all-placeholder');
+    } else {
+        requestTableBody.classList.remove('is-all-placeholder');
+    }
+
+    requestTableBody.innerHTML = dataRowsHtml + ghostRowsHtml;
 
     reqPageInfo.textContent = `Page ${currentReqPage} of ${totalPages}`;
     prevReqBtn.disabled = currentReqPage <= 1;
@@ -247,9 +276,7 @@ requestTableBody.addEventListener('click', async (e) => {
                 showToast('Could not open progress view.', 'error');
                 return;
             }
-            // Mark request as viewed
             markRequestViewed(record.request_id);
-            // Remove indicator from button if present
             const indicator = viewBtn.querySelector('.request-indicator');
             if (indicator) {
                 indicator.remove();
@@ -316,14 +343,6 @@ searchInput.addEventListener('input', () => {
     currentReqPage = 1;
     renderTable();
 });
-statusFilter.addEventListener('change', () => {
-    currentReqPage = 1;
-    renderTable();
-});
-sortDropdown.addEventListener('change', () => {
-    currentReqPage = 1;
-    renderTable();
-});
 
 prevReqBtn.addEventListener('click', () => {
     if (currentReqPage > 1) {
@@ -338,6 +357,20 @@ nextReqBtn.addEventListener('click', () => {
         currentReqPage++;
         renderTable();
     }
+});
+
+document.querySelectorAll('.req-filter-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+        document.querySelectorAll('.req-filter-chip').forEach((c) => {
+            c.classList.remove('is-active');
+            c.setAttribute('aria-pressed', 'false');
+        });
+        chip.classList.add('is-active');
+        chip.setAttribute('aria-pressed', 'true');
+        activeStatusFilter = chip.dataset.filter;
+        currentReqPage = 1;
+        renderTable();
+    });
 });
 
 mobileMenuBtn.addEventListener('click', (e) => {

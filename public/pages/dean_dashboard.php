@@ -1,37 +1,11 @@
 <?php
-session_start();
-require_once __DIR__ . '/partials/session_access_guard.php';
+require_once __DIR__ . '/partials/dean_page_context.php';
 
-require_once __DIR__ . '/../../app/classes/db.php';
-
-$db = Database::connect();
-$isDepartmentLogin = isset($_SESSION['login_type']) && $_SESSION['login_type'] === 'department';
-
-if ($isDepartmentLogin) {
-    $stmt = $db->prepare("SELECT * FROM departments WHERE department_id = ? LIMIT 1");
-    $stmt->execute([(int) $_SESSION['department_id']]);
-    $department = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    $user = [
-        'full_name' => $department['department_name'] ?? 'Department',
-        'department_abbreviation' => $department['department_abbreviation'] ?? '',
-        'Email' => $department['department_username'] ?? '',
-        'role' => 'Department',
-        'photo_url' => $department['department_photo_url'] ?? null,
-    ];
-    $username = trim((string) ($department['department_name'] ?? 'Department'));
-    $initials = strtoupper(substr((string) ($department['department_abbreviation'] ?? 'D'), 0, 1));
-} else {
-    $stmt = $db->prepare("SELECT * FROM user WHERE user_id = ?");
-    $stmt->execute([$_SESSION['user_id']]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    $username = trim((string)($user['full_name'] ?? ''));
-    if ($username === '') {
-        $username = explode('@', (string)($user['Email'] ?? ''))[0] ?? 'Dean';
-    }
-    $initials = strtoupper(substr($user['Email'], 0, 1));
+$username = trim((string)($user['full_name'] ?? ''));
+if ($username === '') {
+    $username = explode('@', (string)($user['Email'] ?? ''))[0] ?? 'Dean';
 }
+$initials = strtoupper(substr((string)($user['Email'] ?? 'D'), 0, 1));
 ?>
 
 <!DOCTYPE html>
@@ -102,7 +76,7 @@ if ($isDepartmentLogin) {
         <section class="dashboard-panel dashboard-panel--recent dean-recent-panel" aria-label="Recent requests">
             <header class="dashboard-panel__head dashboard-panel__head--split dean-recent-panel__head">
                 <h2 class="dashboard-panel__title"><i class="fas fa-clock" aria-hidden="true"></i> Pending Requests</h2>
-                <button id="requestItemBtn" class="dean-request-btn" type="button" onclick="window.location.href='dean_requisition_form.php?from=dashboard';">
+                <button id="requestItemBtn" class="dean-request-btn" type="button" onclick="window.location.href='<?php echo $isDepartmentLogin ? 'department_requisition_form.php' : 'dean_requisition_form.php'; ?>?from=dashboard';">
                     <i class="fas fa-plus" aria-hidden="true"></i> Request Item
                 </button>
             </header>

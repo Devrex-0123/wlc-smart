@@ -151,8 +151,9 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                 <button type="button" class="close-modal" id="closeDepartmentModal" aria-label="Close modal">&times;</button>
             </div>
 
-            <form id="departmentForm" enctype="multipart/form-data" class="modal-form">
+            <form id="departmentForm" enctype="multipart/form-data" class="modal-form" novalidate>
                 <input type="hidden" name="department_id" id="department_id">
+                <input type="hidden" name="department_edit_type" id="department_edit_type">
 
                 <div class="profile-avatar-section">
                     <div class="avatar-preview-container">
@@ -200,10 +201,18 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 
                 <hr class="form-divider">
 
-                <div class="form-group">
-                    <label for="department_username">Username</label>
-                    <input type="text" name="department_username" id="department_username" placeholder="e.g. cicte_dept" required maxlength="50" pattern="[A-Za-z0-9._-]+" title="Letters, numbers, dots, hyphens, and underscores only" autocomplete="username">
-                    <small class="input-hint">Used for department login. Must be unique.</small>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="department_username">Username</label>
+                        <input type="text" name="department_username" id="department_username" placeholder="e.g. cicte_dept" required maxlength="50" pattern="[A-Za-z0-9._-]+" title="Letters, numbers, dots, hyphens, and underscores only" autocomplete="username">
+                        <small class="input-hint">Used for department login. Must be unique.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="department_office_id">Facility</label>
+                        <select name="department_office_id" id="department_office_id">
+                            <option value="">Select Facility</option>
+                        </select>
+                    </div>
                 </div>
 
                 <hr class="form-divider">
@@ -400,11 +409,11 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                 <h4 class="view-user-section-title"><i class="fas fa-building" aria-hidden="true"></i> Organization</h4>
                 <div class="view-user-grid">
                     <div class="view-user-field">
-                        <span class="view-user-label"><i class="fas fa-phone" aria-hidden="true"></i> Contact</span>
+                        <span class="view-user-label" id="view_contact_label"><i class="fas fa-phone" aria-hidden="true"></i> Contact</span>
                         <p id="view_contact_number" class="view-user-value">—</p>
                     </div>
                     <div class="view-user-field">
-                        <span class="view-user-label"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Office</span>
+                        <span class="view-user-label" id="view_office_label"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Office</span>
                         <p id="view_office" class="view-user-value">—</p>
                     </div>
                 </div>
@@ -605,7 +614,7 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 </div>
 
 <script src="../assets/js/logout.js?v=wlc1"></script>
-<script src="../assets/js/account_management.js?v=wlc40"></script>
+<script src="../assets/js/account_management.js?v=wlc43"></script>
 
 <?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 </body>

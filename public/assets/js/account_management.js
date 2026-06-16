@@ -192,9 +192,22 @@ function openViewUserModal(user) {
     }
 
     const contactEl = document.getElementById('view_contact_number');
-    if (contactEl) contactEl.textContent = user.contact_number || '—';
     const officeEl = document.getElementById('view_office');
-    if (officeEl) officeEl.textContent = user.office_name || '—';
+    const contactLabel = document.getElementById('view_contact_label');
+    const officeLabel = document.getElementById('view_office_label');
+    const isDeptAccount = normalizeUserRole(user.role) === 'user';
+
+    if (isDeptAccount) {
+        if (contactLabel) contactLabel.innerHTML = '<i class="fas fa-tag" aria-hidden="true"></i> Abbreviation';
+        if (officeLabel) officeLabel.innerHTML = '<i class="fas fa-layer-group" aria-hidden="true"></i> Department Type';
+        if (contactEl) contactEl.textContent = user.abbreviation || '—';
+        if (officeEl) officeEl.textContent = user.department_type || '—';
+    } else {
+        if (contactLabel) contactLabel.innerHTML = '<i class="fas fa-phone" aria-hidden="true"></i> Contact';
+        if (officeLabel) officeLabel.innerHTML = '<i class="fas fa-map-marker-alt" aria-hidden="true"></i> Office';
+        if (contactEl) contactEl.textContent = user.contact_number || '—';
+        if (officeEl) officeEl.textContent = user.office_name || '—';
+    }
     const consentEl = document.getElementById('view_consent');
     if (consentEl) consentEl.textContent = consentText;
     if (statusEl) {
@@ -426,9 +439,9 @@ enableConfirmOk?.addEventListener('click', async () => {
 saveConfirmBackdrop?.addEventListener('click', closeSaveConfirmModal);
 saveConfirmCancel?.addEventListener('click', closeSaveConfirmModal);
 saveConfirmOk?.addEventListener('click', () => {
+    const isDeptSave = pendingDepartmentSave;
     closeSaveConfirmModal();
-    if (pendingDepartmentSave) {
-        pendingDepartmentSave = false;
+    if (isDeptSave) {
         submitDepartmentForm();
         return;
     }
@@ -659,6 +672,9 @@ async function loadUsers() {
         searchInput.value = '';
         adminCurrentPage = 1;
         renderAdminUsersTable(getFilteredUsers());
+        // Re-render dept panel so dean rows (sourced from allUsers) appear
+        filteredDepartments = getFilteredDepartments();
+        renderDepartmentPanel();
     } catch (err) {
         console.error(err);
     }
@@ -699,6 +715,28 @@ async function populateOfficeDropdown() {
     }
 }
 populateOfficeDropdown();
+
+async function populateDepartmentOfficeDropdown(selectedId = '') {
+    try {
+        const res = await fetch('../../app/api/office.php', { credentials: 'include' });
+        const data = await res.json();
+        const dropdown = document.getElementById('department_office_id');
+        if (!dropdown) return;
+        dropdown.innerHTML = '<option value="">Select Facility</option>';
+        if (data.success && data.offices?.length > 0) {
+            data.offices.forEach(office => {
+                const opt = document.createElement('option');
+                opt.value = office.office_id;
+                opt.textContent = office.office_name;
+                if (String(office.office_id) === String(selectedId)) opt.selected = true;
+                dropdown.appendChild(opt);
+            });
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+populateDepartmentOfficeDropdown();
 
 const profileRequiredFieldIds = ['full_name', 'contact_number', 'email', 'role', 'office_id'];
 const passwordFieldIds = ['password', 'confirm_password'];
@@ -928,8 +966,11 @@ function openDepartmentModal() {
     departmentForm?.reset();
     const deptIdInput = document.getElementById('department_id');
     if (deptIdInput) deptIdInput.value = '';
+    const editTypeInput = document.getElementById('department_edit_type');
+    if (editTypeInput) editTypeInput.value = '';
     const statusSelect = document.getElementById('department_status');
     if (statusSelect) statusSelect.value = 'Active';
+    populateDepartmentOfficeDropdown();
     setDepartmentFormMode('add');
     resetDepartmentPhotoPreview();
     resetDepartmentPasswordFieldStyles();
@@ -942,11 +983,13 @@ function openDepartmentEditModal(dept) {
     departmentForm?.reset();
     setDepartmentFormMode('edit');
     document.getElementById('department_id').value = dept.department_id;
+    document.getElementById('department_edit_type').value = 'legacy';
     document.getElementById('department_name').value = dept.department_name || '';
     document.getElementById('department_abbreviation').value = dept.department_abbreviation || '';
     document.getElementById('department_type').value = dept.department_type || '';
     document.getElementById('department_status').value = dept.department_status || 'Active';
     document.getElementById('department_username').value = dept.department_username || '';
+    populateDepartmentOfficeDropdown(dept.office_id || '');
     if (departmentPasswordInput) departmentPasswordInput.value = '';
     if (departmentConfirmPasswordInput) departmentConfirmPasswordInput.value = '';
     resetDepartmentPasswordFieldStyles();
@@ -956,6 +999,41 @@ function openDepartmentEditModal(dept) {
     if (departmentPhotoPreview && departmentPhotoPlaceholder) {
         if (photoUrl) {
             departmentPhotoPreview.src = `../${photoUrl}`;
+            departmentPhotoPreview.style.display = 'block';
+            departmentPhotoPlaceholder.style.display = 'none';
+        } else {
+            resetDepartmentPhotoPreview();
+        }
+    }
+
+    if (departmentModal) departmentModal.style.display = 'flex';
+}
+
+function openDepartmentEditModalForUser(user) {
+    if (!user) return;
+    // Close User modal if it was open to avoid overlapping forms.
+    if (modal) modal.style.display = 'none';
+    departmentForm?.reset();
+    setDepartmentFormMode('edit');
+    const deptIdEl = document.getElementById('department_id');
+    const editTypeEl = document.getElementById('department_edit_type');
+    if (deptIdEl) deptIdEl.value = user.user_id;
+    if (editTypeEl) editTypeEl.value = 'user_dept';
+    document.getElementById('department_name').value = user.full_name || '';
+    document.getElementById('department_abbreviation').value = user.abbreviation || '';
+    document.getElementById('department_type').value = user.department_type || '';
+    const statusRaw = (user.account_status || 'active').toLowerCase();
+    document.getElementById('department_status').value = statusRaw === 'active' ? 'Active' : 'Inactive';
+    document.getElementById('department_username').value = user.email || '';
+    populateDepartmentOfficeDropdown(user.office_id || '');
+    if (departmentPasswordInput) departmentPasswordInput.value = '';
+    if (departmentConfirmPasswordInput) departmentConfirmPasswordInput.value = '';
+    resetDepartmentPasswordFieldStyles();
+    updateDepartmentPasswordFeedback();
+
+    if (departmentPhotoPreview && departmentPhotoPlaceholder) {
+        if (user.photo_url) {
+            departmentPhotoPreview.src = `../${user.photo_url}`;
             departmentPhotoPreview.style.display = 'block';
             departmentPhotoPlaceholder.style.display = 'none';
         } else {
@@ -1036,15 +1114,21 @@ function validateDepartmentForm(isEdit = false) {
 
 async function submitDepartmentForm() {
     const deptId = document.getElementById('department_id')?.value || '';
+    const editType = document.getElementById('department_edit_type')?.value || '';
     const isEdit = !!deptId;
     if (!validateDepartmentForm(isEdit)) return;
 
     saveDepartmentBtn.disabled = true;
     saveDepartmentBtn.textContent = 'Saving...';
 
+    let action = 'add';
+    if (isEdit) {
+        action = editType === 'user_dept' ? 'edit_user_dept' : 'edit';
+    }
+
     const formData = new FormData(departmentForm);
-    formData.append('action', isEdit ? 'edit' : 'add');
-    if (isEdit) formData.append('department_id', deptId);
+    formData.set('action', action);
+    if (isEdit) formData.set('department_id', deptId);
 
     try {
         const res = await fetch('../../app/api/department_actions.php', {
@@ -1055,14 +1139,20 @@ async function submitDepartmentForm() {
         const data = await res.json();
         if (data.success) {
             closeDepartmentModalView();
-            loadDepartments();
+            if (isEdit && editType === 'user_dept') {
+                loadUsers();
+            } else if (isEdit) {
+                loadDepartments();
+            } else {
+                loadUsers();
+            }
             openAccountSuccessModal(
                 isEdit
                     ? 'Your department changes have been successfully saved.'
                     : 'The new department has been added successfully.'
             );
         } else {
-            showToast(data.message || 'Failed to add department', 'error');
+            showToast(data.message || 'Failed to save department', 'error');
         }
     } catch (_) {
         showToast('An error occurred', 'error');
@@ -1330,6 +1420,12 @@ accountManagementRoot?.addEventListener('click', async e => {
     const inDeptTable = !!e.target.closest('.users-management-table--dept');
 
     if (viewBtn && inDeptTable) {
+        if (viewBtn.dataset.rowType === 'dean') {
+            const user = allUsers.find(u => String(u.user_id) === String(viewBtn.dataset.id));
+            if (!user) { showToast('User not found', 'error'); return; }
+            openViewUserModal(user);
+            return;
+        }
         const dept = allDepartments.find(d => String(d.department_id) === String(viewBtn.dataset.id));
         if (!dept) {
             showToast('Department not found', 'error');
@@ -1340,6 +1436,42 @@ accountManagementRoot?.addEventListener('click', async e => {
     }
 
     if (editBtn && inDeptTable) {
+        if (editBtn.dataset.rowType === 'dean') {
+            const user = allUsers.find(u => String(u.user_id) === String(editBtn.dataset.id));
+            if (!user) { showToast('User not found', 'error'); return; }
+            const roleNorm = (user.role || '').toLowerCase().trim();
+            if (roleNorm === 'user') {
+                openDepartmentEditModalForUser(user);
+                return;
+            }
+            modalTitle.textContent = 'Edit User';
+            setFormMode('edit');
+            document.getElementById('user_id').value = user.user_id;
+            document.getElementById('email').value = user.email;
+            document.getElementById('full_name').value = user.full_name || '';
+            document.getElementById('contact_number').value = user.contact_number || '';
+            document.getElementById('role').value = user.role;
+            document.getElementById('office_id').value = user.office_id || '';
+            document.getElementById('account_status').value = (user.account_status || 'active').toLowerCase();
+            document.getElementById('password').value = '';
+            document.getElementById('confirm_password').value = '';
+            resetPasswordFieldStyles();
+            updatePasswordFeedback();
+            if (photoPreview && photoPlaceholder) {
+                if (user.photo_url) {
+                    photoPreview.src = `../${user.photo_url}`;
+                    photoPreview.style.display = 'block';
+                    photoPlaceholder.style.display = 'none';
+                } else {
+                    photoPreview.src = '';
+                    photoPreview.style.display = 'none';
+                    photoPlaceholder.style.display = 'flex';
+                    photoPlaceholder.textContent = (user.email || '').charAt(0).toUpperCase();
+                }
+            }
+            modal.style.display = 'flex';
+            return;
+        }
         const dept = allDepartments.find(d => String(d.department_id) === String(editBtn.dataset.id));
         if (!dept) {
             showToast('Department not found', 'error');
@@ -1350,6 +1482,12 @@ accountManagementRoot?.addEventListener('click', async e => {
     }
 
     if (deleteBtn && inDeptTable) {
+        if (deleteBtn.dataset.rowType === 'dean') {
+            const uid = deleteBtn.dataset.id;
+            const rowUser = allUsers.find(u => String(u.user_id) === String(uid));
+            openDeleteConfirmModal(uid, rowUser?.email || '');
+            return;
+        }
         const dept = allDepartments.find(d => String(d.department_id) === String(deleteBtn.dataset.id));
         if (!dept) {
             showToast('Department not found', 'error');
@@ -1432,15 +1570,19 @@ const ADMIN_ROLE_DEFS = [
     { role: 'Canvasser', label: 'Canvasser' },
     { role: 'Laboratory Manager', label: 'Laboratory Manager' },
     { role: 'Employee', label: 'Employee' },
-    { role: 'User', label: 'User' },
 ];
 
 function normalizeUserRole(role) {
     return String(role || '').trim().toLowerCase();
 }
 
+const CANVASSER_ELIGIBLE_ROLES = ['canvasser', 'employee', 'laboratory manager'];
+
 function isCanvasserAssignee(user) {
-    return user && (Number(user.is_canvasser_assignee) === 1 || normalizeUserRole(user.role) === 'canvasser');
+    if (!user) return false;
+    const role = normalizeUserRole(user.role);
+    if (!CANVASSER_ELIGIBLE_ROLES.includes(role)) return false;
+    return Number(user.is_canvasser_assignee) === 1 || role === 'canvasser';
 }
 
 function usersForRoleDef(users, roleDef) {
@@ -1455,7 +1597,7 @@ function usersForRoleDef(users, roleDef) {
 
 function isAdminPanelUser(user) {
     const role = normalizeUserRole(user.role);
-    return role !== 'dean' && role !== 'inventory manager';
+    return role !== 'dean' && role !== 'user' && role !== 'inventory manager';
 }
 
 function flattenPanelUsers(users, roleDefs) {
@@ -1575,6 +1717,44 @@ function buildDepartmentRowHtml(dept, rowNum) {
     `;
 }
 
+function buildDeanRowInDeptTableHtml(user, rowNum) {
+    const firstLetter = (user.full_name || user.email || '').charAt(0).toUpperCase() || 'D';
+    const hasPhoto = !!user.photo_url;
+    const photoSrc = hasPhoto ? `../${user.photo_url}` : '';
+    const abbrev = (user.abbreviation || '—').trim();
+    const statusRaw = (user.account_status || 'active').toLowerCase();
+    const statusClass = statusRaw === 'active' ? 'active' : statusRaw === 'disabled' ? 'disabled' : 'locked';
+    const statusLabel = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1);
+
+    return `
+        <td>${rowNum}</td>
+        <td>
+            <div class="user-photo-wrapper" data-email="${user.email || ''}" data-photo="${photoSrc}">
+                ${hasPhoto
+                    ? `<img src="${photoSrc}" alt="Photo of ${user.email}" class="user-photo-thumb">`
+                    : `<div class="user-photo-placeholder">${firstLetter}</div>`
+                }
+            </div>
+        </td>
+        <td class="users-col-abbrev" title="${abbrev}">${abbrev}</td>
+        <td>${user.department_type || '—'}</td>
+        <td class="users-col-status"><span class="status-pill status-${statusClass}">${statusLabel}</span></td>
+        <td>
+            <div class="user-action-cell">
+                <button type="button" class="action-btn view" data-id="${user.user_id}" data-row-type="dean" title="View details">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button type="button" class="action-btn edit" data-id="${user.user_id}" data-row-type="dean" title="Edit user">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button type="button" class="action-btn delete" data-id="${user.user_id}" data-row-type="dean" title="Delete user">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </td>
+    `;
+}
+
 function renderDepartmentPanel() {
     if (!deptUsersTableBody) return;
 
@@ -1591,9 +1771,11 @@ function renderDepartmentPanel() {
     if (!pageDepartments.length) {
         deptUsersTableBody.innerHTML = '<tr><td colspan="6" class="users-table-loading">No departments found.</td></tr>';
     } else {
-        pageDepartments.forEach((dept, index) => {
+        pageDepartments.forEach((row, index) => {
             const tr = document.createElement('tr');
-            tr.innerHTML = buildDepartmentRowHtml(dept, start + index + 1);
+            tr.innerHTML = row._isDean
+                ? buildDeanRowInDeptTableHtml(row, start + index + 1)
+                : buildDepartmentRowHtml(row, start + index + 1);
             deptUsersTableBody.appendChild(tr);
         });
     }
@@ -1633,20 +1815,29 @@ function renderSplitUserTables(users) {
 function getFilteredDepartments() {
     const searchTerm = (searchInput?.value || '').toLowerCase().trim();
 
-    return allDepartments.filter((dept) => {
+    const depts = allDepartments.filter((dept) => {
         if (!searchTerm) return true;
         const name = (dept.department_name || '').toLowerCase();
         const abbrev = (dept.department_abbreviation || '').toLowerCase();
         const username = (dept.department_username || '').toLowerCase();
         const type = (dept.department_type || '').toLowerCase();
         const status = (dept.department_status || '').toLowerCase();
+        return name.includes(searchTerm) || abbrev.includes(searchTerm) || username.includes(searchTerm) || type.includes(searchTerm) || status.includes(searchTerm);
+    }).map(d => ({ ...d, _isDean: false }));
 
-        return name.includes(searchTerm)
-            || abbrev.includes(searchTerm)
-            || username.includes(searchTerm)
-            || type.includes(searchTerm)
-            || status.includes(searchTerm);
-    });
+    const deans = allUsers
+        .filter(u => ['dean', 'user'].includes(normalizeUserRole(u.role)))
+        .filter(u => {
+            if (!searchTerm) return true;
+            const name = (u.full_name || '').toLowerCase();
+            const email = (u.email || '').toLowerCase();
+            const status = (u.account_status || '').toLowerCase();
+            const role = normalizeUserRole(u.role);
+            return name.includes(searchTerm) || email.includes(searchTerm) || status.includes(searchTerm) || role.includes(searchTerm);
+        })
+        .map(u => ({ ...u, _isDean: true }));
+
+    return [...depts, ...deans];
 }
 
 function getFilteredUsers() {

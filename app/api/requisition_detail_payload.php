@@ -192,8 +192,8 @@ function requisitionInsertLinesForRequest(PDO $db, int $requestId, array $items,
         $itemCategory = trim((string) ($item['category'] ?? ''));
         $itemId = isset($item['item_id']) ? (int) $item['item_id'] : null;
         $quantity = max(1, (int) ($item['quantity'] ?? 1));
-        $unitTypeRaw = strtolower(trim((string) ($item['unit_type'] ?? 'unit')));
-        $unitType = in_array($unitTypeRaw, ['set', 'unit', 'piece'], true) ? $unitTypeRaw : 'unit';
+        $unitTypeRaw = strtolower(trim((string) ($item['unit_type'] ?? 'piece')));
+        $unitType = $unitTypeRaw !== '' ? $unitTypeRaw : 'piece';
 
         $lineStmt->execute([
             $requestId,
