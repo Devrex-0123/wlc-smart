@@ -25,7 +25,7 @@ if ($isDepartmentLogin) {
 }
 
 $roleLc = strtolower(trim((string) ($user['role'] ?? $_SESSION['user_role'] ?? '')));
-$isDeanWorkspace = $isDepartmentLogin || in_array($roleLc, ['dean', 'department'], true);
+$isDeanWorkspace = $isDepartmentLogin || in_array($roleLc, ['dean', 'department','user'], true);
 
 if (!$isDeanWorkspace) {
     header('Location: employee_dashboard.php');

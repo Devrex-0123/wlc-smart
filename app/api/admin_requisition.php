@@ -187,7 +187,7 @@ try {
         ]);
     }
 
-    if ($action === 'get_request_detail_view') {
+        if ($action === 'get_request_detail_view') {
         assertRequestDetailViewAuth($db);
         $requestId = (int)($_GET['request_id'] ?? 0);
         if ($requestId <= 0) {
@@ -226,10 +226,21 @@ try {
         $ownerStmt->execute([(int) $anchor['user_id']]);
         $owner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
         $emailOwn = (string) ($owner['Email'] ?? '');
-        $payload['requester_display'] = $emailOwn !== '' ? (explode('@', $emailOwn)[0] ?? '—') : '—';
+        
+        // UPDATED: Use stored requester fields with fallback to user data
+        $payload['requester_display'] = trim((string)($anchor['requester_name'] ?? ''));
+        if ($payload['requester_display'] === '') {
+            $payload['requester_display'] = $emailOwn !== '' ? (explode('@', $emailOwn)[0] ?? '—') : '—';
+        }
         $payload['requester_role'] = (string) ($owner['role'] ?? '');
-        $payload['requester_email'] = $emailOwn;
-        $payload['requester_contact'] = (string) ($owner['contact_number'] ?? '');
+        $payload['requester_email'] = trim((string)($anchor['requester_email'] ?? ''));
+        if ($payload['requester_email'] === '') {
+            $payload['requester_email'] = $emailOwn;
+        }
+        $payload['requester_contact'] = trim((string)($anchor['requester_contact'] ?? ''));
+        if ($payload['requester_contact'] === '') {
+            $payload['requester_contact'] = (string) ($owner['contact_number'] ?? '');
+        }
         sendJson($payload);
     }
 

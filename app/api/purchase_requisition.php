@@ -231,7 +231,7 @@ function loadPurchaseRequisitionSnapshotData(PDO $db, int $requestId): ?array
     require_once __DIR__ . '/../helpers/comptroller_qty_approval.php';
 
     $headerStmt = $db->prepare(
-        'SELECT r.request_id, r.created_at, r.purpose, r.user_id, u.Email,
+        'SELECT r.request_id, r.created_at, r.purpose, r.user_id, r.requester_name, u.Email,
                 f.room, f.laboratory, f.building
          FROM requisition_item r
          LEFT JOIN user u ON u.user_id = r.user_id
@@ -279,8 +279,17 @@ function loadPurchaseRequisitionSnapshotData(PDO $db, int $requestId): ?array
         ];
     }
 
+        $requesterName = trim((string) ($header['requester_name'] ?? ''));
     $requesterEmail = (string) ($header['Email'] ?? '');
-    $requesterDisplay = $requesterEmail !== '' ? (explode('@', $requesterEmail)[0] ?? $requesterEmail) : '—';
+    
+    // Use the actual name from the requisition_item table if it exists
+    if ($requesterName !== '') {
+        $requesterDisplay = $requesterName;
+    } else {
+        // Fallback to the email prefix if the name is blank
+        $requesterDisplay = $requesterEmail !== '' ? (explode('@', $requesterEmail)[0] ?? $requesterEmail) : '—';
+    }
+    
     $purpose = (string) ($header['purpose'] ?? '');
     $room = trim((string) ($header['room'] ?? ''));
     $lab = trim((string) ($header['laboratory'] ?? ''));

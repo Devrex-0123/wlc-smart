@@ -14,15 +14,17 @@ function sendJson($payload) {
  * @param array<int, mixed> $items
  * @param array<int, mixed> $suppliers
  */
-function insertRequisitionBatch(PDO $db, int $userId, int $officeId, int $facilityId, string $requestDate, string $message, string $purpose, string $urgentNote, array $items, array $suppliers, string $submissionStatus = 'draft'): void
+function insertRequisitionBatch(PDO $db, int $userId, int $officeId, int $facilityId, string $requestDate, string $message, string $purpose, string $urgentNote, array $items, array $suppliers, string $submissionStatus = 'draft', ?string $requesterName = null, ?string $requesterEmail = null, ?string $requesterContact = null): void
 {
     $msgVal = $message !== '' ? $message : null;
     $purposeVal = $purpose !== '' ? $purpose : null;
     $urgentNoteVal = $urgentNote !== '' ? $urgentNote : null;
     // Keep the requested date, but stamp with actual current time (not 12:00 AM).
     $createdAt = $requestDate . ' ' . date('H:i:s');
-    $stmt = $db->prepare("INSERT INTO requisition_item (user_id, office_id, facility_id, status, created_at, message, purpose, urgent_note, submission_status) VALUES (?, ?, ?, 'Pending', ?, ?, ?, ?, ?)");
-    $stmt->execute([$userId, $officeId, $facilityId, $createdAt, $msgVal, $purposeVal, $urgentNoteVal, $submissionStatus]);
+    
+    // UPDATED: Include requester fields
+    $stmt = $db->prepare("INSERT INTO requisition_item (user_id, requester_name, requester_email, requester_contact, office_id, facility_id, status, created_at, message, purpose, urgent_note, submission_status) VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?)");
+    $stmt->execute([$userId, $requesterName, $requesterEmail, $requesterContact, $officeId, $facilityId, $createdAt, $msgVal, $purposeVal, $urgentNoteVal, $submissionStatus]);
     $requestId = (int) $db->lastInsertId();
     requisitionInsertLinesForRequest($db, $requestId, $items, is_array($suppliers) ? $suppliers : []);
 }
@@ -288,138 +290,245 @@ try {
     }
 
     if ($action === 'get_request_detail_view') {
-        $requestId = (int)($_GET['request_id'] ?? 0);
-        if ($requestId <= 0) {
-            sendJson(['success' => false, 'message' => 'Invalid request id.']);
-        }
-
-        $anchor = cwirms_dean_fetch_requisition_item($db, $deanApiCtx, $requestId);
-        if (!$anchor) {
-            sendJson(['success' => false, 'message' => 'Request not found.']);
-        }
-
-        $rows = requisitionFetchDetailMatrixRows($db, $requestId);
-
-        if (count($rows) === 0) {
-            sendJson(['success' => false, 'message' => 'Could not load requisition rows.']);
-        }
-
-        $payload = buildRequisitionDetailPayload($anchor, $rows, $requestId);
-        requisitionAttachApprovalToPayload($db, $requestId, $payload);
-        $ownerStmt = $db->prepare('SELECT Email, role, contact_number FROM user WHERE user_id = ?');
-        $ownerStmt->execute([(int)$anchor['user_id']]);
-        $owner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
-        $emailOwn = (string)($owner['Email'] ?? '');
-        $payload['requester_display'] = $emailOwn !== '' ? (explode('@', $emailOwn)[0] ?? '—') : '—';
-        $payload['requester_role'] = (string)($owner['role'] ?? '');
-        $payload['requester_email'] = $emailOwn;
-        $payload['requester_contact'] = (string)($owner['contact_number'] ?? '');
-        $payload['dean_edit_locked'] = requisitionVerifierChainLocked($payload['approval'] ?? null);
-        sendJson($payload);
+    $requestId = (int)($_GET['request_id'] ?? 0);
+    if ($requestId <= 0) {
+        sendJson(['success' => false, 'message' => 'Invalid request id.']);
     }
+
+    $anchor = cwirms_dean_fetch_requisition_item($db, $deanApiCtx, $requestId);
+    if (!$anchor) {
+        sendJson(['success' => false, 'message' => 'Request not found.']);
+    }
+
+    $rows = requisitionFetchDetailMatrixRows($db, $requestId);
+
+    if (count($rows) === 0) {
+        sendJson(['success' => false, 'message' => 'Could not load requisition rows.']);
+    }
+
+    $payload = buildRequisitionDetailPayload($anchor, $rows, $requestId);
+    requisitionAttachApprovalToPayload($db, $requestId, $payload);
+    $ownerStmt = $db->prepare('SELECT Email, role, contact_number FROM user WHERE user_id = ?');
+    $ownerStmt->execute([(int)$anchor['user_id']]);
+    $owner = $ownerStmt->fetch(PDO::FETCH_ASSOC);
+    $emailOwn = (string)($owner['Email'] ?? '');
+    
+    // UPDATED: Use stored requester fields with fallback to user data
+    $payload['requester_display'] = trim((string)($anchor['requester_name'] ?? ''));
+    if ($payload['requester_display'] === '') {
+        $payload['requester_display'] = $emailOwn !== '' ? (explode('@', $emailOwn)[0] ?? '—') : '—';
+    }
+    $payload['requester_role'] = (string)($owner['role'] ?? '');
+    $payload['requester_email'] = trim((string)($anchor['requester_email'] ?? ''));
+    if ($payload['requester_email'] === '') {
+        $payload['requester_email'] = $emailOwn;
+    }
+    $payload['requester_contact'] = trim((string)($anchor['requester_contact'] ?? ''));
+    if ($payload['requester_contact'] === '') {
+        $payload['requester_contact'] = (string)($owner['contact_number'] ?? '');
+    }
+    $payload['dean_edit_locked'] = requisitionVerifierChainLocked($payload['approval'] ?? null);
+    sendJson($payload);
+}
 
     if ($action === 'update_requisition') {
-        $anchorId = (int)($_POST['request_id'] ?? 0);
-        $officeId = (int)($_POST['office_id'] ?? 0);
-        $facilityId = (int)($_POST['facility_id'] ?? 0);
-        $requestDate = trim($_POST['request_date'] ?? '');
-        $message = trim($_POST['message'] ?? '');
-        $itemsRaw = $_POST['items'] ?? '[]';
-        $suppliersRaw = $_POST['suppliers'] ?? '[]';
-        $items = json_decode($itemsRaw, true);
-        $suppliers = json_decode($suppliersRaw, true);
+    $anchorId = (int)($_POST['request_id'] ?? 0);
+    $officeId = (int)($_POST['office_id'] ?? 0);
+    $facilityId = (int)($_POST['facility_id'] ?? 0);
+    $requestDate = trim($_POST['request_date'] ?? '');
+    $message = trim($_POST['message'] ?? '');
+    $purpose = trim($_POST['purpose'] ?? '');
+    $urgentNote = trim($_POST['urgent_note'] ?? '');
+    $itemsRaw = $_POST['items'] ?? '[]';
+    $suppliersRaw = $_POST['suppliers'] ?? '[]';
+    $items = json_decode($itemsRaw, true);
+    $suppliers = json_decode($suppliersRaw, true);
 
-        if ($anchorId <= 0) {
-            sendJson(['success' => false, 'message' => 'Invalid request id.']);
-        }
-        if (!$officeId || !$facilityId || !$requestDate) {
-            sendJson(['success' => false, 'message' => 'Office, location, and date are required.']);
-        }
-        if (!is_array($items) || count($items) === 0) {
-            sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
-        }
+    // ADD: Get requester fields
+    $requesterName = trim($_POST['requester_name'] ?? '');
+    $requesterEmail = trim($_POST['requester_email'] ?? '');
+    $requesterContact = trim($_POST['requester_contact'] ?? '');
 
-        $anchor = cwirms_dean_fetch_requisition_item($db, $deanApiCtx, $anchorId);
-        if (!$anchor) {
-            sendJson(['success' => false, 'message' => 'Request not found.']);
-        }
-        $canEdit = (($anchor['status'] ?? '') === 'Pending');
-        if (!$canEdit && ($anchor['status'] ?? '') === 'Ongoing') {
-            $reviewStmt = $db->prepare('SELECT requisition_status FROM requisition_form_approval WHERE request_id = ? LIMIT 1');
-            $reviewStmt->execute([$anchorId]);
-            $reviewStatus = strtolower(trim((string)($reviewStmt->fetchColumn() ?: '')));
-            $canEdit = ($reviewStatus === 'accept');
-        }
-        if (!$canEdit) {
-            sendJson(['success' => false, 'message' => 'You can update pending requests or inventory-approved requisitions only.']);
-        }
-
-        $verStmt = $db->prepare(
-            'SELECT canvas_status, gsd_status, comp_status, pres_status FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
-        );
-        $verStmt->execute([$anchorId]);
-        $verRow = $verStmt->fetch(PDO::FETCH_ASSOC);
-        if ($verRow && requisitionVerifierChainLocked($verRow)) {
-            sendJson([
-                'success' => false,
-                'message' => 'This requisition can no longer be edited because the canvasser or a verifier (G.S.D. officer, comptroller, or president) has already recorded a decision.',
-            ]);
-        }
-
-        // Keep original time component when updating so created_at is not forced to 12:00 AM.
-        $timePart = date('H:i:s');
-        if (!empty($anchor['created_at']) && preg_match('/\b(\d{2}:\d{2}:\d{2})\b/', (string)$anchor['created_at'], $m)) {
-            $timePart = $m[1];
-        }
-        $createdAt = $requestDate . ' ' . $timePart;
-        $msgVal = $message !== '' ? $message : null;
-        $db->beginTransaction();
-        try {
-            $updStmt = $db->prepare("UPDATE requisition_item SET office_id = ?, facility_id = ?, created_at = ?, message = ?, purpose = ?, urgent_note = ? WHERE request_id = ? AND {$itemScope['sql']}");
-            $updStmt->execute([$officeId, $facilityId, $createdAt, $msgVal, ($purpose !== '' ? $purpose : null), ($urgentNote !== '' ? $urgentNote : null), $anchorId, $itemScope['param']]);
-
-            $delLines = $db->prepare('DELETE FROM requisition_line WHERE request_id = ?');
-            $delLines->execute([$anchorId]);
-
-            $resetReviewStmt = $db->prepare("UPDATE requisition_form_approval SET requisition_status = 'pending', requisition_note = NULL, requisition_reviewed_by = NULL, requisition_reviewed_at = NULL WHERE request_id = ? AND requisition_status = 'reject'");
-            $resetReviewStmt->execute([$anchorId]);
-
-            requisitionInsertLinesForRequest($db, $anchorId, $items, is_array($suppliers) ? $suppliers : []);
-            $db->commit();
-        } catch (Exception $e) {
-            $db->rollBack();
-            throw $e;
-        }
-
-        sendJson(['success' => true, 'message' => 'Requisition updated successfully.']);
+    // If name is empty, use email local part as fallback
+    if ($requesterName === '' && $requesterEmail !== '') {
+        $requesterName = explode('@', $requesterEmail)[0] ?? '';
     }
 
+    if ($anchorId <= 0) {
+        sendJson(['success' => false, 'message' => 'Invalid request id.']);
+    }
+    if (!$officeId || !$facilityId || !$requestDate) {
+        sendJson(['success' => false, 'message' => 'Office, location, and date are required.']);
+    }
+    if (!is_array($items) || count($items) === 0) {
+        sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
+    }
+
+    $anchor = cwirms_dean_fetch_requisition_item($db, $deanApiCtx, $anchorId);
+    if (!$anchor) {
+        sendJson(['success' => false, 'message' => 'Request not found.']);
+    }
+    $canEdit = (($anchor['status'] ?? '') === 'Pending');
+    if (!$canEdit && ($anchor['status'] ?? '') === 'Ongoing') {
+        $reviewStmt = $db->prepare('SELECT requisition_status FROM requisition_form_approval WHERE request_id = ? LIMIT 1');
+        $reviewStmt->execute([$anchorId]);
+        $reviewStatus = strtolower(trim((string)($reviewStmt->fetchColumn() ?: '')));
+        $canEdit = ($reviewStatus === 'accept');
+    }
+    if (!$canEdit) {
+        sendJson(['success' => false, 'message' => 'You can update pending requests or inventory-approved requisitions only.']);
+    }
+
+    $verStmt = $db->prepare(
+        'SELECT canvas_status, gsd_status, comp_status, pres_status FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+    );
+    $verStmt->execute([$anchorId]);
+    $verRow = $verStmt->fetch(PDO::FETCH_ASSOC);
+    if ($verRow && requisitionVerifierChainLocked($verRow)) {
+        sendJson([
+            'success' => false,
+            'message' => 'This requisition can no longer be edited because the canvasser or a verifier (G.S.D. officer, comptroller, or president) has already recorded a decision.',
+        ]);
+    }
+
+    // Keep original time component when updating so created_at is not forced to 12:00 AM.
+    $timePart = date('H:i:s');
+    if (!empty($anchor['created_at']) && preg_match('/\b(\d{2}:\d{2}:\d{2})\b/', (string)$anchor['created_at'], $m)) {
+        $timePart = $m[1];
+    }
+    $createdAt = $requestDate . ' ' . $timePart;
+    $msgVal = $message !== '' ? $message : null;
+    $purposeVal = $purpose !== '' ? $purpose : null;
+    $urgentNoteVal = $urgentNote !== '' ? $urgentNote : null;
+    
+    $db->beginTransaction();
+    try {
+        // UPDATED: Include requester fields
+        $updStmt = $db->prepare("UPDATE requisition_item SET office_id = ?, facility_id = ?, created_at = ?, message = ?, purpose = ?, urgent_note = ?, requester_name = ?, requester_email = ?, requester_contact = ? WHERE request_id = ? AND {$itemScope['sql']}");
+        $updStmt->execute([$officeId, $facilityId, $createdAt, $msgVal, $purposeVal, $urgentNoteVal, $requesterName, $requesterEmail, $requesterContact, $anchorId, $itemScope['param']]);
+
+        $delLines = $db->prepare('DELETE FROM requisition_line WHERE request_id = ?');
+        $delLines->execute([$anchorId]);
+
+        $resetReviewStmt = $db->prepare("UPDATE requisition_form_approval SET requisition_status = 'pending', requisition_note = NULL, requisition_reviewed_by = NULL, requisition_reviewed_at = NULL WHERE request_id = ? AND requisition_status = 'reject'");
+        $resetReviewStmt->execute([$anchorId]);
+
+        requisitionInsertLinesForRequest($db, $anchorId, $items, is_array($suppliers) ? $suppliers : []);
+        $db->commit();
+    } catch (Exception $e) {
+        $db->rollBack();
+        throw $e;
+    }
+
+    sendJson(['success' => true, 'message' => 'Requisition updated successfully.']);
+}
+
     if ($action === 'submit') {
-        $officeId = (int)($_POST['office_id'] ?? 0);
-        $facilityId = (int)($_POST['facility_id'] ?? 0);
-        $requestDate = trim($_POST['request_date'] ?? '');
-        $message = trim($_POST['message'] ?? '');
-        $purpose = trim($_POST['purpose'] ?? '');
-        $urgentNote = trim($_POST['urgent_note'] ?? '');
-        $itemsRaw = $_POST['items'] ?? '[]';
-        $suppliersRaw = $_POST['suppliers'] ?? '[]';
-        $items = json_decode($itemsRaw, true);
-        $suppliers = json_decode($suppliersRaw, true);
+    $officeId = (int)($_POST['office_id'] ?? 0);
+    $facilityId = (int)($_POST['facility_id'] ?? 0);
+    $requestDate = trim($_POST['request_date'] ?? '');
+    $message = trim($_POST['message'] ?? '');
+    $purpose = trim($_POST['purpose'] ?? '');
+    $urgentNote = trim($_POST['urgent_note'] ?? '');
+    $itemsRaw = $_POST['items'] ?? '[]';
+    $suppliersRaw = $_POST['suppliers'] ?? '[]';
+    $items = json_decode($itemsRaw, true);
+    $suppliers = json_decode($suppliersRaw, true);
 
-        if (!$officeId || !$facilityId || !$requestDate) {
-            sendJson(['success' => false, 'message' => 'Office, location, and date are required.']);
-        }
-        if (!is_array($items) || count($items) === 0) {
-            sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
-        }
-        if (!empty($deanApiCtx['is_department_login']) && $officeId !== $deanOfficeScopeId) {
-            sendJson(['success' => false, 'message' => 'You can only submit requisitions for your office.']);
-        }
+    // ADD: Get requester fields
+    $requesterName = trim($_POST['requester_name'] ?? '');
+    $requesterEmail = trim($_POST['requester_email'] ?? '');
+    $requesterContact = trim($_POST['requester_contact'] ?? '');
 
-        $ownerUserId = cwirms_dean_require_requisition_owner_id($deanApiCtx);
+    // If name is empty, use email local part as fallback
+    if ($requesterName === '' && $requesterEmail !== '') {
+        $requesterName = explode('@', $requesterEmail)[0] ?? '';
+    }
 
-        $db->beginTransaction();
-        try {
+    if (!$officeId || !$facilityId || !$requestDate) {
+        sendJson(['success' => false, 'message' => 'Office, location, and date are required.']);
+    }
+    if (!is_array($items) || count($items) === 0) {
+        sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
+    }
+    if (!empty($deanApiCtx['is_department_login']) && $officeId !== $deanOfficeScopeId) {
+        sendJson(['success' => false, 'message' => 'You can only submit requisitions for your office.']);
+    }
+
+    $ownerUserId = cwirms_dean_require_requisition_owner_id($deanApiCtx);
+
+    $db->beginTransaction();
+    try {
+        // UPDATED: Pass requester fields
+        insertRequisitionBatch(
+            $db,
+            $ownerUserId,
+            $officeId,
+            $facilityId,
+            $requestDate,
+            $message,
+            $purpose,
+            $urgentNote,
+            $items,
+            is_array($suppliers) ? $suppliers : [],
+            'submitted',
+            $requesterName,
+            $requesterEmail,
+            $requesterContact
+        );
+        $db->commit();
+    } catch (Exception $e) {
+        $db->rollBack();
+        throw $e;
+    }
+
+    sendJson(['success' => true, 'message' => 'Requisition submitted successfully.']);
+}
+
+    if ($action === 'save_draft') {
+    $requestId = (int)($_POST['request_id'] ?? 0);
+    $officeId = (int)($_POST['office_id'] ?? 0);
+    $facilityId = (int)($_POST['facility_id'] ?? 0);
+    $requestDate = trim($_POST['request_date'] ?? '');
+    $message = trim($_POST['message'] ?? '');
+    $purpose = trim($_POST['purpose'] ?? '');
+    $urgentNote = trim($_POST['urgent_note'] ?? '');
+    $itemsRaw = $_POST['items'] ?? '[]';
+    $suppliersRaw = $_POST['suppliers'] ?? '[]';
+    $targetSubmissionStatus = strtolower(trim((string)($_POST['submission_status'] ?? 'draft')));
+    $items = json_decode($itemsRaw, true);
+    $suppliers = json_decode($suppliersRaw, true);
+
+    // ADD: Get requester fields
+    $requesterName = trim($_POST['requester_name'] ?? '');
+    $requesterEmail = trim($_POST['requester_email'] ?? '');
+    $requesterContact = trim($_POST['requester_contact'] ?? '');
+
+    // If name is empty, use email local part as fallback
+    if ($requesterName === '' && $requesterEmail !== '') {
+        $requesterName = explode('@', $requesterEmail)[0] ?? '';
+    }
+
+    if (!in_array($targetSubmissionStatus, ['draft', 'submitted'], true)) {
+        $targetSubmissionStatus = 'draft';
+    }
+
+    if (!$officeId || !$facilityId || !$requestDate) {
+        sendJson(['success' => false, 'message' => 'Office, location, and date are required.']);
+    }
+    if (!is_array($items) || count($items) === 0) {
+        sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
+    }
+    if (!empty($deanApiCtx['is_department_login']) && $officeId !== $deanOfficeScopeId) {
+        sendJson(['success' => false, 'message' => 'You can only save requisitions for your office.']);
+    }
+
+    $ownerUserId = cwirms_dean_require_requisition_owner_id($deanApiCtx);
+
+    $db->beginTransaction();
+    try {
+        if ($requestId <= 0) {
+            // Create new draft requisition - UPDATED: Pass requester fields
             insertRequisitionBatch(
                 $db,
                 $ownerUserId,
@@ -431,112 +540,60 @@ try {
                 $urgentNote,
                 $items,
                 is_array($suppliers) ? $suppliers : [],
-                'submitted'
+                'draft',
+                $requesterName,
+                $requesterEmail,
+                $requesterContact
             );
+            $newRequestId = (int) $db->lastInsertId();
             $db->commit();
-        } catch (Exception $e) {
-            $db->rollBack();
-            throw $e;
-        }
-
-        sendJson(['success' => true, 'message' => 'Requisition submitted successfully.']);
-    }
-
-    if ($action === 'save_draft') {
-        $requestId = (int)($_POST['request_id'] ?? 0);
-        $officeId = (int)($_POST['office_id'] ?? 0);
-        $facilityId = (int)($_POST['facility_id'] ?? 0);
-        $requestDate = trim($_POST['request_date'] ?? '');
-        $message = trim($_POST['message'] ?? '');
-        $purpose = trim($_POST['purpose'] ?? '');
-        $urgentNote = trim($_POST['urgent_note'] ?? '');
-        $itemsRaw = $_POST['items'] ?? '[]';
-        $suppliersRaw = $_POST['suppliers'] ?? '[]';
-        $targetSubmissionStatus = strtolower(trim((string)($_POST['submission_status'] ?? 'draft')));
-        $items = json_decode($itemsRaw, true);
-        $suppliers = json_decode($suppliersRaw, true);
-
-        if (!in_array($targetSubmissionStatus, ['draft', 'submitted'], true)) {
-            $targetSubmissionStatus = 'draft';
-        }
-
-        if (!$officeId || !$facilityId || !$requestDate) {
-            sendJson(['success' => false, 'message' => 'Office, location, and date are required.']);
-        }
-        if (!is_array($items) || count($items) === 0) {
-            sendJson(['success' => false, 'message' => 'Add at least one requested item.']);
-        }
-        if (!empty($deanApiCtx['is_department_login']) && $officeId !== $deanOfficeScopeId) {
-            sendJson(['success' => false, 'message' => 'You can only save requisitions for your office.']);
-        }
-
-        $ownerUserId = cwirms_dean_require_requisition_owner_id($deanApiCtx);
-
-        $db->beginTransaction();
-        try {
-            if ($requestId <= 0) {
-                // Create new draft requisition
-                insertRequisitionBatch(
-                    $db,
-                    $ownerUserId,
-                    $officeId,
-                    $facilityId,
-                    $requestDate,
-                    $message,
-                    $purpose,
-                    $urgentNote,
-                    $items,
-                    is_array($suppliers) ? $suppliers : [],
-                    'draft'
-                );
-                $newRequestId = (int) $db->lastInsertId();
-                $db->commit();
-                sendJson(['success' => true, 'message' => 'Draft saved successfully.', 'request_id' => $newRequestId]);
-            } else {
-                // Update existing draft requisition
-                $checkStmt = $db->prepare("SELECT request_id, submission_status FROM requisition_item WHERE request_id = ? AND {$itemScope['sql']}");
-                $checkStmt->execute([$requestId, $itemScope['param']]);
-                $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
-                
-                if (!$existing) {
-                    $db->rollBack();
-                    sendJson(['success' => false, 'message' => 'Request not found.']);
-                }
-                
-                if ($existing['submission_status'] === 'submitted') {
-                    $db->rollBack();
-                    sendJson(['success' => false, 'message' => 'Cannot modify submitted requisition.']);
-                }
-
-                $msgVal = $message !== '' ? $message : null;
-                $purposeVal = $purpose !== '' ? $purpose : null;
-                $urgentNoteVal = $urgentNote !== '' ? $urgentNote : null;
-
-                $updateStmt = $db->prepare("UPDATE requisition_item SET office_id = ?, facility_id = ?, message = ?, purpose = ?, urgent_note = ?, submission_status = ? WHERE request_id = ? AND {$itemScope['sql']}");
-                $updateStmt->execute([$officeId, $facilityId, $msgVal, $purposeVal, $urgentNoteVal, $targetSubmissionStatus, $requestId, $itemScope['param']]);
-
-                // Delete old items and re-insert
-                $delItemsStmt = $db->prepare('DELETE FROM requisition_line WHERE request_id = ?');
-                $delItemsStmt->execute([$requestId]);
-
-                requisitionInsertLinesForRequest($db, $requestId, $items, is_array($suppliers) ? $suppliers : []);
-
-                $db->commit();
-                $responseMessage = $targetSubmissionStatus === 'submitted'
-                    ? 'Requisition submitted successfully.'
-                    : 'Draft saved successfully.';
-                sendJson([
-                    'success' => true,
-                    'message' => $responseMessage,
-                    'request_id' => $requestId,
-                    'new_status' => $targetSubmissionStatus,
-                ]);
+            sendJson(['success' => true, 'message' => 'Draft saved successfully.', 'request_id' => $newRequestId]);
+        } else {
+            // Update existing draft requisition
+            $checkStmt = $db->prepare("SELECT request_id, submission_status FROM requisition_item WHERE request_id = ? AND {$itemScope['sql']}");
+            $checkStmt->execute([$requestId, $itemScope['param']]);
+            $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$existing) {
+                $db->rollBack();
+                sendJson(['success' => false, 'message' => 'Request not found.']);
             }
-        } catch (Exception $e) {
-            $db->rollBack();
-            throw $e;
+            
+            if ($existing['submission_status'] === 'submitted') {
+                $db->rollBack();
+                sendJson(['success' => false, 'message' => 'Cannot modify submitted requisition.']);
+            }
+
+            $msgVal = $message !== '' ? $message : null;
+            $purposeVal = $purpose !== '' ? $purpose : null;
+            $urgentNoteVal = $urgentNote !== '' ? $urgentNote : null;
+
+            // UPDATED: Include requester fields in update
+            $updateStmt = $db->prepare("UPDATE requisition_item SET office_id = ?, facility_id = ?, message = ?, purpose = ?, urgent_note = ?, submission_status = ?, requester_name = ?, requester_email = ?, requester_contact = ? WHERE request_id = ? AND {$itemScope['sql']}");
+            $updateStmt->execute([$officeId, $facilityId, $msgVal, $purposeVal, $urgentNoteVal, $targetSubmissionStatus, $requesterName, $requesterEmail, $requesterContact, $requestId, $itemScope['param']]);
+
+            // Delete old items and re-insert
+            $delItemsStmt = $db->prepare('DELETE FROM requisition_line WHERE request_id = ?');
+            $delItemsStmt->execute([$requestId]);
+
+            requisitionInsertLinesForRequest($db, $requestId, $items, is_array($suppliers) ? $suppliers : []);
+
+            $db->commit();
+            $responseMessage = $targetSubmissionStatus === 'submitted'
+                ? 'Requisition submitted successfully.'
+                : 'Draft saved successfully.';
+            sendJson([
+                'success' => true,
+                'message' => $responseMessage,
+                'request_id' => $requestId,
+                'new_status' => $targetSubmissionStatus,
+            ]);
         }
+    } catch (Exception $e) {
+        $db->rollBack();
+        throw $e;
     }
+}
 
     if ($action === 'change_submission_status') {
         $requestId = (int)($_POST['request_id'] ?? 0);

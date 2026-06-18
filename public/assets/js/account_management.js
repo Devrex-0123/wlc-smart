@@ -1564,6 +1564,7 @@ accountManagementRoot?.addEventListener('click', async e => {
 // -------- SEARCH, SORT & SPLIT USER TABLES --------
 const searchInput = document.getElementById('searchInput');
 const ADMIN_ROLE_DEFS = [
+    { role: 'Inventory Manager', label: 'Inventory Manager' },
     { role: 'GSD officer', label: 'GSD' },
     { role: 'Comptroller', label: 'Comptroller' },
     { role: 'President', label: 'President' },
@@ -1586,18 +1587,29 @@ function isCanvasserAssignee(user) {
 }
 
 function usersForRoleDef(users, roleDef) {
-    if (roleDef.role === 'Canvasser') {
+    // Normalize the target role: lowercase and replace underscores with spaces
+    const targetRole = roleDef.role.toLowerCase().trim().replace(/_/g, ' ');
+    
+    if (targetRole === 'canvasser') {
         return users.filter(u => isCanvasserAssignee(u));
     }
-    if (roleDef.role === 'Employee') {
-        return users.filter(u => (u.role || '').trim() === 'Employee' && !isCanvasserAssignee(u));
+    if (targetRole === 'employee') {
+        return users.filter(u => {
+            const uRole = (u.role || '').trim().toLowerCase().replace(/_/g, ' ');
+            return uRole === 'employee' && !isCanvasserAssignee(u);
+        });
     }
-    return users.filter(u => (u.role || '').trim() === roleDef.role);
+    
+    // Case-insensitive comparison for all other roles (like Inventory Manager)
+    return users.filter(u => {
+        const uRole = (u.role || '').trim().toLowerCase().replace(/_/g, ' ');
+        return uRole === targetRole;
+    });
 }
 
 function isAdminPanelUser(user) {
-    const role = normalizeUserRole(user.role);
-    return role !== 'dean' && role !== 'user' && role !== 'inventory manager';
+    const role = normalizeUserRole(user.role).replace(/_/g, ' ');
+    return role !== 'dean' && role !== 'user';
 }
 
 function flattenPanelUsers(users, roleDefs) {
