@@ -69,6 +69,9 @@ function readRootConfig(root) {
             progressFrom: '',
             viewer: '',
             userId: 0,
+            itemsReceivedAction: false,
+            itemsReceivedPoId: 0,
+            itemsReceivedPoNumber: '',
         };
     }
     const readonly = root.dataset.readonly === '1' || root.dataset.readonly === 'true';
@@ -79,7 +82,22 @@ function readRootConfig(root) {
     const progressFrom = root.dataset.progressFrom || '';
     const viewer = root.dataset.viewer || '';
     const userId = parseInt(root.dataset.userId || '0', 10) || 0;
-    return { readonly, backHref, backAriaLabel, deanFlow, departmentFlow, progressFrom, viewer, userId };
+    const itemsReceivedAction = root.dataset.itemsReceivedAction === '1';
+    const itemsReceivedPoId = parseInt(root.dataset.poId || '0', 10) || 0;
+    const itemsReceivedPoNumber = root.dataset.poNumber || '';
+    return {
+        readonly,
+        backHref,
+        backAriaLabel,
+        deanFlow,
+        departmentFlow,
+        progressFrom,
+        viewer,
+        userId,
+        itemsReceivedAction,
+        itemsReceivedPoId,
+        itemsReceivedPoNumber,
+    };
 }
 
 function loadRecord(requestId) {
@@ -614,6 +632,40 @@ function renderEmpty(root, config) {
     `;
 }
 
+function buildInventoryManagerItemsReceivedSection(record, config) {
+    if (!config.itemsReceivedAction) {
+        return '';
+    }
+
+    if (record.items_received_at) {
+        return `
+                <div class="rsp-hero-section rsp-hero-im-actions">
+                    <div class="rsp-im-success-banner" role="status">
+                        <i class="fas fa-circle-check" aria-hidden="true"></i>
+                        Request completed — items marked as received.
+                    </div>
+                </div>`;
+    }
+
+    if (!record.payment_released_at) {
+        return '';
+    }
+
+    return `
+                <div class="rsp-hero-section rsp-hero-im-actions">
+                    <div class="rsp-im-notice">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        Visible to Inventory Manager only. Confirm the items for this PO have been physically received before marking complete.
+                    </div>
+                    <div class="rsp-im-actions">
+                        <button type="button" class="rsp-btn-items-received" id="rspMarkItemsReceivedBtn">
+                            <i class="fas fa-box-open" aria-hidden="true"></i> Items received — click to complete request
+                        </button>
+                    </div>
+                    <p id="rspImActionMsg" class="rsp-status-msg" role="status"></p>
+                </div>`;
+}
+
 function renderApp(root, record, config) {
     progressRecord = record;
     const st = record.status || 'Pending';
@@ -794,6 +846,8 @@ function renderApp(root, record, config) {
                 </div>`
             : '';
 
+    const inventoryManagerItemsReceivedSection = buildInventoryManagerItemsReceivedSection(record, config);
+
     root.innerHTML = `
         <div class="rsp-wrap">
             <header class="rsp-hero rsp-unified">
@@ -837,6 +891,7 @@ function renderApp(root, record, config) {
                     </div>
                 </div>
                 ${requesterActionsSection}
+                ${inventoryManagerItemsReceivedSection}
                 ${updateSection}
             </header>
         </div>
@@ -878,6 +933,13 @@ function renderApp(root, record, config) {
             void handleMarkPaymentReleased(root, config);
         });
     }
+
+    const markItemsReceivedBtn = document.getElementById('rspMarkItemsReceivedBtn');
+    if (markItemsReceivedBtn) {
+        markItemsReceivedBtn.addEventListener('click', () => {
+            void handleMarkItemsReceived(root, config);
+        });
+    }
 }
 
 async function postPoRequesterAction(action, purchaseOrderId) {
@@ -908,6 +970,55 @@ function mergePoProgressFields(record, poData) {
         payment_released_at: poData.payment_released_at || null,
         items_received_at: poData.items_received_at || null,
     };
+}
+
+async function handleMarkItemsReceived(root, config) {
+    if (!progressRecord || !config.itemsReceivedAction) {
+        return;
+    }
+
+    const msg = document.getElementById('rspImActionMsg');
+    const btn = document.getElementById('rspMarkItemsReceivedBtn');
+    const poId = Number(config.itemsReceivedPoId || progressRecord.purchase_order_id || 0);
+    if (poId <= 0) {
+        return;
+    }
+
+    const poLabel = String(config.itemsReceivedPoNumber || progressRecord.purchase_order_number || 'this PO').trim();
+    const ok = window.confirm(`Confirm the items for ${poLabel} have been received?`);
+    if (!ok) {
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+    }
+    if (msg) {
+        msg.textContent = '';
+        msg.className = 'rsp-status-msg';
+    }
+
+    try {
+        const data = await postPoRequesterAction('mark_items_received', poId);
+        progressRecord = mergePoProgressFields(progressRecord, data.data);
+        try {
+            sessionStorage.setItem(
+                STORAGE_PREFIX + String(progressRecord.request_id),
+                JSON.stringify(progressRecord)
+            );
+        } catch {
+            /* ignore */
+        }
+        renderApp(root, progressRecord, config);
+    } catch (err) {
+        if (msg) {
+            msg.textContent = err instanceof Error ? err.message : 'Could not mark items as received.';
+            msg.className = 'rsp-status-msg err';
+        }
+        if (btn) {
+            btn.disabled = false;
+        }
+    }
 }
 
 async function handleMarkPaymentReleased(root, config) {

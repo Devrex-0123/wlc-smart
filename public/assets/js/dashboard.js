@@ -116,8 +116,6 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-const PURCHASE_ORDER_API = '../../app/api/purchase_order.php';
-
 function formatPoDateTime(value) {
   if (!value) return '—';
   const d = new Date(value);
@@ -139,7 +137,11 @@ function renderAwaitingItemReceipt(items = []) {
       const poNumber = escapeHtml(String(item.po_number || '—'));
       const location = escapeHtml(String(item.location || '—'));
       const released = escapeHtml(formatPoDateTime(item.payment_released_at));
-      const poId = Number(item.purchase_order_id || 0);
+      const requestId = Number(item.requisition_id || 0);
+      const progressHref =
+        requestId > 0
+          ? `requisition_status_progress.php?rid=${encodeURIComponent(String(requestId))}`
+          : '#';
 
       return `
         <li class="dashboard-recent__item dashboard-awaiting-receipt__item">
@@ -150,54 +152,13 @@ function renderAwaitingItemReceipt(items = []) {
             <p class="dashboard-recent__title">${poNumber}</p>
             <p class="dashboard-recent__meta">${location} · Payment released ${released}</p>
           </div>
-          <button type="button" class="dashboard-awaiting-receipt__btn" data-po-id="${poId}">
-            <i class="fas fa-circle-check" aria-hidden="true"></i> Mark items received
-          </button>
+          <a href="${progressHref}" class="dashboard-awaiting-receipt__view">
+            View <i class="fas fa-chevron-right" aria-hidden="true"></i>
+          </a>
         </li>
       `;
     })
     .join('');
-
-  list.querySelectorAll('.dashboard-awaiting-receipt__btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      void handleMarkItemsReceivedDashboard(btn);
-    });
-  });
-}
-
-async function handleMarkItemsReceivedDashboard(btn) {
-  const poId = Number(btn.getAttribute('data-po-id') || 0);
-  if (poId <= 0) return;
-
-  const ok = window.confirm('Confirm the items for this PO have been received?');
-  if (!ok) return;
-
-  btn.disabled = true;
-  const originalHtml = btn.innerHTML;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Saving…';
-
-  try {
-    const body = new URLSearchParams();
-    body.append('action', 'mark_items_received');
-    body.append('purchase_order_id', String(poId));
-
-    const res = await fetch(PURCHASE_ORDER_API, {
-      method: 'POST',
-      credentials: 'include',
-      body,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) {
-      throw new Error(data.message || 'Could not mark items as received.');
-    }
-
-    await loadDashboardSummary();
-  } catch (err) {
-    console.error(err);
-    btn.disabled = false;
-    btn.innerHTML = originalHtml;
-    window.alert(err instanceof Error ? err.message : 'Could not mark items as received.');
-  }
 }
 
 async function loadDashboardSummary() {
