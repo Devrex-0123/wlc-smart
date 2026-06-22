@@ -50,9 +50,10 @@ try {
         FROM user u
         LEFT JOIN offices d ON u.office_id = d.office_id
         WHERE u.deleted_at IS NULL
+          AND u.user_id != ?
         ORDER BY u.created_at DESC
     ");
-    $stmt->execute();
+    $stmt->execute([$_SESSION['user_id']]);
 
     $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

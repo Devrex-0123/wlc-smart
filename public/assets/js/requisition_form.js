@@ -2412,6 +2412,15 @@ submitRequisitionBtn.addEventListener('click', async (event) => {
     payload.append('items', JSON.stringify(itemsToSubmit));
     payload.append('suppliers', JSON.stringify(state.selectedSuppliers));
 
+
+    const requesterName = requesterNameInput ? requesterNameInput.value.trim() : '';
+    const requesterEmail = document.getElementById('requesterEmail') ? document.getElementById('requesterEmail').value.trim() : '';
+    const requesterContact = document.getElementById('requesterContact') ? document.getElementById('requesterContact').value.trim() : '';
+    
+    payload.append('requester_name', requesterName);
+    payload.append('requester_email', requesterEmail);
+    payload.append('requester_contact', requesterContact);
+
     try {
         const response = await fetch('../../app/api/dean_requisition.php', {
             method: 'POST',

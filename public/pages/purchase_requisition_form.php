@@ -21,6 +21,17 @@ $isPresidentVerifier = in_array($roleLc, ['president', 'president verifier', 've
 $requestId = (int) ($_GET['request_id'] ?? 0);
 $from = trim((string) ($_GET['from'] ?? ''));
 
+if ($requestId > 0) {
+    $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ? LIMIT 1');
+    $nameStmt->execute([$requestId]);
+    $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+    
+    // If a name is stored in the database, overwrite the email fallback with it
+    if ($storedName !== '') {
+        $displayName = $storedName;
+    }
+}
+
 $progressQs = $requestId > 0 ? ('?rid=' . $requestId) : '';
 $backHref = 'dean_requisition_management.php';
 if ($from === 'gsd') {

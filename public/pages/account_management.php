@@ -313,13 +313,13 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                         <label for="role">Assigned Role</label>
                         <select name="role" id="role" required>
                             <option value="">Select Role</option>
-                            <option value="Dean">Dean</option>
-                            <option value="Laboratory Manager">Laboratory Manager</option>
+                            <!-- <option value="Dean">Dean</option>-->
+                            <option value="Inventory Manager">Inventory Manager</option> 
                             <option value="Comptroller">Comptroller</option>
                             <option value="President">President</option>
                             <option value="GSD officer">GSD officer</option>
-                            <option value="Canvasser">Canvasser</option>
-                            <option value="Employee">Employee</option>
+                            <!-- <option value="Canvasser">Canvasser</option> -->
+                            <!-- <option value="Employee">Employee</option> -->
                             <option value="User">User</option>
                         </select>
                     </div>

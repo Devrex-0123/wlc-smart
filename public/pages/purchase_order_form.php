@@ -13,17 +13,30 @@ $stmt = $db->prepare('SELECT u.Email, u.role, u.full_name FROM user u WHERE u.us
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
-$displayName = trim((string) ($user['full_name'] ?? ''));
-if ($displayName === '') {
-    $displayName = explode('@', (string) ($user['Email'] ?? 'unknown'))[0] ?? 'unknown';
-}
-
 $roleLc = strtolower(trim((string) ($user['role'] ?? '')));
 $isComptroller = ($roleLc === 'comptroller');
 $isPresidentVerifier = in_array($roleLc, ['president', 'president verifier', 'verifier president', 'president_verifier'], true);
+
 $poId = (int) ($_GET['id'] ?? 0);
 $requestId = (int) ($_GET['request_id'] ?? 0);
 $from = trim((string) ($_GET['from'] ?? ''));
+
+$requesterName = '';
+if ($requestId > 0) {
+    $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ? LIMIT 1');
+    $nameStmt->execute([$requestId]);
+    $requesterName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+}
+
+// 3. SET THE DISPLAY NAME
+if ($requesterName !== '') {
+    $displayName = $requesterName;
+} else {
+    $displayName = trim((string) ($user['full_name'] ?? ''));
+    if ($displayName === '') {
+        $displayName = explode('@', (string) ($user['Email'] ?? 'unknown'))[0] ?? 'unknown';
+    }
+}
 
 $progressQs = $requestId > 0 ? ('?rid=' . $requestId) : '';
 $backHref = 'president_dashboard.php';

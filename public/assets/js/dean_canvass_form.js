@@ -36,6 +36,7 @@
     const cvCanvassedCards = document.getElementById('cvCanvassedCards');
     const cvCanvassedSupplierLabel = document.querySelector('.canvassed-supplier-label');
     const cvCanvassedSupplierWrap = document.getElementById('cvCanvassedSupplierWrap');
+    const cvCanvasSection = document.getElementById('cvCanvasSection'); // null for the requester now
     const cvSaveBtn = document.getElementById('cvSaveBtn');
     const cvSaveDraftBtn = document.getElementById('cvSaveDraftBtn');
     const cvCompleteCanvassBtn = document.getElementById('cvCompleteCanvassBtn');
@@ -50,7 +51,7 @@
     const cvSuggestedSupplierNotice = document.getElementById('cvSuggestedSupplierNotice');
     const cvSuggestedSupplierNoticeText = document.getElementById('cvSuggestedSupplierNoticeText');
     const cvSuggestedSupplierNoticeDismiss = document.getElementById('cvSuggestedSupplierNoticeDismiss');
-
+    
     const CV_CANVASS_HINT_DISMISSED_KEY = 'cwirms_cv_canvass_items_hint_dismissed';
     let cvSuggestedNoticeDismissed = false;
 
@@ -1322,9 +1323,7 @@
             renderPreferredPicker();
         }
         hydrateCanvassedSupplierItemsFromSavedPrices();
-        if (cvCanvassedCards) {
-            renderSupplierTable();
-        }
+        
     }
 
     async function uploadPendingPreferredPhotos() {
@@ -1925,7 +1924,7 @@
             }
         }
         updateSuggestedSupplierNotice();
-        renderSupplierTable();
+        
         if (gsdReadonly && typeof window.__imrmsGsdAssigneeSyncApproval === 'function') {
             window.__imrmsGsdAssigneeSyncApproval(appr);
         }
@@ -2297,176 +2296,212 @@
     }
 
     function syncCanvassedSupplierMatrixVisibility() {
-        const isRequesterView = Boolean(window.CWIRMS_PREF_SUP && window.CWIRMS_PREF_SUP.isRequester);
-        if (cvSupplierPickerLabel) {
-            cvSupplierPickerLabel.hidden = isRequesterView;
-        }
-        const hasCanvassedData = state.selectedSuppliers.length > 0;
-        if (cvCanvassedSupplierLabel) {
-            cvCanvassedSupplierLabel.hidden = !hasCanvassedData;
-        }
-        if (cvCanvassedSupplierWrap) {
-            cvCanvassedSupplierWrap.hidden = !hasCanvassedData;
+    const isRequesterView = Boolean(window.CWIRMS_PREF_SUP && window.CWIRMS_PREF_SUP.isRequester);
+    if (cvSupplierPickerLabel) {
+        cvSupplierPickerLabel.hidden = isRequesterView;
+    }
+    const hasCanvassedData = state.selectedSuppliers && state.selectedSuppliers.length > 0;
+    
+    if (cvCanvassedSupplierLabel) {
+        cvCanvassedSupplierLabel.hidden = !hasCanvassedData;
+    }
+    if (cvCanvassedSupplierWrap) {
+        if (!hasCanvassedData) {
+            cvCanvassedSupplierWrap.setAttribute('hidden', 'hidden');
+            cvCanvassedSupplierWrap.style.display = 'none';
+        } else {
+            cvCanvassedSupplierWrap.removeAttribute('hidden');
+            cvCanvassedSupplierWrap.style.display = '';
         }
     }
+}
 
     function renderSupplierTable() {
         if (!cvCanvassedCards) {
-            return;
-        }
-        syncCanvassedSupplierMatrixVisibility();
-        const canvasStatus = String((cachedCanvassApproval && cachedCanvassApproval.canvas_status) || '').trim().toLowerCase();
-        const canvasserLocked = canvasserRegister && (canvasStatus === 'accept' || canvasStatus === 'reject');
-        const isRequesterView = Boolean(window.CWIRMS_PREF_SUP && window.CWIRMS_PREF_SUP.isRequester);
-        const hideStructureActions = gsdReadonly || canvasserLocked || isRequesterView;
-        const { showGsdSuggestUi, canChangeSuggested } = getGsdSuggestSelectionContext();
-
-        if (state.selectedSuppliers.length === 0) {
-            cvCanvassedCards.innerHTML = `<div class="empty-state">${
-                canvasserRegister
-                    ? 'No canvassed suppliers yet. Add suppliers and enter quoted prices here.'
-                    : 'No canvassed supplier quotes yet. This section is filled in by the assigned canvasser.'
-            }</div>`;
-            return;
-        }
-
-        if (state.items.length === 0) {
-            cvCanvassedCards.innerHTML = `<div class="empty-state">${
-                canvasserRegister
-                    ? 'Waiting for the requester to add canvass lines before you can quote prices.'
-                    : 'Add canvass items first.'
-            }</div>`;
-            return;
-        }
-
-        cvCanvassedCards.innerHTML = state.selectedSuppliers
-            .map((supplier, supplierIndex) => {
-                const sidNum = Number(supplier.supplier_id);
-                const avatarSrc = escapeHtml(getSupplierImageUrl(supplier.supplier_image));
-                const roAttr = gsdReadonly || isRequesterView ? ' readonly' : '';
-                const notesReadonly = hideStructureActions || isRequesterView;
-                const headerBadge = buildCanvassedSupplierHeaderBadge(supplier);
-                const supplierDetails = resolveCanvassedSupplierDetails(supplier);
-                const locationLine = formatSupplierLocation(supplierDetails);
-                const namePart = canvasserRegister
-                    ? `<button type="button" class="supplier-table-contact-name-btn cv-canvas-contact-btn" data-cv-supplier-id="${escapeHtml(
-                          String(supplier.supplier_id)
-                      )}" aria-label="${escapeHtml(`View contact for ${supplier.supplier_name || 'supplier'}`)}">${escapeHtml(
-                          supplier.supplier_name || ''
-                      )}</button>`
-                    : escapeHtml(supplier.supplier_name || '');
-                const linkedIndices = getCanvassedSupplierItemIndices(sidNum);
-                const availableItems = state.items
-                    .map((item, index) => ({ item, index }))
-                    .filter(({ index }) => !linkedIndices.includes(index));
-                const addItemOptions = availableItems
-                    .map(
-                        ({ item, index }) =>
-                            `<option value="${index}">${escapeHtml(item.name || `Item ${index + 1}`)}</option>`
-                    )
-                    .join('');
-                const canAddItems = canvasserRegister && !hideStructureActions && !isRequesterView;
-                const addItemBar = canAddItems
-                    ? state.items.length === 0
-                        ? '<div class="cv-pref-add-item-bar"><span class="empty-state">Add canvass items first.</span></div>'
-                        : `<div class="cv-pref-add-item-bar">
-                        <select class="cv-pref-add-item-select cv-canvas-add-item-select" data-cv-supplier-id="${sidNum}" aria-label="Select item to quote"${availableItems.length === 0 ? ' disabled' : ''}>
-                            <option value="">Select item…</option>
-                            ${addItemOptions}
-                        </select>
-                        <button type="button" class="cv-pref-add-item-btn cv-canvas-add-item-btn" data-cv-supplier-id="${sidNum}"${availableItems.length === 0 ? ' disabled' : ''}>+ Add item</button>
-                    </div>`
-                    : '';
-                const itemRows = linkedIndices
-                    .map((itemIndex) => {
-                        const it = state.items[itemIndex];
-                        if (!it) {
-                            return '';
-                        }
-                        const value = supplier.prices[itemIndex] ?? '';
-                        const isSelectedForItem = isSuggestedForMatrix(itemIndex, sidNum, 'canvassed');
-                        const pricePresent = value !== null && String(value).trim() !== '';
-                        const radioName = `cvSuggestedCanvassedItem${itemIndex}`;
-                        const canPickThisCell = showGsdSuggestUi && pricePresent;
-                        const radioHtml = showGsdSuggestUi
-                            ? `<label class="cv-suggested-radio-wrap" title="Suggested supplier for this item">
-                                <input type="radio"
-                                    class="cv-suggested-item-radio"
-                                    name="${radioName}"
-                                    value="${sidNum}"
-                                    data-item-index="${itemIndex}"
-                                    data-canvass-detail-id="${Number(it.canvass_detail_id || 0)}"
-                                    data-selection-source="canvassed"
-                                    ${isSelectedForItem ? 'checked' : ''}
-                                    ${canPickThisCell ? '' : 'disabled'}>
-                               </label>`
-                            : '';
-                        const selectedBadge =
-                            gsdReadonly && isSelectedForItem ? '<span class="cv-gsd-suggested-badge">Suggested</span>' : '';
-                        const clearBtn =
-                            showGsdSuggestUi && isSelectedForItem
-                                ? `<button type="button" class="cv-suggested-clear-btn" data-item-index="${itemIndex}" data-canvass-detail-id="${Number(it.canvass_detail_id || 0)}" title="Clear suggested supplier">Clear</button>`
-                                : '';
-                        const removeItemBtn =
-                            canAddItems
-                                ? `<button type="button" class="cv-pref-remove-item-btn cv-canvas-remove-item-btn" data-cv-supplier-id="${sidNum}" data-cv-item-index="${itemIndex}" title="Remove item" aria-label="Remove item">×</button>`
-                                : '';
-                        return `<tr class="${isSelectedForItem ? 'cv-gsd-suggested-row' : ''}">
-                            <td>
-                                <div class="cv-canvass-item-name-cell">
-                                    ${escapeHtml(it.name || `Item ${itemIndex + 1}`)}
-                                    ${formatRequisitionQtyHint(getItemQuantityMeta(itemIndex))}
-                                </div>
-                            </td>
-                            <td>
-                                <div class="cv-pref-price-wrap cv-canvas-price-wrap">
-                                    ${radioHtml}
-                                    <span class="cv-pref-peso">PHP</span>
-                                    <input type="number" min="0" step="0.01" class="supplier-price-input" data-cv-supplier-index="${supplierIndex}" data-cv-item-index="${itemIndex}" value="${escapeHtml(String(value))}" placeholder="0.00"${roAttr}>
-                                    ${selectedBadge}
-                                    ${clearBtn}
-                                </div>
-                            </td>
-                            <td class="cv-pref-item-action-cell">${removeItemBtn}</td>
-                        </tr>`;
-                    })
-                    .join('');
-                const emptyItemsRow =
-                    linkedIndices.length === 0
-                        ? `<tr><td colspan="3" class="empty-state">${canAddItems ? 'No items added yet. Select an item above.' : 'No quoted items for this supplier.'}</td></tr>`
-                        : '';
-                return `<article class="cv-pref-card cv-canvas-card" data-cv-supplier-card-index="${supplierIndex}">
-                    <div class="cv-pref-card-head">
-                        <div class="cv-pref-card-id">
-                            <img src="${avatarSrc}" alt="" class="cv-pref-avatar cv-pref-avatar-img" onerror="${supplierAvatarOnError}">
-                            <div>
-                                <div class="cv-pref-name cv-canvass-head-name-row">${namePart}<span class="cv-canvass-header-badge">${headerBadge}</span></div>
-                                <div class="cv-pref-contact">${escapeHtml(supplierDetails.contact_person || 'No contact person')}</div>
-                                <div class="cv-pref-tin"><span class="cv-pref-tin-label">TIN</span>${escapeHtml(formatSupplierTinDisplay(supplierDetails.tin))}</div>
-                                ${locationLine ? `<div class="cv-pref-location"><i class="fas fa-location-dot" aria-hidden="true"></i> ${escapeHtml(locationLine)}</div>` : ''}
-                            </div>
-                        </div>
-                        ${
-                            hideStructureActions
-                                ? ''
-                                : `<div class="cv-pref-card-actions">
-                            <button type="button" class="cv-pref-remove-btn cv-canvas-remove-btn" data-cv-supplier-index="${supplierIndex}" title="Remove supplier" aria-label="Remove supplier"><i class="fas fa-times" aria-hidden="true"></i></button>
-                        </div>`
-                        }
-                    </div>
-                    <div class="cv-pref-card-body">
-                        ${addItemBar}
-                        <table class="cv-pref-items-table" aria-label="Canvassed supplier quotes">
-                            <thead><tr><th>Item name</th><th>Quoted price</th><th></th></tr></thead>
-                            <tbody>${itemRows}${emptyItemsRow}</tbody>
-                        </table>
-                        ${buildCanvassedOptionalNotesSection(supplier, supplierIndex, notesReadonly)}
-                    </div>
-                </article>`;
-            })
-            .join('');
-        emitCanvassPricingUpdate();
+        return;
     }
+
+    const hasData = state.selectedSuppliers && state.selectedSuppliers.length > 0;
+
+    // Heading + picker are canvasser-only in the PHP now. Everyone else only sees
+    // anything here once the canvasser has actually added a supplier.
+    if (cvCanvasSection) {
+        cvCanvasSection.hidden = !canvasserRegister && !hasData;
+    }
+
+    if (!hasData) {
+        if (cvCanvassedSupplierWrap) cvCanvassedSupplierWrap.hidden = true;
+        if (cvCanvassedSupplierLabel) cvCanvassedSupplierLabel.hidden = true;
+        cvCanvassedCards.innerHTML = `<div class="empty-state">${
+            canvasserRegister
+                ? 'No canvassed suppliers yet. Add suppliers and enter quoted prices here.'
+                : 'No canvassed supplier quotes yet. This section is filled in by the assigned canvasser.'
+        }</div>`;
+        return;
+    }
+
+    if (cvCanvassedSupplierWrap) cvCanvassedSupplierWrap.hidden = false;
+    if (cvCanvassedSupplierLabel) cvCanvassedSupplierLabel.hidden = false;
+    
+    // If there IS data, show the container
+    if (cvCanvassedSupplierWrap) {
+        cvCanvassedSupplierWrap.removeAttribute('hidden');
+        cvCanvassedSupplierWrap.style.display = '';
+        cvCanvassedSupplierWrap.style.visibility = '';
+        cvCanvassedSupplierWrap.style.height = '';
+        cvCanvassedSupplierWrap.style.overflow = '';
+        cvCanvassedSupplierWrap.style.padding = '';
+        cvCanvassedSupplierWrap.style.margin = '';
+        cvCanvassedSupplierWrap.style.border = '';
+    }
+    if (cvCanvassedSupplierLabel) {
+        cvCanvassedSupplierLabel.removeAttribute('hidden');
+    }
+    
+    
+    const canvasStatus = String((cachedCanvassApproval && cachedCanvassApproval.canvas_status) || '').trim().toLowerCase();
+    const canvasserLocked = canvasserRegister && (canvasStatus === 'accept' || canvasStatus === 'reject');
+    const isRequesterView = Boolean(window.CWIRMS_PREF_SUP && window.CWIRMS_PREF_SUP.isRequester);
+    const hideStructureActions = gsdReadonly || canvasserLocked || isRequesterView;
+    const { showGsdSuggestUi, canChangeSuggested } = getGsdSuggestSelectionContext();
+
+    if (state.items.length === 0) {
+        cvCanvassedCards.innerHTML = `<div class="empty-state">${
+            canvasserRegister
+                ? 'Waiting for the requester to add canvass lines before you can quote prices.'
+                : 'Add canvass items first.'
+        }</div>`;
+        return;
+    }
+
+    cvCanvassedCards.innerHTML = state.selectedSuppliers
+        .map((supplier, supplierIndex) => {
+            const sidNum = Number(supplier.supplier_id);
+            const avatarSrc = escapeHtml(getSupplierImageUrl(supplier.supplier_image));
+            const roAttr = gsdReadonly || isRequesterView ? ' readonly' : '';
+            const notesReadonly = hideStructureActions || isRequesterView;
+            const headerBadge = buildCanvassedSupplierHeaderBadge(supplier);
+            const supplierDetails = resolveCanvassedSupplierDetails(supplier);
+            const locationLine = formatSupplierLocation(supplierDetails);
+            const namePart = canvasserRegister
+                ? `<button type="button" class="supplier-table-contact-name-btn cv-canvas-contact-btn" data-cv-supplier-id="${escapeHtml(
+                      String(supplier.supplier_id)
+                  )}" aria-label="${escapeHtml(`View contact for ${supplier.supplier_name || 'supplier'}`)}">${escapeHtml(
+                      supplier.supplier_name || ''
+                  )}</button>`
+                : escapeHtml(supplier.supplier_name || '');
+            const linkedIndices = getCanvassedSupplierItemIndices(sidNum);
+            const availableItems = state.items
+                .map((item, index) => ({ item, index }))
+                .filter(({ index }) => !linkedIndices.includes(index));
+            const addItemOptions = availableItems
+                .map(
+                    ({ item, index }) =>
+                        `<option value="${index}">${escapeHtml(item.name || `Item ${index + 1}`)}</option>`
+                )
+                .join('');
+            const canAddItems = canvasserRegister && !hideStructureActions && !isRequesterView;
+            const addItemBar = canAddItems
+                ? state.items.length === 0
+                    ? '<div class="cv-pref-add-item-bar"><span class="empty-state">Add canvass items first.</span></div>'
+                    : `<div class="cv-pref-add-item-bar">
+                    <select class="cv-pref-add-item-select cv-canvas-add-item-select" data-cv-supplier-id="${sidNum}" aria-label="Select item to quote"${availableItems.length === 0 ? ' disabled' : ''}>
+                        <option value="">Select item…</option>
+                        ${addItemOptions}
+                    </select>
+                    <button type="button" class="cv-pref-add-item-btn cv-canvas-add-item-btn" data-cv-supplier-id="${sidNum}"${availableItems.length === 0 ? ' disabled' : ''}>+ Add item</button>
+                </div>`
+                : '';
+            const itemRows = linkedIndices
+                .map((itemIndex) => {
+                    const it = state.items[itemIndex];
+                    if (!it) {
+                        return '';
+                    }
+                    const value = supplier.prices[itemIndex] ?? '';
+                    const isSelectedForItem = isSuggestedForMatrix(itemIndex, sidNum, 'canvassed');
+                    const pricePresent = value !== null && String(value).trim() !== '';
+                    const radioName = `cvSuggestedCanvassedItem${itemIndex}`;
+                    const canPickThisCell = showGsdSuggestUi && pricePresent;
+                    const radioHtml = showGsdSuggestUi
+                        ? `<label class="cv-suggested-radio-wrap" title="Suggested supplier for this item">
+                            <input type="radio"
+                                class="cv-suggested-item-radio"
+                                name="${radioName}"
+                                value="${sidNum}"
+                                data-item-index="${itemIndex}"
+                                data-canvass-detail-id="${Number(it.canvass_detail_id || 0)}"
+                                data-selection-source="canvassed"
+                                ${isSelectedForItem ? 'checked' : ''}
+                                ${canPickThisCell ? '' : 'disabled'}>
+                           </label>`
+                        : '';
+                    const selectedBadge =
+                        gsdReadonly && isSelectedForItem ? '<span class="cv-gsd-suggested-badge">Suggested</span>' : '';
+                    const clearBtn =
+                        showGsdSuggestUi && isSelectedForItem
+                            ? `<button type="button" class="cv-suggested-clear-btn" data-item-index="${itemIndex}" data-canvass-detail-id="${Number(it.canvass_detail_id || 0)}" title="Clear suggested supplier">Clear</button>`
+                            : '';
+                    const removeItemBtn =
+                        canAddItems
+                            ? `<button type="button" class="cv-pref-remove-item-btn cv-canvas-remove-item-btn" data-cv-supplier-id="${sidNum}" data-cv-item-index="${itemIndex}" title="Remove item" aria-label="Remove item">×</button>`
+                            : '';
+                    return `<tr class="${isSelectedForItem ? 'cv-gsd-suggested-row' : ''}">
+                        <td>
+                            <div class="cv-canvass-item-name-cell">
+                                ${escapeHtml(it.name || `Item ${itemIndex + 1}`)}
+                                ${formatRequisitionQtyHint(getItemQuantityMeta(itemIndex))}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="cv-pref-price-wrap cv-canvas-price-wrap">
+                                ${radioHtml}
+                                <span class="cv-pref-peso">PHP</span>
+                                <input type="number" min="0" step="0.01" class="supplier-price-input" data-cv-supplier-index="${supplierIndex}" data-cv-item-index="${itemIndex}" value="${escapeHtml(String(value))}" placeholder="0.00"${roAttr}>
+                                ${selectedBadge}
+                                ${clearBtn}
+                            </div>
+                        </td>
+                        <td class="cv-pref-item-action-cell">${removeItemBtn}</td>
+                    </tr>`;
+                })
+                .join('');
+            const emptyItemsRow =
+                linkedIndices.length === 0
+                    ? `<tr><td colspan="3" class="empty-state">${canAddItems ? 'No items added yet. Select an item above.' : 'No quoted items for this supplier.'}</td></tr>`
+                    : '';
+            return `<article class="cv-pref-card cv-canvas-card" data-cv-supplier-card-index="${supplierIndex}">
+                <div class="cv-pref-card-head">
+                    <div class="cv-pref-card-id">
+                        <img src="${avatarSrc}" alt="" class="cv-pref-avatar cv-pref-avatar-img" onerror="${supplierAvatarOnError}">
+                        <div>
+                            <div class="cv-pref-name cv-canvass-head-name-row">${namePart}<span class="cv-canvass-header-badge">${headerBadge}</span></div>
+                            <div class="cv-pref-contact">${escapeHtml(supplierDetails.contact_person || 'No contact person')}</div>
+                            <div class="cv-pref-tin"><span class="cv-pref-tin-label">TIN</span>${escapeHtml(formatSupplierTinDisplay(supplierDetails.tin))}</div>
+                            ${locationLine ? `<div class="cv-pref-location"><i class="fas fa-location-dot" aria-hidden="true"></i> ${escapeHtml(locationLine)}</div>` : ''}
+                        </div>
+                    </div>
+                    ${
+                        hideStructureActions
+                            ? ''
+                            : `<div class="cv-pref-card-actions">
+                        <button type="button" class="cv-pref-remove-btn cv-canvas-remove-btn" data-cv-supplier-index="${supplierIndex}" title="Remove supplier" aria-label="Remove supplier"><i class="fas fa-times" aria-hidden="true"></i></button>
+                    </div>`
+                    }
+                </div>
+                <div class="cv-pref-card-body">
+                    ${addItemBar}
+                    <table class="cv-pref-items-table" aria-label="Canvassed supplier quotes">
+                        <thead><tr><th>Item name</th><th>Quoted price</th><th></th></tr></thead>
+                        <tbody>${itemRows}${emptyItemsRow}</tbody>
+                    </table>
+                    ${buildCanvassedOptionalNotesSection(supplier, supplierIndex, notesReadonly)}
+                </div>
+            </article>`;
+        })
+        .join('');
+    emitCanvassPricingUpdate();
+}
 
     function removeItemAt(index) {
         state.items.splice(index, 1);
@@ -2547,119 +2582,123 @@
     }
 
     async function loadForm() {
-        state.isHydrating = true;
-        try {
-            const res = await fetch(`${api}?action=get&request_id=${encodeURIComponent(String(requestId))}`, {
-                credentials: 'include',
-            });
-            const data = await res.json();
-            if (!data.success) {
-                showToast(data.message || 'Could not load.', 'error');
-                return;
-            }
-
-            const h = data.header || {};
-            const deptEl = document.getElementById('cvOfficeDisplay');
-            const facEl = document.getElementById('cvFacilityDisplay');
-            const dateEl = document.getElementById('cvRequestDate');
-            const purposeEl = document.getElementById('cvPurpose');
-            if (deptEl) deptEl.value = h.office_name || '—';
-            if (facEl) facEl.value = h.facility_label || '—';
-            if (dateEl) dateEl.value = h.request_date || '—';
-            if (purposeEl) purposeEl.value = h.purpose || '';
-
-            renderRequestedRequisitionItems(data.requisition_requested_items);
-            state.requestedLines = Array.isArray(data.requisition_requested_items)
-                ? data.requisition_requested_items.map((row) => ({
-                      requisition_line_id: Number(row.requisition_line_id || 0),
-                      quantity: Math.max(1, Number(row.quantity) || 1),
-                      unit_type: String(row.unit_type || 'unit'),
-                  }))
-                : [];
-
-            state.catalogItems = Array.isArray(data.item_catalog) ? data.item_catalog : [];
-            fillCvItemDatalist(state.catalogItems);
-
-            state.availableSuppliers = Array.isArray(data.supplier_catalog) ? data.supplier_catalog : [];
-
-            state.items = (Array.isArray(data.items) ? data.items : []).map((it) => ({
-                name: String(it.item_name || ''),
-                brand: String(it.brand || ''),
-                model: String(it.model || ''),
-                specification: String(it.specification || ''),
-                canvass_detail_id: Number(it.canvass_detail_id || 0),
-                requisition_line_id: it.requisition_line_id != null ? it.requisition_line_id : null,
-                suggested_supplier_ids: Array.isArray(it.suggested_supplier_ids)
-                    ? it.suggested_supplier_ids
-                          .map((x) => Number(x))
-                          .filter((n) => !Number.isNaN(n) && n > 0)
-                    : [],
-                selected_supplier_id: Number(it.selected_supplier_id || 0),
-                selected_supplier_source: it.selected_supplier_source || null,
-            }));
-
-            state.suggestedByItem = {};
-            state.items.forEach((it, idx) => {
-                const sid = Number(it.selected_supplier_id || 0);
-                if (sid > 0) {
-                    const src =
-                        it.selected_supplier_source === 'preferred' ||
-                        it.selected_supplier_source === 'canvassed'
-                            ? it.selected_supplier_source
-                            : null;
-                    state.suggestedByItem[idx] = { supplierId: sid, source: src };
-                }
-            });
-
-            state.selectedSuppliers = (Array.isArray(data.suppliers) ? data.suppliers : []).map((s) => ({
-                supplier_id: s.supplier_id,
-                supplier_name: s.supplier_name,
-                supplier_image: s.supplier_image,
-                prices: normalizePrices(s.prices),
-                photos: normalizePrices(s.photos),
-                benefits: s.benefits != null ? String(s.benefits) : '',
-                discounts: Array.isArray(s.discounts)
-                    ? s.discounts.map((d) => ({
-                          label: d.label != null ? String(d.label) : '',
-                          discount_percent:
-                              d.discount_percent != null && d.discount_percent !== ''
-                                  ? String(d.discount_percent)
-                                  : '',
-                      }))
-                    : [],
-            }));
-            state.preferredSuppliers = Array.isArray(data.preferred_suppliers) ? (data.preferred_suppliers.map((s) => ({
-                supplier_id: s.supplier_id,
-                supplier_name: s.supplier_name,
-                contact_person: s.contact_person || '',
-                phone_number: s.phone_number || '',
-                email: s.email || '',
-                shop_url: s.shop_url || '',
-                supplier_image: s.supplier_image || '',
-            }))) : [];
-
-            setSupplierPickerHighlight(null);
-            renderCvItems();
-            await loadPreferredSuppliers();
-            hydrateCanvassedSupplierItemsFromSavedPrices();
-            renderSupplierTable();
-            renderSupplierDropdown();
-            state.canvassedSupplierCount = state.selectedSuppliers.length;
-            applyCanvassApproval(data.approval);
-            applyGsdReadonlyUi();
-            if (typeof window.__imrmsCvReviewerAfterLoad === 'function') {
-                try {
-                    window.__imrmsCvReviewerAfterLoad();
-                } catch {
-                    /* no-op */
-                }
-            }
-        } catch {
-            showToast('Network error.', 'error');
-        } finally {
-            state.isHydrating = false;
+    state.isHydrating = true;
+    try {
+        const res = await fetch(`${api}?action=get&request_id=${encodeURIComponent(String(requestId))}`, {
+            credentials: 'include',
+        });
+        const data = await res.json();
+        if (!data.success) {
+            showToast(data.message || 'Could not load.', 'error');
+            return;
         }
+
+        const h = data.header || {};
+        const deptEl = document.getElementById('cvOfficeDisplay');
+        const facEl = document.getElementById('cvFacilityDisplay');
+        const dateEl = document.getElementById('cvRequestDate');
+        const purposeEl = document.getElementById('cvPurpose');
+        if (deptEl) deptEl.value = h.office_name || '—';
+        if (facEl) facEl.value = h.facility_label || '—';
+        if (dateEl) dateEl.value = h.request_date || '—';
+        if (purposeEl) purposeEl.value = h.purpose || '';
+
+        renderRequestedRequisitionItems(data.requisition_requested_items);
+        state.requestedLines = Array.isArray(data.requisition_requested_items)
+            ? data.requisition_requested_items.map((row) => ({
+                  requisition_line_id: Number(row.requisition_line_id || 0),
+                  quantity: Math.max(1, Number(row.quantity) || 1),
+                  unit_type: String(row.unit_type || 'unit'),
+              }))
+            : [];
+
+        state.catalogItems = Array.isArray(data.item_catalog) ? data.item_catalog : [];
+        fillCvItemDatalist(state.catalogItems);
+
+        state.availableSuppliers = Array.isArray(data.supplier_catalog) ? data.supplier_catalog : [];
+
+        state.items = (Array.isArray(data.items) ? data.items : []).map((it) => ({
+            name: String(it.item_name || ''),
+            brand: String(it.brand || ''),
+            model: String(it.model || ''),
+            specification: String(it.specification || ''),
+            canvass_detail_id: Number(it.canvass_detail_id || 0),
+            requisition_line_id: it.requisition_line_id != null ? it.requisition_line_id : null,
+            suggested_supplier_ids: Array.isArray(it.suggested_supplier_ids)
+                ? it.suggested_supplier_ids
+                      .map((x) => Number(x))
+                      .filter((n) => !Number.isNaN(n) && n > 0)
+                : [],
+            selected_supplier_id: Number(it.selected_supplier_id || 0),
+            selected_supplier_source: it.selected_supplier_source || null,
+        }));
+
+        state.suggestedByItem = {};
+        state.items.forEach((it, idx) => {
+            const sid = Number(it.selected_supplier_id || 0);
+            if (sid > 0) {
+                const src =
+                    it.selected_supplier_source === 'preferred' ||
+                    it.selected_supplier_source === 'canvassed'
+                        ? it.selected_supplier_source
+                        : null;
+                state.suggestedByItem[idx] = { supplierId: sid, source: src };
+            }
+        });
+
+        state.selectedSuppliers = (Array.isArray(data.suppliers) ? data.suppliers : []).map((s) => ({
+            supplier_id: s.supplier_id,
+            supplier_name: s.supplier_name,
+            supplier_image: s.supplier_image,
+            prices: normalizePrices(s.prices),
+            photos: normalizePrices(s.photos),
+            benefits: s.benefits != null ? String(s.benefits) : '',
+            discounts: Array.isArray(s.discounts)
+                ? s.discounts.map((d) => ({
+                      label: d.label != null ? String(d.label) : '',
+                      discount_percent:
+                          d.discount_percent != null && d.discount_percent !== ''
+                              ? String(d.discount_percent)
+                              : '',
+                  }))
+                : [],
+        }));
+        state.preferredSuppliers = Array.isArray(data.preferred_suppliers) ? (data.preferred_suppliers.map((s) => ({
+            supplier_id: s.supplier_id,
+            supplier_name: s.supplier_name,
+            contact_person: s.contact_person || '',
+            phone_number: s.phone_number || '',
+            email: s.email || '',
+            shop_url: s.shop_url || '',
+            supplier_image: s.supplier_image || '',
+        }))) : [];
+
+        setSupplierPickerHighlight(null);
+        renderCvItems();
+        await loadPreferredSuppliers();
+        hydrateCanvassedSupplierItemsFromSavedPrices();
+        
+        // Apply approval BEFORE rendering supplier table
+        applyCanvassApproval(data.approval);
+        
+        // Now render the supplier table
+        renderSupplierTable();
+        renderSupplierDropdown();
+        state.canvassedSupplierCount = state.selectedSuppliers.length;
+        applyGsdReadonlyUi();
+        if (typeof window.__imrmsCvReviewerAfterLoad === 'function') {
+            try {
+                window.__imrmsCvReviewerAfterLoad();
+            } catch {
+                /* no-op */
+            }
+        }
+    } catch {
+        showToast('Network error.', 'error');
+    } finally {
+        state.isHydrating = false;
     }
+}
 
     async function persistCanvassToServer(submissionMode = 'draft') {
         if (state.items.length === 0) {
