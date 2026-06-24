@@ -6,9 +6,11 @@
     if (!card) return;
 
     const gsdReadonly = card.dataset.gsdReadonly === '1';
+    const gsdReviewView = card.dataset.gsdReview === '1';
     const canvasserRegister = card.dataset.canvasserRegister === '1';
     const requesterEditView = card.dataset.requesterEdit === '1';
     const CANVASSER_REQUESTS_API = card.dataset.canvasserApi || '../../app/api/canvasser_requests.php';
+    const GSD_REQUESTS_API = card.dataset.gsdApi || '../../app/api/gsd/requests.php';
 
     const requestId = parseInt(card.dataset.requestId || '0', 10);
     const api = card.dataset.api || '../../app/api/canvass_detail.php';
@@ -492,6 +494,59 @@
         renderPreferredTable();
     }
 
+    async function handleGsdAwardRadioChange(radio) {
+        if (!radio || !gsdReviewView) {
+            return;
+        }
+        const lineId = parseInt(
+            radio.getAttribute('data-requisition-line-id') || radio.dataset.canvassDetailId || '0',
+            10
+        );
+        const supplierId = parseInt(radio.value || '0', 10);
+        const selectionSource =
+            radio.getAttribute('data-selection-source') === 'preferred' ? 'preferred' : 'canvassed';
+        if (lineId <= 0 || supplierId <= 0) {
+            return;
+        }
+
+        const { canChangeSuggested } = getGsdSuggestSelectionContext();
+        if (!canChangeSuggested) {
+            return;
+        }
+
+        try {
+            const body = new URLSearchParams();
+            body.set('action', 'save_suggested_supplier_item');
+            body.set('request_id', String(requestId));
+            body.set('requisition_line_id', String(lineId));
+            body.set('suggested_supplier_id', String(supplierId));
+            body.set('selection_source', selectionSource);
+            const res = await fetch(GSD_REQUESTS_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+                credentials: 'include',
+            });
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.message || 'Could not save quote selection.', 'error');
+                return;
+            }
+
+            const line = (state.gsdLines || []).find((r) => Number(r.requisition_line_id) === lineId);
+            if (line) {
+                line.award = {
+                    supplier_id: supplierId,
+                    supplier_name: data.suggested_supplier_name || '',
+                    selection_source: selectionSource,
+                };
+            }
+            emitCanvassPricingUpdate();
+        } catch {
+            showToast('Network error saving quote selection.', 'error');
+        }
+    }
+
     function bindSuggestedSupplierSelectionHandlers(root) {
         if (!root || root.dataset.cvSuggestedSelectionBound) {
             return;
@@ -500,6 +555,13 @@
         root.addEventListener('change', (e) => {
             const radio = e.target.closest('.cv-suggested-item-radio');
             if (!radio) {
+                return;
+            }
+            if (
+                gsdReviewView
+                && (radio.dataset.requisitionLineId || radio.dataset.canvassDetailId)
+            ) {
+                handleGsdAwardRadioChange(radio);
                 return;
             }
             handleSuggestedSupplierRadioChange(radio);
@@ -783,6 +845,10 @@
     }
 
     function buildCanvassPricingSnapshot() {
+        if (gsdReviewView && Array.isArray(state.gsdLines) && state.gsdLines.length > 0) {
+            return buildGsdPricingSnapshotFromLines(state.gsdLines);
+        }
+
         const lines = [];
         let selectedCount = 0;
         let grandTotal = 0;
@@ -969,32 +1035,29 @@
                         const removeItemBtn = editable
                             ? `<button type="button" class="cv-pref-remove-item-btn" data-pref-supplier-id="${sid}" data-cv-item-index="${index}" title="Remove item from this supplier" aria-label="Remove item">×</button>`
                             : '';
-                        return `<tr class="${isSelectedForItem ? 'cv-gsd-suggested-row' : ''}">
-                            <td>
-                                <div class="cv-canvass-item-name-cell">
-                                    ${escapeHtml(item.name || `Item ${index + 1}`)}
-                                </div>
-                            </td>
-                            <td class="cv-pref-req-qty-cell">Req. qty: ${reqQty} ${escapeHtml(unitLabel)}</td>
-                            <td>
-                                <div class="cv-pref-price-wrap">
-                                    ${radioHtml}
-                                    <span class="cv-pref-peso">PHP</span>
-                                    <input type="number" min="0" step="0.01" class="cv-preferred-price-input" data-pref-supplier-id="${sid}" data-cv-item-index="${index}" value="${escapeHtml(String(val))}" placeholder="0.00"${editable ? '' : ' readonly'}>
-                                    ${selectedBadge}
-                                    ${clearBtn}
-                                </div>
-                            </td>
-                            <td>${photoCell}</td>
-                            <td class="cv-pref-item-action-cell">${removeItemBtn}</td>
-                        </tr>`;
+                        return `<div class="cv-pref-item-row${isSelectedForItem ? ' cv-gsd-suggested-row' : ''}">
+                            <div class="cv-pref-item-name-block">
+                                <span class="cv-pref-item-name">${escapeHtml(item.name || `Item ${index + 1}`)}</span>
+                                <span class="cv-pref-item-qty">Req. qty: ${reqQty} ${escapeHtml(unitLabel)}</span>
+                            </div>
+                            <div class="cv-pref-price-wrap">
+                                ${radioHtml}
+                                <span class="cv-pref-peso">PHP</span>
+                                <input type="number" min="0" step="0.01" class="cv-preferred-price-input" data-pref-supplier-id="${sid}" data-cv-item-index="${index}" value="${escapeHtml(String(val))}" placeholder="0.00"${editable ? '' : ' readonly'}>
+                                ${selectedBadge}
+                                ${clearBtn}
+                            </div>
+                            <div class="cv-pref-item-actions">
+                                ${photoCell}${removeItemBtn}
+                            </div>
+                        </div>`;
                     })
                     .join('');
                 const emptyItemsRow =
                     linkedIndices.length === 0
-                        ? `<tr><td colspan="5" class="empty-state">${editable ? 'No items added yet. Select an item above.' : 'No quoted items for this supplier.'}</td></tr>`
+                        ? `<div class="cv-pref-items-empty">${editable ? 'No items added yet. Select an item above.' : 'No quoted items for this supplier.'}</div>`
                         : '';
-                return `<article class="cv-pref-card">
+                return `<article class="cv-pref-card" data-supplier-id="${sid}">
                     <div class="cv-pref-card-head">
                         <div class="cv-pref-card-id">
                             <img src="${avatarSrc}" alt="" class="cv-pref-avatar cv-pref-avatar-img" onerror="${supplierAvatarOnError}">
@@ -1012,10 +1075,7 @@
                     </div>
                     <div class="cv-pref-card-body">
                         ${addItemBar}
-                        <table class="cv-pref-items-table" aria-label="Supplier quotes">
-                            <thead><tr><th>Item name</th><th>Requisition qty</th><th>Quoted price</th><th>Quotation photo</th><th></th></tr></thead>
-                            <tbody>${itemRows}${emptyItemsRow}</tbody>
-                        </table>
+                        <div class="cv-pref-items">${itemRows}${emptyItemsRow}</div>
                     </div>
                 </article>`;
             })
@@ -1484,6 +1544,8 @@
     const state = {
         items: [],
         selectedSuppliers: [],
+        canvasserLines: [],
+        gsdLines: [],
         availableSuppliers: [],
         preferredSuppliers: [],
         catalogItems: [],
@@ -1500,7 +1562,6 @@
         canvassedSupplierCount: 0,
         suggestedByItem: {},
         requestedLines: [],
-        canvasserLines: [],
         autoSaveTimer: null,
         hasUnsavedChanges: false,
         isHydrating: false,
@@ -2720,6 +2781,217 @@
         } catch { /* silent */ }
     }
 
+    // ── GSD review view (requisition_line + quotes + awards) ─────────────────
+
+    function buildGsdPricingSnapshotFromLines(lines) {
+        let selectedCount = 0;
+        let grandTotal = 0;
+        const currency = 'PHP';
+        const out = (lines || []).map((row, index) => {
+            const qty = Math.max(1, Number(row.quantity) || 1);
+            const unit = String(row.unit_type || 'unit');
+            const award = row.award || null;
+            const supplierId = award ? Number(award.supplier_id) : null;
+            const selectionSource = award
+                ? (award.selection_source === 'preferred' ? 'preferred' : 'canvassed')
+                : null;
+            let supplierName = award ? String(award.supplier_name || '') : null;
+            let unitPrice = null;
+            let lineTotal = null;
+
+            if (supplierId && selectionSource) {
+                selectedCount += 1;
+                const quotes = selectionSource === 'preferred'
+                    ? (row.preferred_quotes || [])
+                    : (row.canvassed_quotes || []);
+                const match = quotes.find((q) => Number(q.supplier_id) === supplierId);
+                if (match && match.quoted_unit_price != null && !Number.isNaN(Number(match.quoted_unit_price))) {
+                    unitPrice = Math.round(Number(match.quoted_unit_price) * 100) / 100;
+                    lineTotal = Math.round(unitPrice * qty * 100) / 100;
+                    grandTotal += lineTotal;
+                    if (!supplierName && match.supplier_name) {
+                        supplierName = String(match.supplier_name);
+                    }
+                }
+            }
+
+            return {
+                item_index: index,
+                canvass_detail_id: Number(row.requisition_line_id || 0),
+                requisition_line_id: Number(row.requisition_line_id || 0),
+                item_name: String(row.item_name || `Item ${index + 1}`),
+                quantity: qty,
+                qty_per_set: 1,
+                requisition_qty: qty,
+                unit_type: unit,
+                supplier_id: supplierId,
+                supplier_name: supplierName,
+                selection_source: selectionSource,
+                unit_price: unitPrice,
+                line_total: lineTotal,
+                discount_label: null,
+            };
+        });
+
+        return {
+            lines: out,
+            item_count: out.length,
+            selected_count: selectedCount,
+            grand_total: Math.round(grandTotal * 100) / 100,
+            currency,
+            show_discount_column: false,
+        };
+    }
+
+    function buildGsdQuoteOptionHtml(lineId, quote, quoteType, selectedAward, canSelect) {
+        const sid = Number(quote.supplier_id || 0);
+        const isSelected = selectedAward
+            && Number(selectedAward.supplier_id) === sid
+            && (selectedAward.selection_source || 'canvassed') === quoteType;
+        const checked = isSelected ? ' checked' : '';
+        const disabled = canSelect ? '' : ' disabled';
+        const badge = quoteType === 'preferred' ? 'preferred' : 'canvassed';
+        const price = fmtPhp(quote.quoted_unit_price);
+        if (canSelect) {
+            return `<label class="cv-gsd-quote-option cv-line-quote-chip cv-line-quote-chip--${badge}">
+                <input type="radio" class="cv-suggested-item-radio" name="gsd_award_${lineId}"
+                    value="${sid}" data-requisition-line-id="${lineId}" data-canvass-detail-id="${lineId}"
+                    data-selection-source="${quoteType}"${checked}${disabled}>
+                <span class="cv-line-quote-chip-label">${escapeHtml(quote.supplier_name || '')}</span>
+                <span class="cv-line-quote-chip-price">${price}</span>
+                <span class="cv-line-quote-chip-badge">${badge}</span>
+            </label>`;
+        }
+        return `<span class="cv-line-quote-chip cv-line-quote-chip--${badge}${isSelected ? ' cv-line-quote-chip--selected' : ''}" title="${escapeHtml(quote.benefits || '')}">
+            <span class="cv-line-quote-chip-label">${escapeHtml(quote.supplier_name || '')}</span>
+            <span class="cv-line-quote-chip-price">${price}</span>
+            <span class="cv-line-quote-chip-badge">${badge}</span>
+        </span>`;
+    }
+
+    function renderGsdLineItems(lines) {
+        const body = document.getElementById('cvRequestedItemsTableBody');
+        if (!body) return;
+
+        const { canChangeSuggested } = getGsdSuggestSelectionContext();
+        const canSelect = canChangeSuggested;
+
+        if (!Array.isArray(lines) || lines.length === 0) {
+            body.innerHTML =
+                '<tr class="requested-items-empty"><td colspan="5">No line items with supplier quotes yet.</td></tr>';
+            emitCanvassPricingUpdate();
+            return;
+        }
+
+        let html = '';
+        let lastGroup = null;
+        let rowNum = 0;
+
+        lines.forEach((row) => {
+            const group = String(row.group_label || '').trim();
+            if (group !== lastGroup) {
+                if (group) {
+                    html += `<tr class="cv-canvasser-group-header-row">
+                        <td colspan="5" class="cv-canvasser-group-header">
+                            <i class="fas fa-layer-group" aria-hidden="true"></i> ${escapeHtml(group)}
+                        </td>
+                    </tr>`;
+                }
+                lastGroup = group;
+            }
+
+            rowNum++;
+            const name = escapeHtml(row.item_name || '—');
+            const brand = String(row.brand || '').trim();
+            const model = String(row.model || '').trim();
+            const spec = String(row.specification || '').trim();
+            const metaParts = [brand, model, spec].filter(Boolean);
+            const metaRow = metaParts.length
+                ? `<div class="cv-req-line-meta">${escapeHtml(metaParts.join(' · '))}</div>`
+                : '';
+            const qty = row.quantity != null ? row.quantity : 1;
+            const unit = escapeHtml(String(row.unit_type || 'unit'));
+            const lid = Number(row.requisition_line_id || 0);
+            const award = row.award || null;
+
+            const pQuotes = Array.isArray(row.preferred_quotes) ? row.preferred_quotes : [];
+            const cQuotes = Array.isArray(row.canvassed_quotes) ? row.canvassed_quotes : [];
+            let quotesHtml = '';
+            pQuotes.forEach((q) => {
+                quotesHtml += buildGsdQuoteOptionHtml(lid, q, 'preferred', award, canSelect);
+            });
+            cQuotes.forEach((q) => {
+                quotesHtml += buildGsdQuoteOptionHtml(lid, q, 'canvassed', award, canSelect);
+            });
+            if (!quotesHtml) {
+                quotesHtml = '<span class="cv-line-quote-empty">No quotes for this item</span>';
+            }
+
+            html += `<tr class="cv-gsd-item-row${group ? ' cv-canvasser-item-grouped' : ''}">
+                <td class="requested-items-table-num">${rowNum}</td>
+                <td class="requested-items-table-item">${name}${metaRow}</td>
+                <td class="requested-items-table-qty">${escapeHtml(String(qty))}</td>
+                <td class="requested-items-table-unit">${unit}</td>
+                <td class="cv-gsd-item-quotes-cell">
+                    <div class="cv-canvasser-item-quotes cv-gsd-item-quotes">${quotesHtml}</div>
+                </td>
+            </tr>`;
+        });
+
+        body.innerHTML = html;
+        bindSuggestedSupplierSelectionHandlers(body);
+        emitCanvassPricingUpdate();
+    }
+
+    async function loadGsdReviewView() {
+        const tbody = document.getElementById('cvRequestedItemsTableBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1rem;color:#64748b;">Loading items…</td></tr>';
+        }
+        try {
+            const res = await fetch(
+                `${GSD_REQUESTS_API}?action=get_gsd_review_view&request_id=${encodeURIComponent(String(requestId))}`,
+                { credentials: 'include' }
+            );
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.message || 'Could not load GSD review.', 'error');
+                return;
+            }
+
+            const h = data.header || {};
+            const deptEl = document.getElementById('cvOfficeDisplay');
+            const facEl = document.getElementById('cvFacilityDisplay');
+            const dateEl = document.getElementById('cvRequestDate');
+            const purposeEl = document.getElementById('cvPurpose');
+            if (deptEl) deptEl.value = h.office_name || '—';
+            if (facEl) facEl.value = h.facility_label || '—';
+            if (dateEl) dateEl.value = h.request_date || '—';
+            if (purposeEl) purposeEl.value = h.purpose || '';
+
+            state.gsdLines = data.lines || [];
+            renderGsdLineItems(state.gsdLines);
+            applyCanvassApproval(data.approval);
+        } catch {
+            showToast('Network error loading GSD review.', 'error');
+        }
+    }
+
+    async function refreshGsdReviewView() {
+        try {
+            const res = await fetch(
+                `${GSD_REQUESTS_API}?action=get_gsd_review_view&request_id=${encodeURIComponent(String(requestId))}`,
+                { credentials: 'include' }
+            );
+            const data = await res.json();
+            if (!data.success) return;
+            state.gsdLines = data.lines || [];
+            renderGsdLineItems(state.gsdLines);
+        } catch { /* silent */ }
+    }
+
+    window.__cwirmsRefreshGsdReviewView = refreshGsdReviewView;
+
     // ── Quote Modal ──
 
     function buildCanvasserQuoteModalSupplierList(suppliers) {
@@ -2952,7 +3224,7 @@
     async function loadRequesterLineView() {
         const tbody = document.getElementById('cvRequestedItemsTableBody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1rem;color:#64748b;">Loading items…</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1rem;color:#64748b;">Loading items…</td></tr>';
         }
         try {
             const res = await fetch(
@@ -2966,6 +3238,9 @@
             }
             state_req.lines     = data.lines || [];
             state_req.suppliers = data.suppliers || [];
+            window._cvAvailableSuppliers = state_req.suppliers.map(function (s) {
+                return { id: s.supplier_id, name: s.supplier_name || '', contact: s.contact_person || '', tin: s.tin || '', address: s.address || '', image: s.supplier_image || '' };
+            });
 
             const h = data.header || {};
             const deptEl    = document.getElementById('cvOfficeDisplay');
@@ -2978,6 +3253,12 @@
             if (purposeEl) purposeEl.value = h.purpose        || '';
 
             renderRequesterLineItems(state_req.lines);
+            window.CANVASS_ITEMS = state_req.lines.map(function (r) {
+                return { id: r.requisition_line_id, name: r.item_name || '(unnamed)', qty: r.quantity || 1 };
+            });
+            if (window.CWIRMS_REQUESTER_SUPPLIER_QUOTES) {
+                window.CWIRMS_REQUESTER_SUPPLIER_QUOTES.hydrateFromLines(state_req.lines);
+            }
         } catch (err) {
             showToast('Network error loading items.', 'error');
         }
@@ -2994,6 +3275,9 @@
                 state_req.lines     = data.lines     || [];
                 state_req.suppliers = data.suppliers || state_req.suppliers;
                 renderRequesterLineItems(state_req.lines);
+                if (window.CWIRMS_REQUESTER_SUPPLIER_QUOTES) {
+                    window.CWIRMS_REQUESTER_SUPPLIER_QUOTES.hydrateFromLines(state_req.lines);
+                }
             }
         } catch { /* silent */ }
     }
@@ -3002,7 +3286,7 @@
         const tbody = document.getElementById('cvRequestedItemsTableBody');
         if (!tbody) return;
         if (!lines || lines.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1.5rem;color:#64748b;">No items found on this requisition.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1.5rem;color:#64748b;">No items found on this requisition.</td></tr>';
             return;
         }
 
@@ -3017,7 +3301,7 @@
             if (grp && grp !== lastGrp) {
                 lastGrp = grp;
                 html += `<tr class="cv-line-group-header-row">
-                    <td colspan="5" class="cv-line-group-header">
+                    <td colspan="4" class="cv-line-group-header">
                         <i class="fas fa-layer-group" aria-hidden="true"></i> ${escapeHtml(grp)}
                     </td></tr>`;
             } else if (!grp && lastGrp !== '') {
@@ -3032,27 +3316,6 @@
             const subHtml = subParts.length
                 ? `<div class="ri-meta-chips">${subParts.join('')}</div>` : '';
 
-            // Preferred quotes chips
-            const quotes = row.preferred_quotes || [];
-            let quotesHtml = '';
-            if (quotes.length > 0) {
-                quotesHtml = quotes.map(q => {
-                    const price = parseFloat(q.quoted_unit_price || 0);
-                    return `<span class="cv-pref-quote-chip"
-                                  data-line-id="${row.requisition_line_id}"
-                                  data-supplier-id="${q.supplier_id}">
-                        <i class="fas fa-tag" aria-hidden="true"></i>
-                        ${escapeHtml(q.supplier_name)} — ${fmtPhp(price)}
-                        <button type="button"
-                                class="cv-pref-quote-chip-del"
-                                data-line-id="${row.requisition_line_id}"
-                                data-supplier-id="${q.supplier_id}"
-                                aria-label="Remove preferred quote"
-                                title="Remove">×</button>
-                    </span>`;
-                }).join('');
-            }
-
             html += `<tr class="requested-item-row${grp ? ' in-group' : ''}">
                 <td class="ri-num">${rowNum}</td>
                 <td class="ri-name-cell">
@@ -3061,37 +3324,10 @@
                 </td>
                 <td>${escapeHtml(String(row.quantity || 1))}</td>
                 <td>${escapeHtml(row.unit_type || 'unit')}</td>
-                <td class="cv-pref-quote-cell">
-                    <div class="cv-pref-quote-chips">${quotesHtml}</div>
-                    <button type="button"
-                            class="cv-add-pref-quote-btn"
-                            data-line-id="${row.requisition_line_id}"
-                            data-line-name="${escapeHtml(name)}">
-                        <i class="fas fa-plus" aria-hidden="true"></i> Add Preferred Quote
-                    </button>
-                </td>
             </tr>`;
         }
 
         tbody.innerHTML = html;
-
-        // "+ Add Preferred Quote" buttons
-        tbody.querySelectorAll('.cv-add-pref-quote-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const lineId   = parseInt(btn.dataset.lineId   || '0', 10);
-                const lineName = btn.dataset.lineName || '';
-                openRequesterPrefQuoteModal(lineId, lineName);
-            });
-        });
-
-        // Delete chips
-        tbody.querySelectorAll('.cv-pref-quote-chip-del').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const lineId     = parseInt(btn.dataset.lineId     || '0', 10);
-                const supplierId = parseInt(btn.dataset.supplierId || '0', 10);
-                await deleteRequesterPrefQuote(lineId, supplierId);
-            });
-        });
     }
 
     // ── Preferred-quote modal ─────────────────────────────────────────────────
@@ -3311,6 +3547,10 @@
             await loadCanvasserView();
             return;
         }
+        if (gsdReviewView) {
+            await loadGsdReviewView();
+            return;
+        }
         // Requesters (owners) use per-line preferred-quote view
         if (requesterEditView) {
             await loadRequesterLineView();
@@ -3349,6 +3589,9 @@
         fillCvItemDatalist(state.catalogItems);
 
         state.availableSuppliers = Array.isArray(data.supplier_catalog) ? data.supplier_catalog : [];
+        window._cvAvailableSuppliers = state.availableSuppliers.map(function (s) {
+            return { id: s.supplier_id, name: s.supplier_name || '', contact: s.contact_person || '', tin: s.tin || '', address: formatSupplierLocation(s) || '' };
+        });
 
         state.items = (Array.isArray(data.items) ? data.items : []).map((it) => ({
             name: String(it.item_name || ''),
@@ -3365,6 +3608,7 @@
             selected_supplier_id: Number(it.selected_supplier_id || 0),
             selected_supplier_source: it.selected_supplier_source || null,
         }));
+        window._cvItemsSnapshot = state.items.map((it, i) => ({ index: i, name: it.name, requisition_line_id: it.requisition_line_id }));
 
         state.suggestedByItem = {};
         state.items.forEach((it, idx) => {
@@ -3624,10 +3868,29 @@
             return;
         }
         if (requesterEditView) {
-            showToast('Your preferred quotes are saved automatically. Track canvass progress from the status page.');
-            setTimeout(() => {
-                window.location.href = 'dean_requisition_status_progress.php?rid=' + requestId;
-            }, 1800);
+            if (state.autoSaveTimer) {
+                clearRequesterAutosaveTimer();
+            }
+            if (cvSaveBtn) cvSaveBtn.disabled = true;
+            try {
+                const flush = window.CWIRMS_REQUESTER_SUPPLIER_QUOTES;
+                if (flush) {
+                    const result = await flush.flushAllQuotes();
+                    if (!result.ok) {
+                        showToast(result.message || 'Could not save supplier quotes.', 'error');
+                        return;
+                    }
+                }
+                showToast('Supplier quotes saved.');
+                markFormSaved();
+                setTimeout(() => {
+                    window.location.href = 'dean_requisition_status_progress.php?rid=' + requestId;
+                }, 1200);
+            } catch {
+                showToast('Network error saving quotes.', 'error');
+            } finally {
+                if (cvSaveBtn) cvSaveBtn.disabled = false;
+            }
             return;
         }
         if (state.items.length === 0) {
@@ -4045,6 +4308,20 @@
     cvSaveDraftBtn.addEventListener('click', () => {
         if (canvasserRegister) {
             void saveDraft();
+        } else if (requesterEditView && window.CWIRMS_REQUESTER_SUPPLIER_QUOTES) {
+            clearRequesterAutosaveTimer();
+            cvSaveDraftBtn.disabled = true;
+            window.CWIRMS_REQUESTER_SUPPLIER_QUOTES.flushAllQuotes()
+                .then((result) => {
+                    if (!result.ok) {
+                        showToast(result.message || 'Save failed.', 'error');
+                        return;
+                    }
+                    showToast('Supplier quotes saved.');
+                    markFormSaved();
+                })
+                .catch(() => showToast('Network error.', 'error'))
+                .finally(() => { cvSaveDraftBtn.disabled = false; });
         } else {
             // Requester "Save draft" — same as saveForm() but skip the confirm dialog
             if (state.items.length === 0) {
@@ -4479,4 +4756,863 @@
             }
         },
     };
+})();
+
+// ── Quote-modal wiring (requester view: "+ Add Quote" → supplier card) ────────
+(function () {
+    var _qmLine = null;
+
+    // Open modal on "+ Add Quote" button click
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.btn-open-quote-modal');
+        if (!btn) return;
+        _qmLine = {
+            lineId: btn.dataset.lineId,
+            itemName: btn.dataset.itemName,
+            itemQty: btn.dataset.itemQty
+        };
+
+        // Populate supplier dropdown from currently rendered preferred-supplier cards
+        var sel = document.getElementById('qm-supplier-select');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Select supplier…<\/option>';
+        document.querySelectorAll('article.cv-pref-card[data-supplier-id]').forEach(function (card) {
+            var nameEl = card.querySelector('.cv-pref-name');
+            var name = nameEl ? nameEl.textContent.trim() : 'Supplier';
+            var opt = document.createElement('option');
+            opt.value = card.dataset.supplierId;
+            opt.textContent = name;
+            sel.appendChild(opt);
+        });
+
+        var nameEl  = document.getElementById('qm-item-name');
+        var qtyEl   = document.getElementById('qm-item-qty');
+        var priceEl = document.getElementById('qm-price-input');
+        if (nameEl)  nameEl.textContent = _qmLine.itemName;
+        if (qtyEl)   qtyEl.textContent  = _qmLine.itemQty + ' unit';
+        if (priceEl) priceEl.value      = '';
+
+        var modal = document.getElementById('quote-modal');
+        if (modal) modal.style.display = 'flex';
+    });
+
+    // Close handlers
+    var closeBtn  = document.getElementById('quote-modal-close');
+    var cancelBtn = document.getElementById('qm-cancel');
+    var modal     = document.getElementById('quote-modal');
+    if (closeBtn)  closeBtn.addEventListener('click', _qmClose);
+    if (cancelBtn) cancelBtn.addEventListener('click', _qmClose);
+    if (modal)     modal.addEventListener('click', function (e) { if (e.target === this) _qmClose(); });
+
+    function _qmClose() {
+        var m = document.getElementById('quote-modal');
+        if (m) m.style.display = 'none';
+        _qmLine = null;
+    }
+
+    // Save
+    var saveBtn = document.getElementById('qm-save');
+    if (saveBtn) saveBtn.addEventListener('click', function () {
+        var supplierId = (document.getElementById('qm-supplier-select') || {}).value;
+        var price      = (document.getElementById('qm-price-input')     || {}).value;
+        if (!supplierId) { alert('Please select a supplier.'); return; }
+        if (!price || parseFloat(price) <= 0) { alert('Please enter a valid price.'); return; }
+
+        var card = document.querySelector('article.cv-pref-card[data-supplier-id="' + supplierId + '"]');
+        if (!card) { alert('Supplier card not found on this page.'); return; }
+
+        // Resolve canvass item index via the snapshot exposed by loadForm()
+        var targetIndex = null;
+        var snap = window._cvItemsSnapshot || [];
+        var lineId = Number(_qmLine && _qmLine.lineId);
+        if (lineId) {
+            var hit = snap.find(function (it) { return Number(it.requisition_line_id) === lineId; });
+            if (hit) targetIndex = hit.index;
+        }
+        // Fallback: scan any add-item select option text for a name match
+        if (targetIndex === null && _qmLine) {
+            document.querySelectorAll('.cv-pref-add-item-select').forEach(function (s) {
+                if (targetIndex !== null) return;
+                Array.from(s.options).forEach(function (o) {
+                    if (o.value !== '' && o.textContent.trim() === _qmLine.itemName) {
+                        targetIndex = parseInt(o.value, 10);
+                    }
+                });
+            });
+        }
+        if (targetIndex === null) {
+            alert('Could not match "' + (_qmLine ? _qmLine.itemName : '') + '" to a canvass item.\nMake sure canvass items are set up first.');
+            return;
+        }
+
+        var existing = card.querySelector('.cv-preferred-price-input[data-cv-item-index="' + targetIndex + '"]');
+        if (existing) {
+            // Item already in card — just update price
+            existing.value = parseFloat(price).toFixed(2);
+            existing.dispatchEvent(new Event('input', { bubbles: true }));
+            _qmClose();
+        } else {
+            // Add item to card first, then set price after re-render
+            var addSel = card.querySelector('.cv-pref-add-item-select');
+            var addBtn = card.querySelector('.cv-pref-add-item-btn');
+            if (!addSel || !addBtn) { alert('Cannot add item — the supplier card may have all items already linked.'); return; }
+            addSel.value = String(targetIndex);
+            addBtn.click();
+            setTimeout(function () {
+                var inp = card.querySelector('.cv-preferred-price-input[data-cv-item-index="' + targetIndex + '"]');
+                if (inp) {
+                    inp.value = parseFloat(price).toFixed(2);
+                    inp.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }, 150);
+            _qmClose();
+        }
+    });
+})();
+
+// ── Supplier Quotes section (requester view) ─────────────────────────────────
+(function () {
+    var activeSuppliers  = [];
+    var reqItems         = [];
+    var _selectedSupplier = null;
+    var _saveTimers      = {};
+    var card             = document.getElementById('canvassCard');
+    var _canvassApi      = (card && card.dataset.api) || '../../app/api/canvass_detail.php';
+    var _requestId       = card ? parseInt(card.dataset.requestId || '0', 10) : 0;
+
+    function showSupToast(message, type) {
+        var el = document.getElementById('cvFormToast');
+        if (!el) return;
+        el.textContent = message;
+        el.className = 'toast ' + (type === 'error' ? 'error' : 'success');
+        el.style.display = 'block';
+        setTimeout(function () { el.style.display = 'none'; }, 4200);
+    }
+
+    function hydrateFromLines(lines) {
+        var bySup = {};
+        (lines || []).forEach(function (line) {
+            var lineId = line.requisition_line_id;
+            (line.preferred_quotes || []).forEach(function (q) {
+                var sid = String(q.supplier_id);
+                if (!bySup[sid]) {
+                    bySup[sid] = {
+                        id:      sid,
+                        name:    q.supplier_name || '',
+                        contact: '',
+                        tin:     '',
+                        address: '',
+                        image:   q.supplier_image || '',
+                        items:   [],
+                    };
+                }
+                bySup[sid].items.push({
+                    itemId: lineId,
+                    price:  q.quoted_unit_price != null ? String(q.quoted_unit_price) : '',
+                    photo:  null,
+                    saved:  true,
+                });
+            });
+        });
+        activeSuppliers = Object.keys(bySup).map(function (k) { return bySup[k]; });
+        renderSection();
+    }
+
+    async function saveQuoteToServer(supplierId, lineId, price) {
+        if (!_requestId || !supplierId || !lineId) {
+            return { success: false, message: 'Missing save fields.' };
+        }
+        var priceStr = String(price || '').trim();
+        if (priceStr === '' || isNaN(parseFloat(priceStr)) || parseFloat(priceStr) < 0) {
+            return { success: false, message: 'Unit price must be a valid non-negative number.' };
+        }
+        var fd = new FormData();
+        fd.append('request_id', String(_requestId));
+        fd.append('requisition_line_id', String(lineId));
+        fd.append('supplier_id', String(supplierId));
+        fd.append('quoted_unit_price', priceStr);
+        fd.append('benefits', '');
+        var res = await fetch(_canvassApi + '?action=save_preferred_quote', {
+            method: 'POST',
+            credentials: 'include',
+            body: fd,
+        });
+        return res.json();
+    }
+
+    async function deleteQuoteFromServer(supplierId, lineId) {
+        if (!_requestId || !supplierId || !lineId) {
+            return { success: false };
+        }
+        var fd = new FormData();
+        fd.append('request_id', String(_requestId));
+        fd.append('requisition_line_id', String(lineId));
+        fd.append('supplier_id', String(supplierId));
+        var res = await fetch(_canvassApi + '?action=delete_preferred_quote', {
+            method: 'POST',
+            credentials: 'include',
+            body: fd,
+        });
+        return res.json();
+    }
+
+    function scheduleQuoteSave(supplierId, lineId, price) {
+        var key = supplierId + ':' + lineId;
+        if (_saveTimers[key]) {
+            clearTimeout(_saveTimers[key]);
+        }
+        _saveTimers[key] = setTimeout(function () {
+            _saveTimers[key] = null;
+            var priceStr = String(price || '').trim();
+            if (priceStr === '') return;
+            saveQuoteToServer(supplierId, lineId, priceStr).then(function (data) {
+                if (!data.success) {
+                    showSupToast(data.message || 'Could not save quote.', 'error');
+                    return;
+                }
+                var sup = activeSuppliers.find(function (s) { return s.id === String(supplierId); });
+                if (sup) {
+                    var it = sup.items.find(function (i) { return i.itemId === lineId; });
+                    if (it) it.saved = true;
+                }
+            }).catch(function () {
+                showSupToast('Network error saving quote.', 'error');
+            });
+        }, 900);
+    }
+
+    async function flushAllQuotes() {
+        var tasks = [];
+        activeSuppliers.forEach(function (sup) {
+            sup.items.forEach(function (it) {
+                var priceStr = String(it.price || '').trim();
+                if (priceStr !== '') {
+                    tasks.push(saveQuoteToServer(sup.id, it.itemId, priceStr));
+                }
+            });
+        });
+        if (!tasks.length) {
+            return { ok: true, message: 'Nothing to save.' };
+        }
+        var results = await Promise.all(tasks);
+        var failed = results.find(function (r) { return !r || !r.success; });
+        if (failed) {
+            return { ok: false, message: (failed && failed.message) || 'Could not save one or more quotes.' };
+        }
+        activeSuppliers.forEach(function (sup) {
+            sup.items.forEach(function (it) {
+                if (String(it.price || '').trim() !== '') {
+                    it.saved = true;
+                }
+            });
+        });
+        return { ok: true };
+    }
+
+    window.CWIRMS_REQUESTER_SUPPLIER_QUOTES = {
+        hydrateFromLines: hydrateFromLines,
+        flushAllQuotes: flushAllQuotes,
+    };
+
+    // Mirror resolvePublicUploadUrl from main IIFE (not in scope here)
+    function resolveImgPath(path) {
+        if (!path) return '';
+        var raw = String(path).trim();
+        if (!raw) return '';
+        if (/^(https?:|blob:|data:)/i.test(raw)) return raw;
+        var n = raw.replace(/\\/g, '/');
+        n = n.replace(/^app\/api\/public\//i, '');
+        n = n.replace(/^public\//i, '');
+        if (n.startsWith('../')) return n;
+        return '../' + n.replace(/^\/+/, '');
+    }
+
+    function getSupplierImg(imageField) {
+        return imageField ? resolveImgPath(imageField) : '';
+    }
+
+    function getInitials(name) {
+        var words = (name || '').trim().split(/\s+/);
+        return ((words[0] || '')[0] + ((words[1] || '')[0] || '')).toUpperCase();
+    }
+
+    function escHtml(str) {
+        return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function renderSelectionPreview(s) {
+        var panel = document.getElementById('supplier-combobox-selection');
+        var body  = document.getElementById('supplier-combobox-selection-body');
+        if (!panel || !body || !s) {
+            if (panel) panel.hidden = true;
+            return;
+        }
+        var imgSrc = getSupplierImg(s.image);
+        var avatarHtml = imgSrc
+            ? '<img src="' + escHtml(imgSrc) + '" class="sup-combo-logo" alt=""' +
+              ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'inline-flex\'">' +
+              '<span class="sup-combo-initials" style="display:none">' + escHtml(getInitials(s.name)) + '</span>'
+            : '<span class="sup-combo-initials">' + escHtml(getInitials(s.name)) + '</span>';
+        var meta = [s.contact, s.tin ? ('TIN ' + s.tin) : '', s.address].filter(Boolean).join(' · ');
+        body.innerHTML =
+            avatarHtml +
+            '<div><div class="supplier-combobox-selection-name">' + escHtml(s.name || '') + '</div>' +
+            (meta ? '<div class="supplier-combobox-selection-meta">' + escHtml(meta) + '</div>' : '') +
+            '</div>';
+        panel.hidden = false;
+    }
+
+    function hideSelectionPreview() {
+        var panel = document.getElementById('supplier-combobox-selection');
+        if (panel) panel.hidden = true;
+    }
+
+    function normalizeSupplierEntry(raw) {
+        if (!raw) return null;
+        var id = raw.id != null ? raw.id : raw.supplier_id;
+        if (id == null || id === '') return null;
+        return {
+            id:      String(id),
+            name:    raw.name || raw.supplier_name || '',
+            contact: raw.contact || raw.contact_person || '',
+            tin:     raw.tin || '',
+            address: raw.address || '',
+            image:   raw.image || raw.supplier_image || '',
+        };
+    }
+
+    function pickAndAddSupplier(raw) {
+        var s = normalizeSupplierEntry(raw);
+        if (!s) {
+            showSupToast('Invalid supplier selection.', 'error');
+            return false;
+        }
+        if (activeSuppliers.some(function (x) { return x.id === s.id; })) {
+            showSupToast('"' + s.name + '" is already in your quotation.', 'error');
+            return false;
+        }
+        activeSuppliers.push({
+            id:      s.id,
+            name:    s.name,
+            contact: s.contact,
+            tin:     s.tin,
+            address: s.address,
+            image:   s.image,
+            items:   [],
+        });
+        renderSection();
+        clearCombo();
+        showSupToast('"' + s.name + '" added to quotation.');
+        return true;
+    }
+
+    // ── Combobox ──────────────────────────────────────────────────────────────
+    function buildComboboxList(filter) {
+        var sups    = window._cvAvailableSuppliers || [];
+        var usedIds = activeSuppliers.map(function (s) { return String(s.id); });
+        var q       = (filter || '').trim().toLowerCase();
+        var list    = document.getElementById('supplier-combobox-list');
+        var regRow  = document.getElementById('supplier-combobox-register');
+        if (!list) return;
+
+        // Require at least 2 characters before showing anything
+        if (q.length < 2) {
+            list.innerHTML = '';
+            list.style.display = 'none';
+            if (regRow) regRow.style.display = 'none';
+            return;
+        }
+
+        var filtered = sups.filter(function (s) {
+            var sid = String(s.id != null ? s.id : s.supplier_id || '');
+            if (!sid || usedIds.includes(sid)) return false;
+            return (s.name || s.supplier_name || '').toLowerCase().includes(q);
+        });
+
+        list.innerHTML = '';
+
+        if (!filtered.length) {
+            list.style.display = 'none';
+            if (regRow) regRow.style.display = 'flex';
+            return;
+        }
+
+        if (regRow) regRow.style.display = 'none';
+        list.style.display = 'block';
+
+        filtered.forEach(function (raw) {
+            var s = normalizeSupplierEntry(raw);
+            if (!s) return;
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sup-combo-item';
+            btn.dataset.supplierId = s.id;
+
+            var imgSrc = getSupplierImg(s.image);
+            var avatarInner = imgSrc
+                ? '<img src="' + escHtml(imgSrc) + '" class="sup-combo-logo" alt=""' +
+                  ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'inline-flex\'">' +
+                  '<span class="sup-combo-initials" style="display:none">' + escHtml(getInitials(s.name)) + '</span>'
+                : '<span class="sup-combo-initials">' + escHtml(getInitials(s.name)) + '</span>';
+
+            btn.innerHTML = avatarInner + '<span class="sup-combo-label">' + escHtml(s.name) + '</span>';
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                _selectedSupplier = s;
+                renderSelectionPreview(s);
+                pickAndAddSupplier(s);
+            });
+            list.appendChild(btn);
+        });
+    }
+
+    function selectSupplierCombo(s) {
+        var norm = normalizeSupplierEntry(s);
+        if (!norm) return;
+        _selectedSupplier = norm;
+        var inp = document.getElementById('supplier-combobox-input');
+        if (inp) inp.value = norm.name;
+        renderSelectionPreview(norm);
+        var list = document.getElementById('supplier-combobox-list');
+        if (list) list.style.display = 'none';
+        var regRow = document.getElementById('supplier-combobox-register');
+        if (regRow) regRow.style.display = 'none';
+    }
+
+    function clearCombo() {
+        _selectedSupplier = null;
+        var inp = document.getElementById('supplier-combobox-input');
+        if (inp) inp.value = '';
+        var list = document.getElementById('supplier-combobox-list');
+        if (list) list.style.display = 'none';
+        var regRow = document.getElementById('supplier-combobox-register');
+        if (regRow) regRow.style.display = 'none';
+        hideSelectionPreview();
+    }
+
+    // ── Modal ─────────────────────────────────────────────────────────────────
+    function openModal() {
+        clearCombo();
+        var ov = document.getElementById('supplier-modal-overlay');
+        if (ov) ov.style.display = 'flex';
+        var inp = document.getElementById('supplier-combobox-input');
+        if (inp) setTimeout(function () { inp.focus(); }, 60);
+    }
+
+    function closeModal() {
+        var ov = document.getElementById('supplier-modal-overlay');
+        if (ov) ov.style.display = 'none';
+    }
+
+    function addSupplier() {
+        if (!_selectedSupplier) {
+            showSupToast('Please select a supplier from the list.', 'error');
+            return;
+        }
+        pickAndAddSupplier(_selectedSupplier);
+    }
+
+    function removeSupplier(suppId) {
+        var sup = activeSuppliers.find(function (s) { return s.id === suppId; });
+        if (sup && sup.items.length) {
+            Promise.all(sup.items.map(function (it) {
+                if (it.saved || String(it.price || '').trim() !== '') {
+                    return deleteQuoteFromServer(suppId, it.itemId);
+                }
+                return Promise.resolve({ success: true });
+            })).catch(function () {
+                showSupToast('Could not remove all saved quotes.', 'error');
+            });
+        }
+        activeSuppliers = activeSuppliers.filter(function (s) { return s.id !== suppId; });
+        renderSection();
+    }
+
+    function addItemToSupplier(suppId) {
+        var sup = activeSuppliers.find(function (s) { return s.id === suppId; });
+        var sel = document.getElementById('sup-item-sel-' + suppId);
+        if (!sel || !sel.value || !sup) return;
+        var itemId = parseInt(sel.value, 10);
+        if (sup.items.find(function (i) { return i.itemId === itemId; })) return;
+        sup.items.push({ itemId: itemId, price: '', photo: null, saved: false });
+        sel.value = '';
+        renderSection();
+    }
+
+    function removeItemFromSupplier(suppId, itemId) {
+        var sup = activeSuppliers.find(function (s) { return s.id === suppId; });
+        if (!sup) return;
+        var it = sup.items.find(function (i) { return i.itemId === itemId; });
+        if (it && (it.saved || String(it.price || '').trim() !== '')) {
+            deleteQuoteFromServer(suppId, itemId).catch(function () {
+                showSupToast('Could not remove saved quote.', 'error');
+            });
+        }
+        sup.items = sup.items.filter(function (i) { return i.itemId !== itemId; });
+        renderSection();
+    }
+
+    // ── Render ────────────────────────────────────────────────────────────────
+    function renderSection() {
+        reqItems = window.CANVASS_ITEMS || [];
+        var emptyEl   = document.getElementById('supplier-empty-state');
+        var sectionEl = document.getElementById('supplier-grid-section');
+        if (!emptyEl || !sectionEl) return;
+
+        if (!activeSuppliers.length) {
+            emptyEl.style.display   = 'block';
+            sectionEl.style.display = 'none';
+            return;
+        }
+        emptyEl.style.display   = 'none';
+        sectionEl.style.display = 'block';
+
+        var grid = document.getElementById('supplier-card-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        activeSuppliers.forEach(function (sup) {
+            var usedIds   = sup.items.map(function (i) { return i.itemId; });
+            var available = reqItems.filter(function (r) { return !usedIds.includes(r.id); });
+
+            // Avatar: logo image when available, initials fallback
+            // Wrap both elements — onerror hides img and reveals initials div via display toggle
+            // (avoids the broken \" escaping that terminates HTML attribute values early)
+            var imgSrc = getSupplierImg(sup.image);
+            var avatarHtml = imgSrc
+                ? '<div class="sup-avatar-wrap">' +
+                  '<img src="' + escHtml(imgSrc) + '" class="supplier-avatar-img" alt=""' +
+                  ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+                  '<div class="supplier-avatar" style="display:none">' + escHtml(getInitials(sup.name)) + '</div>' +
+                  '</div>'
+                : '<div class="supplier-avatar">' + escHtml(getInitials(sup.name)) + '</div>';
+
+            var itemRowsHtml = sup.items.map(function (si, idx) {
+                var req = reqItems.find(function (r) { return r.id === si.itemId; });
+                if (!req) return '';
+                var thumbHtml = si.photo
+                    ? '<div class="item-photo-preview">' +
+                      '<img src="' + escHtml(si.photo) + '" class="item-photo-thumb" alt="quote photo">' +
+                      '<button type="button" class="btn-item-photo-remove" data-sup-id="' + escHtml(sup.id) + '" data-item-id="' + si.itemId + '" title="Remove photo" aria-label="Remove photo">' +
+                      '<i class="fas fa-trash" aria-hidden="true"></i></button></div>'
+                    : '';
+                return (idx > 0 ? '<div class="supplier-item-divider"></div>' : '') +
+                    '<div class="supplier-item-row" data-item-id="' + si.itemId + '">' +
+                    '<div class="supplier-item-row-name">' + escHtml(req.name) + '</div>' +
+                    '<div class="supplier-item-row-qty">Req. qty: ' + escHtml(String(req.qty)) + ' unit</div>' +
+                    '<div class="supplier-price-row">' +
+                    '<span class="php-prefix-label">PHP</span>' +
+                    '<input class="supplier-price-input" type="number" placeholder="0.00" min="0" step="0.01"' +
+                    ' value="' + escHtml(si.price) + '"' +
+                    ' data-supplier-id="' + escHtml(sup.id) + '" data-item-id="' + si.itemId + '">' +
+                    '<label class="btn-item-photo" title="Upload quote image">' +
+                    '<i class="fas fa-camera" aria-hidden="true"></i>' +
+                    '<input type="file" accept="image/*" class="item-photo-input" data-sup-id="' + escHtml(sup.id) + '" data-item-id="' + si.itemId + '" style="display:none">' +
+                    '</label>' +
+                    '<button type="button" class="btn-item-remove" data-sup-id="' + escHtml(sup.id) + '" data-item-id="' + si.itemId + '" aria-label="Remove item">' +
+                    '<i class="fas fa-times" aria-hidden="true"></i></button>' +
+                    '</div>' +
+                    thumbHtml +
+                    '</div>';
+            }).join('');
+
+            var optHtml = available.map(function (i) {
+                return '<option value="' + i.id + '">' + escHtml(i.name) + '</option>';
+            }).join('');
+
+            var card = document.createElement('div');
+            card.className = 'supplier-card';
+            card.dataset.supplierId = sup.id;
+            card.innerHTML =
+                '<div class="supplier-card-head">' +
+                '<div class="supplier-card-head-left">' +
+                avatarHtml +
+                '<div>' +
+                '<div class="supplier-card-name">' + escHtml(sup.name) + '</div>' +
+                (sup.contact ? '<div class="supplier-card-sub">' + escHtml(sup.contact) + '</div>' : '') +
+                (sup.tin     ? '<div class="supplier-card-sub">TIN ' + escHtml(sup.tin) + '</div>' : '') +
+                (sup.address ? '<div class="supplier-card-sub">' + escHtml(sup.address) + '</div>' : '') +
+                '</div></div>' +
+                '<div class="supplier-card-head-actions">' +
+                '<button class="btn-sup-remove" data-sup-id="' + escHtml(sup.id) + '">Remove</button>' +
+                '</div></div>' +
+                '<div class="supplier-card-body">' +
+                '<div class="supplier-item-add-row">' +
+                '<select id="sup-item-sel-' + escHtml(sup.id) + '"' + (!available.length ? ' disabled' : '') + '>' +
+                '<option value="">Select item to quote…</option>' + optHtml +
+                '</select>' +
+                '<button class="btn-sup-additem" data-sup-id="' + escHtml(sup.id) + '"' + (!available.length ? ' disabled' : '') + '>+ Add item</button>' +
+                '</div>' +
+                (itemRowsHtml || '<div class="supplier-card-empty">Select an item above to add a quoted price</div>') +
+                '</div>';
+            grid.appendChild(card);
+        });
+
+        // Wire: price inputs
+        grid.querySelectorAll('.supplier-price-input').forEach(function (inp) {
+            inp.addEventListener('input', function () {
+                var sup = activeSuppliers.find(function (s) { return s.id === inp.dataset.supplierId; });
+                if (sup) {
+                    var itemId = parseInt(inp.dataset.itemId, 10);
+                    var it = sup.items.find(function (i) { return i.itemId === itemId; });
+                    if (it) {
+                        it.price = inp.value;
+                        it.saved = false;
+                        scheduleQuoteSave(sup.id, itemId, inp.value);
+                    }
+                }
+            });
+            inp.addEventListener('blur', function () {
+                var priceStr = String(inp.value || '').trim();
+                if (priceStr === '') return;
+                var key = inp.dataset.supplierId + ':' + inp.dataset.itemId;
+                if (_saveTimers[key]) {
+                    clearTimeout(_saveTimers[key]);
+                    _saveTimers[key] = null;
+                }
+                saveQuoteToServer(inp.dataset.supplierId, parseInt(inp.dataset.itemId, 10), priceStr)
+                    .then(function (data) {
+                        if (!data.success) {
+                            showSupToast(data.message || 'Could not save quote.', 'error');
+                            return;
+                        }
+                        var sup = activeSuppliers.find(function (s) { return s.id === inp.dataset.supplierId; });
+                        if (sup) {
+                            var it = sup.items.find(function (i) { return i.itemId === parseInt(inp.dataset.itemId, 10); });
+                            if (it) it.saved = true;
+                        }
+                    })
+                    .catch(function () {
+                        showSupToast('Network error saving quote.', 'error');
+                    });
+            });
+        });
+
+        // Wire: photo file inputs
+        grid.querySelectorAll('.item-photo-input').forEach(function (inp) {
+            inp.addEventListener('change', function () {
+                var file = inp.files && inp.files[0];
+                if (!file) return;
+                var supId  = inp.dataset.supId;
+                var itemId = parseInt(inp.dataset.itemId, 10);
+                var sup    = activeSuppliers.find(function (s) { return s.id === supId; });
+                if (!sup) return;
+                var it = sup.items.find(function (i) { return i.itemId === itemId; });
+                if (!it) return;
+                var reader = new FileReader();
+                reader.onload = function (e) { it.photo = e.target.result; renderSection(); };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        // Wire: photo remove buttons
+        grid.querySelectorAll('.btn-item-photo-remove').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var supId  = btn.dataset.supId;
+                var itemId = parseInt(btn.dataset.itemId, 10);
+                var sup    = activeSuppliers.find(function (s) { return s.id === supId; });
+                if (!sup) return;
+                var it = sup.items.find(function (i) { return i.itemId === itemId; });
+                if (it) {
+                    it.photo = null;
+                    renderSection();
+                }
+            });
+        });
+
+        // Wire: remove-item buttons
+        grid.querySelectorAll('.btn-item-remove').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                removeItemFromSupplier(btn.dataset.supId, parseInt(btn.dataset.itemId, 10));
+            });
+        });
+
+        // Wire: remove-supplier buttons
+        grid.querySelectorAll('.btn-sup-remove').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                removeSupplier(btn.dataset.supId);
+            });
+        });
+
+        // Wire: add-item buttons
+        grid.querySelectorAll('.btn-sup-additem').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                addItemToSupplier(btn.dataset.supId);
+            });
+        });
+    }
+
+    // ── Register Supplier modal ───────────────────────────────────────────────
+    function isValidEmail(value) {
+        var email = String(value || '').trim();
+        if (!email) return true;
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function openRegisterModal() {
+        var form = document.getElementById('sup-register-form');
+        if (form) form.reset();
+        var ov = document.getElementById('sup-register-overlay');
+        if (ov) ov.style.display = 'flex';
+        var inp = document.getElementById('sup-register-name');
+        if (inp) setTimeout(function () { inp.focus(); }, 60);
+    }
+
+    function closeRegisterModal() {
+        var ov = document.getElementById('sup-register-overlay');
+        if (ov) ov.style.display = 'none';
+    }
+
+    function submitRegisterSupplier() {
+        var nameEl = document.getElementById('sup-register-name');
+        var name = nameEl ? nameEl.value.trim() : '';
+        if (!name) {
+            showSupToast('Supplier name is required.', 'error');
+            if (nameEl) nameEl.focus();
+            return;
+        }
+
+        var email = (document.getElementById('sup-register-email') || {}).value || '';
+        if (!isValidEmail(email)) {
+            showSupToast('Invalid email format.', 'error');
+            return;
+        }
+
+        if (!_requestId) {
+            showSupToast('Missing request reference. Reload the page and try again.', 'error');
+            return;
+        }
+
+        var body = new URLSearchParams();
+        body.set('action', 'add_preferred');
+        body.set('request_id', String(_requestId));
+        body.set('supplier_name', name);
+        body.set('contact_person', (document.getElementById('sup-register-contact') || {}).value || '');
+        body.set('phone_number',   (document.getElementById('sup-register-phone')   || {}).value || '');
+        body.set('email',          email.trim());
+        body.set('address',        (document.getElementById('sup-register-address') || {}).value || '');
+        body.set('tin',            (document.getElementById('sup-register-tin')     || {}).value || '');
+        body.set('shop_url', '');
+        body.set('city', '');
+        body.set('country', '');
+        body.set('postal_code', '');
+
+        var btnSave = document.getElementById('sup-register-save');
+        if (btnSave) { btnSave.disabled = true; btnSave.textContent = 'Saving…'; }
+
+        fetch(_canvassApi, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+            credentials: 'include'
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) {
+                showSupToast(data.message || 'Could not register supplier.', 'error');
+                return;
+            }
+            var newSup = data.supplier || {};
+            var entry = normalizeSupplierEntry({
+                supplier_id:   newSup.supplier_id,
+                supplier_name: newSup.supplier_name || name,
+                contact_person: newSup.contact_person || '',
+                tin:           newSup.tin || '',
+                address:       newSup.address || '',
+                supplier_image: newSup.supplier_image || '',
+            });
+            if (entry && entry.id) {
+                var existing = window._cvAvailableSuppliers || [];
+                if (!existing.find(function (s) {
+                    var sid = String(s.id != null ? s.id : s.supplier_id || '');
+                    return sid === entry.id;
+                })) {
+                    existing.push(entry);
+                    window._cvAvailableSuppliers = existing;
+                }
+                closeRegisterModal();
+                pickAndAddSupplier(entry);
+                var inp = document.getElementById('supplier-combobox-input');
+                if (inp) {
+                    inp.focus();
+                    buildComboboxList('');
+                }
+            } else {
+                showSupToast('Supplier registered but could not be selected. Search for it manually.', 'error');
+                closeRegisterModal();
+            }
+        })
+        .catch(function () { showSupToast('Network error. Please try again.', 'error'); })
+        .finally(function () {
+            if (btnSave) { btnSave.disabled = false; btnSave.textContent = 'Register'; }
+        });
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    function init() {
+        var btnEmpty  = document.getElementById('btn-add-supplier-empty');
+        var btnFooter = document.getElementById('btn-add-supplier-footer');
+        var btnClose  = document.getElementById('supplier-modal-close');
+        var btnCancel = document.getElementById('supplier-modal-cancel');
+        var btnSave   = document.getElementById('supplier-modal-save');
+        var overlay   = document.getElementById('supplier-modal-overlay');
+        var comboInp  = document.getElementById('supplier-combobox-input');
+        if (!btnEmpty) return; // not on requester view
+
+        btnEmpty.addEventListener('click', openModal);
+        if (btnFooter) btnFooter.addEventListener('click', openModal);
+        if (btnClose)  btnClose.addEventListener('click', closeModal);
+        if (btnCancel) btnCancel.addEventListener('click', closeModal);
+        if (btnSave)   btnSave.addEventListener('click', addSupplier);
+        if (overlay)   overlay.addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+
+        if (comboInp) {
+            comboInp.addEventListener('input', function () {
+                _selectedSupplier = null;
+                hideSelectionPreview();
+                buildComboboxList(this.value);
+            });
+            comboInp.addEventListener('focus', function () {
+                buildComboboxList(this.value);
+            });
+            // Close list when clicking outside combobox (do not close the modal)
+            document.addEventListener('click', function (e) {
+                var wrap = document.getElementById('supplier-combobox');
+                var modal = document.getElementById('supplier-modal-overlay');
+                if (!wrap || !modal || modal.style.display === 'none') return;
+                if (!wrap.contains(e.target)) {
+                    var list = document.getElementById('supplier-combobox-list');
+                    if (list) list.style.display = 'none';
+                }
+            });
+        }
+
+        var modalInner = document.querySelector('#supplier-modal-overlay .supplier-modal');
+        if (modalInner) {
+            modalInner.addEventListener('click', function (e) {
+                e.stopPropagation();
+            });
+        }
+
+        // Register Supplier modal wiring
+        var btnRegLink    = document.getElementById('btn-register-supplier-link');
+        var btnRegClose   = document.getElementById('sup-register-close');
+        var btnRegCancel  = document.getElementById('sup-register-cancel');
+        var btnRegSave    = document.getElementById('sup-register-save');
+        var regOverlay    = document.getElementById('sup-register-overlay');
+        if (btnRegLink)   btnRegLink.addEventListener('click', openRegisterModal);
+        if (btnRegClose)  btnRegClose.addEventListener('click', closeRegisterModal);
+        if (btnRegCancel) btnRegCancel.addEventListener('click', closeRegisterModal);
+        if (btnRegSave)   btnRegSave.addEventListener('click', submitRegisterSupplier);
+        if (regOverlay)   regOverlay.addEventListener('click', function (e) { if (e.target === this) closeRegisterModal(); });
+
+        renderSection();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();

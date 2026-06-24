@@ -620,7 +620,7 @@ $pageTitle = $rfRequestId > 0
 <body class="page-canvass-form">
 
 <main class="requisition-main">
-        <div class="requisition-card<?php echo $isCanvasMatrixReadonly ? ' gsd-canvass-readonly' : ''; ?>" id="canvassCard" data-request-id="<?php echo (int) $requestId; ?>" data-api="../../app/api/canvass_detail.php" data-dean-api="../../app/api/dean_requisition.php" data-gsd-readonly="<?php echo $isCanvasMatrixReadonly ? '1' : '0'; ?>" data-canvasser-register="<?php echo $isCanvasserCanvassView ? '1' : '0'; ?>" data-canvasser-api="../../app/api/canvasser_requests.php" data-requester-edit="<?php echo $isRequesterEditView ? '1' : '0'; ?>">
+        <div class="requisition-card<?php echo $isCanvasMatrixReadonly ? ' gsd-canvass-readonly' : ''; ?>" id="canvassCard" data-request-id="<?php echo (int) $requestId; ?>" data-api="../../app/api/canvass_detail.php" data-dean-api="../../app/api/dean_requisition.php" data-gsd-readonly="<?php echo $isCanvasMatrixReadonly ? '1' : '0'; ?>" data-gsd-review="<?php echo $isGsdCanvassReview ? '1' : '0'; ?>" data-gsd-api="../../app/api/gsd/requests.php" data-canvasser-register="<?php echo $isCanvasserCanvassView ? '1' : '0'; ?>" data-canvasser-api="../../app/api/canvasser_requests.php" data-requester-edit="<?php echo $isRequesterEditView ? '1' : '0'; ?>">
         <a href="<?php echo htmlspecialchars($accessError === null ? $backHref : $accessErrorReturnHref); ?>" class="requisition-close-btn" aria-label="Back" data-tooltip="Back">
             <i class="fas fa-times"></i>
         </a>
@@ -738,7 +738,7 @@ $pageTitle = $rfRequestId > 0
         <section class="rf-section rf-section-requisition-items cv-requested-ref" aria-label="Items from the requisition">
             <h2 class="rf-section-heading">Items on Requisition</h2>
             <p class="cv-requested-ref-hint"><?php echo $isGsdCanvassReview
-                ? 'Line items as recorded on the original requisition (read-only).'
+                ? 'Review each line item and select the winning supplier quote (preferred or canvassed). Awards are saved to the requisition.'
                 : ($isCanvasserCanvassView
                     ? 'Requester’s line items (read-only). Canvass quotation lines set by the requester appear below — you only add suppliers and prices.'
                     : ($isRequesterEditView
@@ -752,23 +752,21 @@ $pageTitle = $rfRequestId > 0
                             <th scope="col">Item / Sub-description</th>
                             <th scope="col">Qty</th>
                             <th scope="col">Unit</th>
-                            <?php if ($isCanvasserCanvassView): ?>
-                            <th scope="col">Quotes</th>
-                            <?php elseif ($isRequesterEditView): ?>
-                            <th scope="col">Preferred Quote</th>
+                            <?php if ($isCanvasserCanvassView || $isGsdCanvassReview): ?>
+                            <th scope="col"><?php echo $isGsdCanvassReview ? 'Select quote' : 'Quotes'; ?></th>
                             <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody id="cvRequestedItemsTableBody">
                         <tr class="requested-items-empty">
-                            <td colspan="<?php echo ($isCanvasserCanvassView || $isRequesterEditView) ? 5 : 4; ?>">Loading…</td>
+                            <td colspan="<?php echo ($isCanvasserCanvassView || $isGsdCanvassReview) ? 5 : 4; ?>">Loading…</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <?php if (!$isRequesterEditView): ?>
+        <?php if (!$isRequesterEditView && !$isGsdCanvassReview): ?>
         <section class="rf-section rf-section-canvass-lines">
         <div class="table-section">
             <?php if (!$isCanvassStructureUiHidden && !$isCanvasserCanvassView): ?>
@@ -814,7 +812,103 @@ $pageTitle = $rfRequestId > 0
         </section>
         <?php endif; // !$isRequesterEditView — hide legacy canvass breakdown for requester ?>
 
-            <?php if (!$isRequesterEditView): ?>
+            <?php if ($isRequesterEditView): ?>
+            <section class="rf-section rf-section-supplier-quotes" id="supplierQuotesSection">
+                <div class="sec-title-bar">
+                    <span class="sec-label">SUPPLIER QUOTES</span>
+                </div>
+
+                <div class="supplier-empty-state" id="supplier-empty-state">
+                    <i class="fas fa-store" aria-hidden="true"></i>
+                    <p>No suppliers added yet.<br>Add a supplier to start entering quoted prices.</p>
+                    <button class="btn-add-supplier-primary" id="btn-add-supplier-empty">+ Add supplier</button>
+                </div>
+
+                <div class="supplier-grid-section" id="supplier-grid-section" style="display:none">
+                    <div class="supplier-card-grid" id="supplier-card-grid"></div>
+                    <div class="supplier-grid-footer">
+                        <button class="btn-add-supplier-outline" id="btn-add-supplier-footer">+ Add supplier</button>
+                    </div>
+                </div>
+
+                <div class="supplier-modal-overlay" id="supplier-modal-overlay" style="display:none">
+                    <div class="supplier-modal">
+                        <div class="supplier-modal-head">
+                            <span>Add supplier</span>
+                            <button class="supplier-modal-close" id="supplier-modal-close">&times;</button>
+                        </div>
+                        <div class="supplier-modal-body">
+                            <label class="supplier-field-label">Select supplier <span class="req-star">*</span></label>
+                            <div class="supplier-combobox" id="supplier-combobox">
+                                <div class="supplier-combobox-input-wrap">
+                                    <i class="fas fa-search sup-combo-search-icon" aria-hidden="true"></i>
+                                    <input type="text" id="supplier-combobox-input" placeholder="Search supplier…" autocomplete="off">
+                                </div>
+                                <div class="supplier-combobox-list" id="supplier-combobox-list" style="display:none"></div>
+                                <div class="supplier-combobox-register" id="supplier-combobox-register" style="display:none">
+                                    <span>Supplier not found.</span>
+                                    <button type="button" id="btn-register-supplier-link" class="sup-combo-register-btn">+ Register Supplier</button>
+                                </div>
+                                <div id="supplier-combobox-selection" class="supplier-combobox-selection" hidden>
+                                    <div class="supplier-combobox-selection-label">Selected supplier</div>
+                                    <div id="supplier-combobox-selection-body" class="supplier-combobox-selection-body"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="supplier-modal-foot">
+                            <button class="btn-modal-cancel" id="supplier-modal-cancel">Cancel</button>
+                            <button class="btn-modal-save" id="supplier-modal-save">&#10003; Add supplier</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Register new supplier modal -->
+                <div class="supplier-modal-overlay" id="sup-register-overlay" style="display:none">
+                    <div class="supplier-modal" style="width:420px;max-width:95vw;">
+                        <div class="supplier-modal-head">
+                            <span>Register New Supplier</span>
+                            <button class="supplier-modal-close" id="sup-register-close">&times;</button>
+                        </div>
+                        <div class="supplier-modal-body sup-register-body">
+                            <form id="sup-register-form" onsubmit="return false">
+                                <div class="sup-register-field">
+                                    <label class="supplier-field-label">Supplier name <span class="req-star">*</span></label>
+                                    <input type="text" id="sup-register-name" placeholder="e.g. Lazada, SM Stationery" maxlength="100" autocomplete="organization">
+                                </div>
+                                <div class="sup-register-field">
+                                    <label class="supplier-field-label">Contact person</label>
+                                    <input type="text" id="sup-register-contact" maxlength="100" autocomplete="name">
+                                </div>
+                                <div class="sup-register-grid">
+                                    <div class="sup-register-field">
+                                        <label class="supplier-field-label">Phone</label>
+                                        <input type="text" id="sup-register-phone" maxlength="30" autocomplete="tel">
+                                    </div>
+                                    <div class="sup-register-field">
+                                        <label class="supplier-field-label">Email</label>
+                                        <input type="email" id="sup-register-email" maxlength="100" autocomplete="email">
+                                    </div>
+                                </div>
+                                <div class="sup-register-field">
+                                    <label class="supplier-field-label">Address</label>
+                                    <input type="text" id="sup-register-address" maxlength="255" autocomplete="street-address">
+                                </div>
+                                <div class="sup-register-field">
+                                    <label class="supplier-field-label">TIN <span style="font-weight:400;color:#999">(optional)</span></label>
+                                    <input type="text" id="sup-register-tin" maxlength="20" placeholder="e.g. 123-456-789-000" autocomplete="off">
+                                </div>
+                            </form>
+                        </div>
+                        <div class="supplier-modal-foot">
+                            <button class="btn-modal-cancel" id="sup-register-cancel">Cancel</button>
+                            <button class="btn-modal-save" id="sup-register-save">Register</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <?php endif; ?>
+
+            <?php if (!$isRequesterEditView && !$isGsdCanvassReview): ?>
             <section class="rf-section rf-section-preferred cv-preferred-section" id="cvPreferredSection">
                 <h2 class="rf-section-heading">Preferred Supplier Matrix</h2>
                 <div class="cv-preferred-section-head" id="cvPreferredSectionHead">
@@ -838,7 +932,7 @@ $pageTitle = $rfRequestId > 0
                 </div>
             </section>
             <?php endif; ?>
-            <?php if (!$isRequesterEditView): ?>
+            <?php if (!$isRequesterEditView && !$isGsdCanvassReview): ?>
             <section class="rf-section rf-section-canvassed supplier-section" id="cvCanvasSection" role="region" aria-label="Suppliers and pricing">
                 <h2 class="rf-section-heading">Canvassed Supplier Matrix</h2>
                     <?php if ($isCanvasserCanvassView && !$verifierChainLocked): ?>
@@ -1261,5 +1355,7 @@ window.IMRMS_CANVASS_REVIEWER = <?php echo json_encode([
 <script src="../assets/js/canvass_reviewer_approval.js"></script>
 <?php endif; ?>
 <?php endif; ?>
+
+
 </body>
 </html>

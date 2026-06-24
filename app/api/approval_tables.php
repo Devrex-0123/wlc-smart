@@ -590,6 +590,163 @@ function cwirmsBackfillPreferredQuotesJsonToJunction(PDO $db): void
 }
 
 /**
+ * Canonical per-line supplier quotes (preferred + canvassed).
+ * Required by requester preferred-quote modal and canvasser workspace.
+ */
+function ensureRequisitionLineQuotesTable(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $tableCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_line_quotes'"
+    );
+    $tableCheck->execute();
+    if (((int) $tableCheck->fetchColumn()) === 0) {
+        $db->exec(
+            "CREATE TABLE requisition_line_quotes (
+                quote_id INT NOT NULL AUTO_INCREMENT,
+                requisition_line_id INT NOT NULL,
+                supplier_id INT NOT NULL,
+                quoted_unit_price DECIMAL(12,2) NOT NULL,
+                quote_type ENUM('preferred','canvassed') NOT NULL DEFAULT 'canvassed',
+                submitted_by_user_id INT NULL DEFAULT NULL,
+                benefits TEXT NULL DEFAULT NULL,
+                quote_photo VARCHAR(255) NULL DEFAULT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (quote_id),
+                UNIQUE KEY uq_line_supplier (requisition_line_id, supplier_id, quote_type),
+                KEY idx_rlq_line (requisition_line_id),
+                KEY idx_rlq_supplier (supplier_id),
+                CONSTRAINT fk_rlq_line FOREIGN KEY (requisition_line_id)
+                    REFERENCES requisition_line (requisition_line_id) ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT fk_rlq_supplier FOREIGN KEY (supplier_id)
+                    REFERENCES suppliers (supplier_id) ON DELETE CASCADE ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+
+        return;
+    }
+
+    $colCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_line_quotes'
+           AND COLUMN_NAME = 'quote_type'"
+    );
+    $colCheck->execute();
+    if (((int) $colCheck->fetchColumn()) === 0) {
+        $db->exec(
+            "ALTER TABLE requisition_line_quotes
+             ADD COLUMN quote_type ENUM('preferred','canvassed') NOT NULL DEFAULT 'canvassed' AFTER quoted_unit_price"
+        );
+    }
+
+    $idxStmt = $db->query('SHOW INDEX FROM requisition_line_quotes');
+    $idxCols = [];
+    if ($idxStmt) {
+        $bySeq = [];
+        while ($idxRow = $idxStmt->fetch(PDO::FETCH_ASSOC)) {
+            if ((string) ($idxRow['Key_name'] ?? '') !== 'uq_line_supplier') {
+                continue;
+            }
+            $bySeq[(int) ($idxRow['Seq_in_index'] ?? 0)] = (string) ($idxRow['Column_name'] ?? '');
+        }
+        ksort($bySeq);
+        $idxCols = array_values($bySeq);
+    }
+    if ($idxCols !== [] && !in_array('quote_type', $idxCols, true)) {
+        try {
+            $db->exec('ALTER TABLE requisition_line_quotes DROP INDEX uq_line_supplier');
+        } catch (Throwable $e) {
+            // ignore if index name differs
+        }
+        try {
+            $db->exec(
+                'ALTER TABLE requisition_line_quotes
+                 ADD UNIQUE KEY uq_line_supplier (requisition_line_id, supplier_id, quote_type)'
+            );
+        } catch (Throwable $e) {
+            // ignore if already correct or data prevents migration
+        }
+    }
+}
+
+function ensureRequisitionLineAwardsTable(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    ensureRequisitionLineQuotesTable($db);
+
+    $tableCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_line_awards'"
+    );
+    $tableCheck->execute();
+    if (((int) $tableCheck->fetchColumn()) === 0) {
+        $db->exec(
+            "CREATE TABLE requisition_line_awards (
+                award_id INT NOT NULL AUTO_INCREMENT,
+                requisition_line_id INT NOT NULL,
+                quote_id INT NULL DEFAULT NULL,
+                supplier_id INT NOT NULL,
+                selection_source ENUM('preferred','canvassed') NULL DEFAULT NULL,
+                awarded_qty INT NOT NULL,
+                deferred_qty INT NULL DEFAULT 0,
+                deferred_reason TEXT NULL,
+                comptroller_status ENUM('fully_approved','deferred','rejected') NULL DEFAULT NULL,
+                awarded_by_user_id INT NOT NULL,
+                awarded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (award_id),
+                UNIQUE KEY uq_line_award (requisition_line_id),
+                KEY idx_rla_line (requisition_line_id),
+                KEY idx_rla_quote (quote_id),
+                KEY idx_rla_supplier (supplier_id),
+                KEY fk_rla_awarded_by (awarded_by_user_id),
+                CONSTRAINT fk_rla_line FOREIGN KEY (requisition_line_id)
+                    REFERENCES requisition_line (requisition_line_id) ON DELETE CASCADE ON UPDATE CASCADE,
+                CONSTRAINT fk_rla_quote FOREIGN KEY (quote_id)
+                    REFERENCES requisition_line_quotes (quote_id) ON DELETE SET NULL ON UPDATE CASCADE,
+                CONSTRAINT fk_rla_supplier FOREIGN KEY (supplier_id)
+                    REFERENCES suppliers (supplier_id) ON UPDATE CASCADE,
+                CONSTRAINT fk_rla_awarded_by FOREIGN KEY (awarded_by_user_id)
+                    REFERENCES user (user_id) ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+
+        return;
+    }
+
+    $colCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'requisition_line_awards'
+           AND COLUMN_NAME = 'selection_source'"
+    );
+    $colCheck->execute();
+    if (((int) $colCheck->fetchColumn()) === 0) {
+        $db->exec(
+            "ALTER TABLE requisition_line_awards
+             ADD COLUMN selection_source ENUM('preferred','canvassed') NULL DEFAULT NULL
+             AFTER supplier_id"
+        );
+    }
+}
+
+/**
  * @return array<int, array{sort_orders: list<int>, prices: array<int, string>, photos: array<int, string>}>
  */
 function cwirmsLoadPreferredSupplierQuoteMapsForRequest(PDO $db, int $requestId): array

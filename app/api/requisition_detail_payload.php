@@ -28,8 +28,7 @@ function requisitionSqlSelectListAggregates(): string
     return '(SELECT GROUP_CONCAT(rl.item_name ORDER BY rl.sort_order ASC, rl.requisition_line_id ASC SEPARATOR \'||\')
         FROM requisition_line rl
         WHERE rl.request_id = r.request_id
-          AND rl.deleted_at IS NULL
-          AND (rl.group_label IS NULL OR rl.group_label = \'\')) AS items_concat,
+          AND (rl.deleted_at IS NULL OR rl.deleted_at = \'\')) AS items_concat,
         (SELECT GROUP_CONCAT(
             COALESCE(NULLIF(TRIM(s.supplier_name), \'\'), \'—\')
             ORDER BY rla.award_id ASC

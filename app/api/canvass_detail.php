@@ -670,6 +670,7 @@ try {
     ensureRequisitionCanvassSubmissionColumn($db);
     ensureRequisitionPreferredQuoteColumns($db);
     ensurePreferredSupplierItemQuotesTable($db);
+    ensureRequisitionLineQuotesTable($db);
     dropRequisitionCanvassDetailPhotoColumns($db);
     $uid = (int) $_SESSION['user_id'];
     $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -1078,6 +1079,15 @@ try {
             );
             $placeholder->execute([$requestId, $newSid, -1]);
 
+            $verifyLink = $db->prepare(
+                'SELECT preferred_supplier_item_id FROM requisition_preferred_supplier_item
+                 WHERE request_id = ? AND supplier_id = ? LIMIT 1'
+            );
+            $verifyLink->execute([$requestId, $newSid]);
+            if (!(int) ($verifyLink->fetchColumn() ?: 0)) {
+                sendJson(['success' => false, 'message' => 'Preferred supplier could not be linked. Please try again.']);
+            }
+
             // If suppliers table includes shop_url, persist it there
             try {
                 if ($shopUrl !== '') {
@@ -1208,6 +1218,16 @@ try {
                  VALUES (?, ?, ?, NULL, NULL)'
             );
             $ins->execute([$requestId, $supplierId, -1]);
+
+            $verifyLink = $db->prepare(
+                'SELECT preferred_supplier_item_id FROM requisition_preferred_supplier_item
+                 WHERE request_id = ? AND supplier_id = ? LIMIT 1'
+            );
+            $verifyLink->execute([$requestId, $supplierId]);
+            if (!(int) ($verifyLink->fetchColumn() ?: 0)) {
+                sendJson(['success' => false, 'message' => 'Preferred supplier could not be linked. Please try again.']);
+            }
+
             sendJson(['success' => true, 'message' => 'Preferred supplier added.']);
         }
 
@@ -1539,6 +1559,8 @@ try {
     // ── Requester per-line preferred quote actions ──────────────────────────────
 
     if ($action === 'get_requester_line_view') {
+        ensureRequisitionLineQuotesTable($db);
+
         $requestId = (int) ($_GET['request_id'] ?? 0);
         if ($requestId <= 0) {
             sendJson(['success' => false, 'message' => 'Invalid request id.']);
@@ -1639,6 +1661,8 @@ try {
     }
 
     if ($action === 'save_preferred_quote') {
+        ensureRequisitionLineQuotesTable($db);
+
         $requestId  = (int) ($_POST['request_id'] ?? 0);
         $lineId     = (int) ($_POST['requisition_line_id'] ?? 0);
         $supplierId = (int) ($_POST['supplier_id'] ?? 0);
@@ -1652,25 +1676,27 @@ try {
             sendJson(['success' => false, 'message' => 'Unit price must be a valid non-negative number.']);
         }
         $price = round((float) $priceRaw, 2);
+        $benefitsVal = $benefits !== '' ? $benefits : null;
 
-        // Must be the request owner
-        $ownStmt = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $ownStmt->execute([$requestId, $uid]);
-        if (!$ownStmt->fetch(PDO::FETCH_ASSOC)) {
-            sendJson(['success' => false, 'message' => 'Access denied. Only the requester can add preferred quotes.']);
+        loadOwnedRequest($db, $requestId, $uid);
+        if (!requisitionInventoryAccepted($db, $requestId)) {
+            sendJson(['success' => false, 'message' => 'Open after the inventory manager accepts the requisition.']);
         }
         if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
             sendJson(['success' => false, 'message' => 'A verifier has already acted on this request. Preferred quotes are locked.']);
         }
-        // Validate line belongs to this request
+
         $lChk = $db->prepare(
-            'SELECT requisition_line_id FROM requisition_line WHERE requisition_line_id = ? AND request_id = ? LIMIT 1'
+            'SELECT requisition_line_id FROM requisition_line
+             WHERE requisition_line_id = ? AND request_id = ?
+               AND (deleted_at IS NULL OR deleted_at = \'\')
+             LIMIT 1'
         );
         $lChk->execute([$lineId, $requestId]);
         if (!$lChk->fetchColumn()) {
             sendJson(['success' => false, 'message' => 'Invalid line item.']);
         }
-        // Validate supplier exists
+
         $sChk = $db->prepare('SELECT supplier_id FROM suppliers WHERE supplier_id = ? LIMIT 1');
         $sChk->execute([$supplierId]);
         if (!$sChk->fetchColumn()) {
@@ -1684,14 +1710,32 @@ try {
              ON DUPLICATE KEY UPDATE
                  quoted_unit_price    = VALUES(quoted_unit_price),
                  benefits             = VALUES(benefits),
-                 submitted_by_user_id = VALUES(submitted_by_user_id)"
+                 submitted_by_user_id = VALUES(submitted_by_user_id),
+                 quote_type           = 'preferred'"
         );
-        $upsert->execute([$lineId, $supplierId, $price, $uid, $benefits !== '' ? $benefits : null]);
+        $upsert->execute([$lineId, $supplierId, $price, $uid, $benefitsVal]);
 
-        sendJson(['success' => true, 'message' => 'Preferred quote saved.']);
+        $verify = $db->prepare(
+            "SELECT quote_id FROM requisition_line_quotes
+             WHERE requisition_line_id = ? AND supplier_id = ? AND quote_type = 'preferred'
+             LIMIT 1"
+        );
+        $verify->execute([$lineId, $supplierId]);
+        $quoteId = (int) ($verify->fetchColumn() ?: 0);
+        if ($quoteId <= 0) {
+            sendJson(['success' => false, 'message' => 'Preferred quote could not be saved. Please try again.']);
+        }
+
+        sendJson([
+            'success'  => true,
+            'message'  => 'Preferred quote saved.',
+            'quote_id' => $quoteId,
+        ]);
     }
 
     if ($action === 'delete_preferred_quote') {
+        ensureRequisitionLineQuotesTable($db);
+
         $requestId  = (int) ($_POST['request_id'] ?? 0);
         $lineId     = (int) ($_POST['requisition_line_id'] ?? 0);
         $supplierId = (int) ($_POST['supplier_id'] ?? 0);
@@ -1700,11 +1744,7 @@ try {
             sendJson(['success' => false, 'message' => 'Missing required fields.']);
         }
 
-        $ownStmt = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
-        $ownStmt->execute([$requestId, $uid]);
-        if (!$ownStmt->fetch(PDO::FETCH_ASSOC)) {
-            sendJson(['success' => false, 'message' => 'Access denied.']);
-        }
+        loadOwnedRequest($db, $requestId, $uid);
         if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
             sendJson(['success' => false, 'message' => 'A verifier has already acted on this request.']);
         }

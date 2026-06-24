@@ -209,14 +209,15 @@
         detail.setAttribute('title', label);
     }
 
-    async function postSaveSuggestedSupplierItem(canvassDetailId, supplierId, selectionSource) {
-        if (!requestId || !canvassDetailId || !supplierId) {
+    async function postSaveSuggestedSupplierItem(lineOrDetailId, supplierId, selectionSource) {
+        if (!requestId || !lineOrDetailId || !supplierId) {
             return;
         }
         const body = new URLSearchParams();
         body.set('action', 'save_suggested_supplier_item');
         body.set('request_id', String(requestId));
-        body.set('canvass_detail_id', String(canvassDetailId));
+        body.set('requisition_line_id', String(lineOrDetailId));
+        body.set('canvass_detail_id', String(lineOrDetailId));
         body.set('suggested_supplier_id', String(supplierId));
         body.set('selection_source', selectionSource === 'preferred' ? 'preferred' : 'canvassed');
         try {
@@ -229,20 +230,25 @@
             const data = await res.json();
             if (!data.success) {
                 showToast(data.message || 'Could not save suggested supplier for item.', 'error');
+                return;
+            }
+            if (typeof window.__cwirmsRefreshGsdReviewView === 'function') {
+                window.__cwirmsRefreshGsdReviewView();
             }
         } catch {
             showToast('Network error saving suggested supplier for item.', 'error');
         }
     }
 
-    async function postClearSuggestedSupplierItem(canvassDetailId) {
-        if (!requestId || !canvassDetailId) {
+    async function postClearSuggestedSupplierItem(lineOrDetailId) {
+        if (!requestId || !lineOrDetailId) {
             return;
         }
         const body = new URLSearchParams();
         body.set('action', 'clear_suggested_supplier_item');
         body.set('request_id', String(requestId));
-        body.set('canvass_detail_id', String(canvassDetailId));
+        body.set('requisition_line_id', String(lineOrDetailId));
+        body.set('canvass_detail_id', String(lineOrDetailId));
         try {
             const res = await fetch(gsdApi, {
                 method: 'POST',
@@ -272,9 +278,12 @@
                 return;
             }
             const sid = parseInt(radio.value || '0', 10);
-            const canvassDetailId = parseInt(radio.dataset.canvassDetailId || '0', 10);
+            const lineId = parseInt(
+                radio.dataset.requisitionLineId || radio.dataset.canvassDetailId || '0',
+                10
+            );
             if (sid > 0) {
-                postSaveSuggestedSupplierItem(canvassDetailId, sid, radio.dataset.selectionSource || 'canvassed');
+                postSaveSuggestedSupplierItem(lineId, sid, radio.dataset.selectionSource || 'canvassed');
             }
         });
     }

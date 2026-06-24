@@ -38,6 +38,9 @@ declare(strict_types=1);
  */
 function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
 {
+    require_once __DIR__ . '/../api/approval_tables.php';
+    ensureRequisitionLineAwardsTable($db);
+
     $currency = 'PHP';
     $empty = [
         'lines'              => [],
@@ -51,18 +54,17 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
         return $empty;
     }
 
-    // Fetch all lines that have at least one canvassed quote — these are the "canvass matrix" rows.
+    // Fetch all lines that have at least one supplier quote.
     $lineStmt = $db->prepare(
         "SELECT rl.requisition_line_id, rl.item_name, rl.quantity, rl.unit_type,
                 rl.sort_order, rl.group_label
          FROM requisition_line rl
          WHERE rl.request_id = ?
-           AND rl.deleted_at IS NULL
+           AND (rl.deleted_at IS NULL OR rl.deleted_at = '')
            AND EXISTS (
                SELECT 1
                FROM requisition_line_quotes rlq
                WHERE rlq.requisition_line_id = rl.requisition_line_id
-                 AND rlq.quote_type = 'canvassed'
            )
          ORDER BY rl.sort_order ASC, rl.requisition_line_id ASC"
     );
