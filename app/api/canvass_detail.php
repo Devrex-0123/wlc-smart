@@ -1536,6 +1536,187 @@ try {
         sendJson(['success' => true, 'message' => 'Canvass form saved.']);
     }
 
+    // ── Requester per-line preferred quote actions ──────────────────────────────
+
+    if ($action === 'get_requester_line_view') {
+        $requestId = (int) ($_GET['request_id'] ?? 0);
+        if ($requestId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request id.']);
+        }
+        // Ownership check
+        $ownStmt = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
+        $ownStmt->execute([$requestId, $uid]);
+        if (!$ownStmt->fetch(PDO::FETCH_ASSOC)) {
+            sendJson(['success' => false, 'message' => 'Access denied.']);
+        }
+        if (!requisitionInventoryAccepted($db, $requestId)) {
+            sendJson(['success' => false, 'message' => 'Open after the inventory manager accepts the requisition.']);
+        }
+
+        $hStmt = $db->prepare(
+            'SELECT ri.created_at, ri.purpose, d.office_name, f.building, f.room, f.laboratory
+             FROM requisition_item ri
+             LEFT JOIN offices d ON d.office_id = ri.office_id
+             LEFT JOIN facilities f ON f.facility_id = ri.facility_id
+             WHERE ri.request_id = ? LIMIT 1'
+        );
+        $hStmt->execute([$requestId]);
+        $hRow = $hStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        
+        // Use the existing buildFacilityLabel() function to construct the string
+        $hRow['facility_label'] = buildFacilityLabel($hRow);
+
+        $lineStmt = $db->prepare(
+            "SELECT requisition_line_id, item_name, item_brand, model, specification,
+                    quantity, unit_type, group_label, estimated_unit_cost
+             FROM requisition_line
+             WHERE request_id = ? AND (deleted_at IS NULL OR deleted_at = '')
+             ORDER BY sort_order ASC, requisition_line_id ASC"
+        );
+        $lineStmt->execute([$requestId]);
+        $lines   = $lineStmt->fetchAll(PDO::FETCH_ASSOC);
+        $lineIds = array_map('intval', array_column($lines, 'requisition_line_id'));
+
+        $prefQuotesByLine = [];
+        if (!empty($lineIds)) {
+            $ph    = implode(',', array_fill(0, count($lineIds), '?'));
+            $qStmt = $db->prepare(
+                "SELECT rlq.requisition_line_id, rlq.supplier_id, rlq.quoted_unit_price,
+                        rlq.benefits, s.supplier_name, s.supplier_image
+                 FROM requisition_line_quotes rlq
+                 INNER JOIN suppliers s ON s.supplier_id = rlq.supplier_id
+                 WHERE rlq.requisition_line_id IN ($ph) AND rlq.quote_type = 'preferred'
+                 ORDER BY s.supplier_name ASC"
+            );
+            $qStmt->execute($lineIds);
+            while ($q = $qStmt->fetch(PDO::FETCH_ASSOC)) {
+                $lid = (int) $q['requisition_line_id'];
+                $prefQuotesByLine[$lid][] = [
+                    'supplier_id'       => (int) $q['supplier_id'],
+                    'supplier_name'     => (string) $q['supplier_name'],
+                    'supplier_image'    => (string) ($q['supplier_image'] ?? ''),
+                    'quoted_unit_price' => $q['quoted_unit_price'],
+                    'benefits'          => $q['benefits'],
+                ];
+            }
+        }
+
+        $result = [];
+        foreach ($lines as $line) {
+            $lid      = (int) $line['requisition_line_id'];
+            $result[] = [
+                'requisition_line_id' => $lid,
+                'item_name'           => (string) ($line['item_name'] ?? ''),
+                'brand'               => (string) ($line['item_brand'] ?? ''),
+                'model'               => (string) ($line['model'] ?? ''),
+                'specification'       => (string) ($line['specification'] ?? ''),
+                'quantity'            => (int) ($line['quantity'] ?? 1),
+                'unit_type'           => (string) ($line['unit_type'] ?? 'unit'),
+                'group_label'         => (string) ($line['group_label'] ?? ''),
+                'estimated_unit_cost' => $line['estimated_unit_cost'],
+                'preferred_quotes'    => $prefQuotesByLine[$lid] ?? [],
+            ];
+        }
+        require_once __DIR__ . '/../helpers/supplier.php';
+        ensureSupplierTinColumn($db);
+        $supStmt   = $db->query(
+            'SELECT supplier_id, supplier_name, supplier_image, contact_person, phone_number, email
+             FROM suppliers ORDER BY supplier_name ASC'
+        );
+        $suppliers = $supStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        sendJson([
+            'success'   => true,
+            'lines'     => $result,
+            'suppliers' => $suppliers,
+            'header'    => [
+                'request_date'   => $hRow['created_at'] ?? '',
+                'purpose'        => $hRow['purpose'] ?? '',
+                'office_name'    => $hRow['office_name'] ?? '—',
+                'facility_label' => $hRow['facility_label'] ?? '—',
+            ],
+        ]);
+    }
+
+    if ($action === 'save_preferred_quote') {
+        $requestId  = (int) ($_POST['request_id'] ?? 0);
+        $lineId     = (int) ($_POST['requisition_line_id'] ?? 0);
+        $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+        $priceRaw   = trim((string) ($_POST['quoted_unit_price'] ?? ''));
+        $benefits   = trim((string) ($_POST['benefits'] ?? ''));
+
+        if ($requestId <= 0 || $lineId <= 0 || $supplierId <= 0) {
+            sendJson(['success' => false, 'message' => 'Missing required fields.']);
+        }
+        if ($priceRaw === '' || !is_numeric($priceRaw) || (float) $priceRaw < 0) {
+            sendJson(['success' => false, 'message' => 'Unit price must be a valid non-negative number.']);
+        }
+        $price = round((float) $priceRaw, 2);
+
+        // Must be the request owner
+        $ownStmt = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
+        $ownStmt->execute([$requestId, $uid]);
+        if (!$ownStmt->fetch(PDO::FETCH_ASSOC)) {
+            sendJson(['success' => false, 'message' => 'Access denied. Only the requester can add preferred quotes.']);
+        }
+        if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
+            sendJson(['success' => false, 'message' => 'A verifier has already acted on this request. Preferred quotes are locked.']);
+        }
+        // Validate line belongs to this request
+        $lChk = $db->prepare(
+            'SELECT requisition_line_id FROM requisition_line WHERE requisition_line_id = ? AND request_id = ? LIMIT 1'
+        );
+        $lChk->execute([$lineId, $requestId]);
+        if (!$lChk->fetchColumn()) {
+            sendJson(['success' => false, 'message' => 'Invalid line item.']);
+        }
+        // Validate supplier exists
+        $sChk = $db->prepare('SELECT supplier_id FROM suppliers WHERE supplier_id = ? LIMIT 1');
+        $sChk->execute([$supplierId]);
+        if (!$sChk->fetchColumn()) {
+            sendJson(['success' => false, 'message' => 'Invalid supplier.']);
+        }
+
+        $upsert = $db->prepare(
+            "INSERT INTO requisition_line_quotes
+                 (requisition_line_id, supplier_id, quoted_unit_price, quote_type, submitted_by_user_id, benefits)
+             VALUES (?, ?, ?, 'preferred', ?, ?)
+             ON DUPLICATE KEY UPDATE
+                 quoted_unit_price    = VALUES(quoted_unit_price),
+                 benefits             = VALUES(benefits),
+                 submitted_by_user_id = VALUES(submitted_by_user_id)"
+        );
+        $upsert->execute([$lineId, $supplierId, $price, $uid, $benefits !== '' ? $benefits : null]);
+
+        sendJson(['success' => true, 'message' => 'Preferred quote saved.']);
+    }
+
+    if ($action === 'delete_preferred_quote') {
+        $requestId  = (int) ($_POST['request_id'] ?? 0);
+        $lineId     = (int) ($_POST['requisition_line_id'] ?? 0);
+        $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+
+        if ($requestId <= 0 || $lineId <= 0 || $supplierId <= 0) {
+            sendJson(['success' => false, 'message' => 'Missing required fields.']);
+        }
+
+        $ownStmt = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
+        $ownStmt->execute([$requestId, $uid]);
+        if (!$ownStmt->fetch(PDO::FETCH_ASSOC)) {
+            sendJson(['success' => false, 'message' => 'Access denied.']);
+        }
+        if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
+            sendJson(['success' => false, 'message' => 'A verifier has already acted on this request.']);
+        }
+
+        $del = $db->prepare(
+            "DELETE FROM requisition_line_quotes WHERE requisition_line_id = ? AND supplier_id = ? AND quote_type = 'preferred'"
+        );
+        $del->execute([$lineId, $supplierId]);
+
+        sendJson(['success' => true]);
+    }
+
     sendJson(['success' => false, 'message' => 'Invalid action.']);
 } catch (Throwable $e) {
     sendJson(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);

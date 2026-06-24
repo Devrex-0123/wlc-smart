@@ -5570,3 +5570,363 @@ body.page-canvass-form {
         width: 100%;
     }
 }
+
+/* ==========================================================================
+   Requested-items: entry wrapper, detail sub-row, and view-mode grouping
+   (Phase 3 — new fields: brand, model, specification, group_label)
+   ========================================================================== */
+
+/* Entry wrapper replaces the bare rf-items-row so border lives on the wrapper. */
+.page-requisition-form .rf-items-entry {
+    border-bottom: 1px solid #eef1f5;
+}
+.page-requisition-form .rf-items-entry:last-child {
+    border-bottom: none;
+}
+/* The main row inside an entry must not double-border. */
+.page-requisition-form .rf-items-entry > .rf-items-row {
+    border-bottom: none;
+}
+
+/* ---- Details sub-row ---- */
+.page-requisition-form .rf-items-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr 2fr 1fr;
+    gap: 0.4rem 0.75rem;
+    padding: 0.35rem 0.9rem 0.65rem 2.2rem;
+    background: #f8fafc;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.page-requisition-form .rf-items-detail-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+    min-width: 0;
+}
+
+.page-requisition-form .rf-items-detail-field__label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+.page-requisition-form .rf-items-detail-field__hint {
+    font-size: 0.68rem;
+    font-weight: 400;
+    color: #94a3b8;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.page-requisition-form .rf-items-detail__input {
+    width: 100%;
+    height: 2rem;
+    font-size: 0.82rem;
+}
+
+@media (max-width: 720px) {
+    .page-requisition-form .rf-items-details {
+        grid-template-columns: 1fr 1fr;
+        padding-left: 0.9rem;
+    }
+    .page-requisition-form .rf-items-detail-field--spec {
+        grid-column: 1 / -1;
+    }
+}
+
+/* ---- View mode: item meta text (brand · model · specification) ---- */
+.page-requisition-form .rf-items-row__desc-text {
+    line-height: 1.45;
+}
+
+.page-requisition-form .rf-items-row__meta {
+    display: block;
+    font-size: 0.76rem;
+    color: #64748b;
+    margin-top: 0.1rem;
+    line-height: 1.3;
+    font-style: italic;
+}
+
+/* ---- View mode: grouped items ---- */
+.page-requisition-form .rf-items-group {
+    border-bottom: 1px solid #eef1f5;
+}
+.page-requisition-form .rf-items-group:last-child {
+    border-bottom: none;
+}
+.page-requisition-form .rf-items-group > .rf-items-row {
+    border-bottom: 1px solid #eef1f5;
+}
+.page-requisition-form .rf-items-group > .rf-items-row:last-child {
+    border-bottom: none;
+}
+
+.page-requisition-form .rf-items-group__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.9rem;
+    background: #f0fdf4;
+    border-bottom: 1px solid #d1fae5;
+    font-size: 0.79rem;
+    color: #166534;
+    font-weight: 500;
+    line-height: 1.35;
+}
+.page-requisition-form .rf-items-group__header i {
+    color: #16a34a;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+.page-requisition-form .rf-items-group__header strong {
+    font-weight: 700;
+}
+
+.page-requisition-form .rf-items-row--grouped {
+    padding-left: 1.9rem;
+    background: #fafffe;
+}
+
+/* ------------------------------------------------------
+   Canvasser Quote View � per-item quote chips & modal
+   ------------------------------------------------------ */
+
+/* Group header row in Items on Requisition table (canvasser view) */
+.cv-canvasser-group-header-row td.cv-canvasser-group-header {
+    background: #f0fdf4;
+    color: #166534;
+    font-weight: 700;
+    font-size: 0.82rem;
+    padding: 0.38rem 0.75rem;
+    border-bottom: 1px solid #bbf7d0;
+    letter-spacing: 0.03em;
+}
+.cv-canvasser-group-header i { color: #22c55e; margin-right: 0.35rem; }
+.cv-canvasser-item-grouped td { padding-left: 1.6rem; }
+
+/* Quotes cell */
+.cv-canvasser-item-quotes-cell { vertical-align: top; padding: 0.5rem 0.6rem; min-width: 180px; }
+.cv-canvasser-item-quotes { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.45rem; }
+
+/* Quote chips on the item row */
+.cv-line-quote-chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    border-radius: 999px; padding: 0.2rem 0.55rem 0.2rem 0.6rem;
+    font-size: 0.78rem; font-weight: 500; white-space: nowrap;
+    max-width: 240px;
+}
+.cv-line-quote-chip--preferred {
+    background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;
+}
+.cv-line-quote-chip--canvassed {
+    background: #f0fdf4; border: 1px solid #86efac; color: #166534;
+}
+.cv-line-quote-chip-label { overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+.cv-line-quote-chip-price { font-weight: 700; }
+.cv-line-quote-chip-badge {
+    font-size: 0.68rem; background: #dbeafe; color: #1d4ed8;
+    border-radius: 999px; padding: 0.05rem 0.4rem; font-weight: 600;
+}
+.cv-line-quote-chip-del {
+    background: none; border: none; cursor: pointer;
+    color: #b91c1c; font-size: 1rem; line-height: 1;
+    padding: 0 0.1rem; border-radius: 50%;
+    transition: background 0.15s;
+}
+.cv-line-quote-chip-del:hover { background: #fee2e2; }
+.cv-line-quote-empty { font-size: 0.78rem; color: #94a3b8; font-style: italic; }
+
+/* "+ Quote" button per item */
+.cv-add-quote-btn {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    background: #16a34a; color: #fff;
+    border: none; border-radius: 6px;
+    padding: 0.3rem 0.65rem; font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+    white-space: nowrap;
+}
+.cv-add-quote-btn:hover { background: #15803d; }
+.cv-add-quote-btn i { font-size: 0.72rem; }
+
+/* Quote Modal */
+.cv-canvasser-quote-modal {
+    position: fixed; inset: 0; z-index: 1200;
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+}
+.cv-canvasser-quote-modal-backdrop {
+    position: absolute; inset: 0; background: rgba(0,0,0,0.45);
+    cursor: pointer;
+}
+.cv-canvasser-quote-modal-card {
+    position: relative; z-index: 1;
+    background: #fff; border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.22);
+    padding: 1.5rem 1.6rem 1.3rem;
+    width: 100%; max-width: 520px;
+    max-height: 88vh; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 0.9rem;
+}
+.cv-canvasser-quote-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.5rem;
+}
+.cv-canvasser-quote-modal-header h3 { margin: 0; font-size: 1.05rem; }
+.cv-canvasser-quote-modal-close {
+    background: none; border: none; cursor: pointer;
+    font-size: 1.4rem; color: #64748b; line-height: 1;
+    padding: 0.1rem 0.3rem; border-radius: 6px;
+}
+.cv-canvasser-quote-modal-close:hover { background: #f1f5f9; color: #0f172a; }
+.cv-quote-modal-line-name {
+    margin: 0; font-size: 0.88rem; color: #475569;
+    background: #f8fafc; border-radius: 8px; padding: 0.5rem 0.75rem;
+    font-weight: 600;
+}
+.cv-quote-modal-existing-label {
+    font-size: 0.8rem; font-weight: 700; color: #374151; margin-bottom: 0.45rem;
+    text-transform: uppercase; letter-spacing: 0.04em;
+}
+.cv-quote-modal-existing-chip {
+    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+    padding: 0.45rem 0.65rem; margin-bottom: 0.4rem; font-size: 0.84rem;
+}
+.cv-quote-modal-existing-name { font-weight: 700; color: #166534; }
+.cv-quote-modal-existing-price { color: #15803d; font-weight: 600; }
+.cv-quote-modal-existing-note { color: #64748b; font-style: italic; font-size: 0.8rem; flex-basis: 100%; }
+.cv-quote-modal-existing-del {
+    margin-left: auto; background: none; border: none; cursor: pointer;
+    color: #b91c1c; font-size: 1rem; padding: 0 0.2rem; border-radius: 4px;
+}
+.cv-quote-modal-existing-del:hover { background: #fee2e2; }
+.cv-quote-modal-no-quotes { font-size: 0.82rem; color: #94a3b8; font-style: italic; margin: 0.25rem 0; }
+.cv-quote-modal-divider { border: none; border-top: 1px solid #e2e8f0; margin: 0; }
+.cv-quote-modal-form-title {
+    font-size: 0.8rem; font-weight: 700; color: #374151;
+    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.5rem;
+}
+.cv-canvasser-quote-modal-actions {
+    display: flex; gap: 0.6rem; justify-content: flex-end; padding-top: 0.4rem;
+}
+.cv-quote-modal-supplier-btn { width: 100%; text-align: left; }
+.cv-quote-modal-supplier-list { max-height: 200px; overflow-y: auto; }
+
+@media (max-width: 600px) {
+    .cv-canvasser-item-quotes-cell { min-width: unset; }
+    .cv-line-quote-chip { max-width: 160px; }
+    .cv-canvasser-quote-modal-card { padding: 1.1rem 1rem; }
+}
+
+/* ?? Requester per-line preferred-quote view ???????????????????????????? */
+
+/* Group header row in the items table */
+.cv-line-group-header-row td.cv-line-group-header {
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 0.45rem 0.8rem;
+    letter-spacing: 0.02em;
+    border-left: 3px solid #3b82f6;
+}
+.cv-line-group-header i { color: #3b82f6; margin-right: 0.35rem; }
+.requested-item-row.in-group td:first-child { padding-left: 1.5rem; }
+
+/* Preferred-quote cell */
+.cv-pref-quote-cell {
+    vertical-align: top;
+    padding: 0.5rem 0.6rem;
+    min-width: 200px;
+}
+.cv-pref-quote-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.4rem;
+}
+
+/* Blue preferred-quote chip */
+.cv-pref-quote-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: #eff6ff;
+    border: 1px solid #93c5fd;
+    color: #1d4ed8;
+    border-radius: 999px;
+    padding: 0.22rem 0.55rem 0.22rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    white-space: nowrap;
+    max-width: 260px;
+}
+.cv-pref-quote-chip i { font-size: 0.7rem; color: #3b82f6; }
+.cv-pref-quote-chip-del {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #1d4ed8;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 0.1rem;
+    border-radius: 50%;
+    transition: background 0.15s, color 0.15s;
+    opacity: 0.65;
+}
+.cv-pref-quote-chip-del:hover { background: #dbeafe; color: #1e3a8a; opacity: 1; }
+
+/* "+ Add Preferred Quote" button per item row */
+.cv-add-pref-quote-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+.cv-add-pref-quote-btn:hover { background: #1d4ed8; }
+.cv-add-pref-quote-btn i { font-size: 0.72rem; }
+
+/* Preferred-quote modal existing row */
+.cv-quote-modal-existing-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+}
+.cv-quote-modal-existing-supplier { font-weight: 600; color: #1e293b; }
+.cv-quote-modal-existing-price    { color: #2563eb; font-weight: 700; }
+.cv-quote-modal-existing-note     { color: #64748b; font-size: 0.78rem; flex-basis: 100%; margin-left: 0.1rem; }
+.cv-quote-modal-existing-del {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    padding: 0.2rem 0.3rem;
+    border-radius: 4px;
+    transition: background 0.15s;
+    font-size: 0.82rem;
+}
+.cv-quote-modal-existing-del:hover { background: #fee2e2; }
+
+@media (max-width: 600px) {
+    .cv-pref-quote-chip { max-width: 200px; }
+    .cv-pref-quote-cell { min-width: unset; }
+}

@@ -7,7 +7,8 @@
 
     const gsdReadonly = card.dataset.gsdReadonly === '1';
     const canvasserRegister = card.dataset.canvasserRegister === '1';
-    const CANVASSER_REQUESTS_API = '../../app/api/canvasser_requests.php';
+    const requesterEditView = card.dataset.requesterEdit === '1';
+    const CANVASSER_REQUESTS_API = card.dataset.canvasserApi || '../../app/api/canvasser_requests.php';
 
     const requestId = parseInt(card.dataset.requestId || '0', 10);
     const api = card.dataset.api || '../../app/api/canvass_detail.php';
@@ -1499,6 +1500,7 @@
         canvassedSupplierCount: 0,
         suggestedByItem: {},
         requestedLines: [],
+        canvasserLines: [],
         autoSaveTimer: null,
         hasUnsavedChanges: false,
         isHydrating: false,
@@ -2551,6 +2553,368 @@
             .join('');
     }
 
+    // ── Canvasser new-style view (reads from requisition_line + requisition_line_quotes) ──
+
+    function fmtPhp(val) {
+        const n = parseFloat(val);
+        if (Number.isNaN(n)) return '—';
+        return 'PHP ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderCanvasserLineItems(lines) {
+        const body = document.getElementById('cvRequestedItemsTableBody');
+        if (!body) return;
+        if (!Array.isArray(lines) || lines.length === 0) {
+            body.innerHTML =
+                '<tr class="requested-items-empty"><td colspan="5">No items recorded on this requisition.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        let lastGroup = null;
+        let rowNum = 0;
+
+        lines.forEach((row) => {
+            const group = String(row.group_label || '').trim();
+            if (group !== lastGroup) {
+                if (group) {
+                    html += `<tr class="cv-canvasser-group-header-row">
+                        <td colspan="5" class="cv-canvasser-group-header">
+                            <i class="fas fa-layer-group" aria-hidden="true"></i> ${escapeHtml(group)}
+                        </td>
+                    </tr>`;
+                }
+                lastGroup = group;
+            }
+
+            rowNum++;
+            const name  = escapeHtml(row.item_name || '—');
+            const brand = String(row.brand || '').trim();
+            const model = String(row.model || '').trim();
+            const spec  = String(row.specification || '').trim();
+            const metaParts = [brand, model, spec].filter(Boolean);
+            const metaRow = metaParts.length
+                ? `<div class="cv-req-line-meta">${escapeHtml(metaParts.join(' · '))}</div>`
+                : '';
+            const qty   = row.quantity != null ? row.quantity : 1;
+            const unit  = escapeHtml(String(row.unit_type || 'unit'));
+            const lid   = Number(row.requisition_line_id || 0);
+            const groupClass = group ? ' cv-canvasser-item-grouped' : '';
+
+            // Existing canvassed quote chips
+            const cQuotes = Array.isArray(row.canvassed_quotes) ? row.canvassed_quotes : [];
+            const pQuotes = Array.isArray(row.preferred_quotes)  ? row.preferred_quotes  : [];
+            let quotesHtml = '';
+            if (pQuotes.length) {
+                quotesHtml += pQuotes.map((q) => `
+                    <span class="cv-line-quote-chip cv-line-quote-chip--preferred" title="Preferred quote from requester">
+                        <span class="cv-line-quote-chip-label">${escapeHtml(q.supplier_name)}</span>
+                        <span class="cv-line-quote-chip-price">${fmtPhp(q.quoted_unit_price)}</span>
+                        <span class="cv-line-quote-chip-badge">preferred</span>
+                    </span>`).join('');
+            }
+            if (cQuotes.length) {
+                quotesHtml += cQuotes.map((q) => `
+                    <span class="cv-line-quote-chip cv-line-quote-chip--canvassed" data-supplier-id="${Number(q.supplier_id)}" data-line-id="${lid}" title="${escapeHtml(q.benefits || '')}">
+                        <span class="cv-line-quote-chip-label">${escapeHtml(q.supplier_name)}</span>
+                        <span class="cv-line-quote-chip-price">${fmtPhp(q.quoted_unit_price)}</span>
+                        <button type="button" class="cv-line-quote-chip-del" data-line-id="${lid}" data-supplier-id="${Number(q.supplier_id)}" aria-label="Remove quote" title="Remove quote">×</button>
+                    </span>`).join('');
+            }
+            if (!quotesHtml) {
+                quotesHtml = '<span class="cv-line-quote-empty">No quotes yet</span>';
+            }
+
+            const addBtn = `<button type="button" class="cv-add-quote-btn" data-line-id="${lid}" data-line-name="${escapeHtml(row.item_name || '')}" aria-label="Add quote for ${escapeHtml(row.item_name || '')}">
+                <i class="fas fa-plus" aria-hidden="true"></i> Quote
+            </button>`;
+
+            html += `<tr class="cv-canvasser-item-row${groupClass}">
+                <td class="requested-items-table-num">${rowNum}</td>
+                <td class="requested-items-table-item">${name}${metaRow}</td>
+                <td class="requested-items-table-qty">${escapeHtml(String(qty))}</td>
+                <td class="requested-items-table-unit">${unit}</td>
+                <td class="cv-canvasser-item-quotes-cell">
+                    <div class="cv-canvasser-item-quotes">${quotesHtml}</div>
+                    ${addBtn}
+                </td>
+            </tr>`;
+        });
+
+        body.innerHTML = html;
+
+        // Attach delete listeners
+        body.querySelectorAll('.cv-line-quote-chip-del').forEach((btn) => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const lineId    = parseInt(btn.dataset.lineId, 10);
+                const supplierId = parseInt(btn.dataset.supplierId, 10);
+                btn.disabled = true;
+                const data = await deleteCanvasserLineQuote(lineId, supplierId);
+                if (!data.success) {
+                    showToast(data.message || 'Could not remove quote.', 'error');
+                    btn.disabled = false;
+                    return;
+                }
+                await refreshCanvasserView();
+            });
+        });
+
+        // Attach Add Quote listeners
+        body.querySelectorAll('.cv-add-quote-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const lineId   = parseInt(btn.dataset.lineId, 10);
+                const lineName = btn.dataset.lineName || '';
+                openCanvasserQuoteModal(lineId, lineName);
+            });
+        });
+    }
+
+    async function loadCanvasserView() {
+        try {
+            const res = await fetch(
+                `${CANVASSER_REQUESTS_API}?action=get_canvass_view&request_id=${encodeURIComponent(String(requestId))}`,
+                { credentials: 'include' }
+            );
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.message || 'Could not load.', 'error');
+                return;
+            }
+
+            // Header fields
+            const h = data.header || {};
+            const deptEl    = document.getElementById('cvOfficeDisplay');
+            const facEl     = document.getElementById('cvFacilityDisplay');
+            const dateEl    = document.getElementById('cvRequestDate');
+            const purposeEl = document.getElementById('cvPurpose');
+            if (deptEl)    deptEl.value    = h.office_name    || '—';
+            if (facEl)     facEl.value     = h.facility_label || '—';
+            if (dateEl)    dateEl.value    = h.request_date   || '—';
+            if (purposeEl) purposeEl.value = h.purpose        || '';
+
+            state.canvasserLines    = data.lines     || [];
+            state.availableSuppliers = data.suppliers || [];
+
+            renderCanvasserLineItems(state.canvasserLines);
+            buildCanvasserQuoteModalSupplierList(state.availableSuppliers);
+            applyCanvassApproval(data.approval);
+            syncCanvasserToolbar();
+        } catch {
+            showToast('Network error loading canvass view.', 'error');
+        }
+    }
+
+    async function refreshCanvasserView() {
+        try {
+            const res = await fetch(
+                `${CANVASSER_REQUESTS_API}?action=get_canvass_view&request_id=${encodeURIComponent(String(requestId))}`,
+                { credentials: 'include' }
+            );
+            const data = await res.json();
+            if (!data.success) return;
+            state.canvasserLines    = data.lines     || [];
+            state.availableSuppliers = data.suppliers || [];
+            renderCanvasserLineItems(state.canvasserLines);
+            buildCanvasserQuoteModalSupplierList(state.availableSuppliers);
+        } catch { /* silent */ }
+    }
+
+    // ── Quote Modal ──
+
+    function buildCanvasserQuoteModalSupplierList(suppliers) {
+        const list = document.getElementById('cvQuoteModalSupplierList');
+        if (!list) return;
+        list.innerHTML = (suppliers || []).map((s) => {
+            const img = s.supplier_image
+                ? `<img src="${escapeHtml(s.supplier_image)}" alt="" class="supplier-dropdown-img" width="24" height="24" decoding="async">`
+                : `<span class="supplier-dropdown-img supplier-dropdown-img-placeholder" aria-hidden="true"><i class="fas fa-store"></i></span>`;
+            return `<div class="supplier-dropdown-item" data-supplier-id="${Number(s.supplier_id)}" data-supplier-name="${escapeHtml(s.supplier_name)}" role="option" tabindex="0">
+                ${img}<span>${escapeHtml(s.supplier_name)}</span>
+            </div>`;
+        }).join('') || '<div class="supplier-dropdown-empty">No suppliers found.</div>';
+
+        list.querySelectorAll('.supplier-dropdown-item').forEach((item) => {
+            item.addEventListener('click', () => {
+                const sid  = parseInt(item.dataset.supplierId, 10);
+                const name = item.dataset.supplierName || '';
+                document.getElementById('cvQuoteModalSupplierId').value = String(sid);
+                document.getElementById('cvQuoteModalSupplierText').textContent = name;
+                list.style.display = '';
+            });
+        });
+    }
+
+    function openCanvasserQuoteModal(lineId, lineName) {
+        const modal = document.getElementById('cvCanvasserQuoteModal');
+        if (!modal) return;
+
+        document.getElementById('cvQuoteModalLineName').textContent = lineName;
+        document.getElementById('cvQuoteModalLineId').value = String(lineId);
+
+        // Reset quote form
+        const sidEl = document.getElementById('cvQuoteModalSupplierId');
+        const txtEl = document.getElementById('cvQuoteModalSupplierText');
+        const priceEl = document.getElementById('cvQuoteModalPrice');
+        const benEl = document.getElementById('cvQuoteModalBenefits');
+        if (sidEl)  sidEl.value = '';
+        if (txtEl)  txtEl.textContent = 'Select supplier…';
+        if (priceEl) priceEl.value = '';
+        if (benEl)  benEl.value = '';
+
+        // Show existing quotes
+        const line = (state.canvasserLines || []).find((l) => l.requisition_line_id === lineId);
+        renderQuoteModalExisting(line ? line.canvassed_quotes : []);
+
+        const list = document.getElementById('cvQuoteModalSupplierList');
+        if (list) list.style.display = '';
+
+        modal.style.display = 'flex';
+        modal.removeAttribute('aria-hidden');
+    }
+
+    function renderQuoteModalExisting(quotes) {
+        const wrap = document.getElementById('cvQuoteModalExistingQuotes');
+        if (!wrap) return;
+        if (!quotes || quotes.length === 0) {
+            wrap.innerHTML = '<p class="cv-quote-modal-no-quotes">No canvassed quotes for this item yet.</p>';
+            return;
+        }
+        wrap.innerHTML = quotes.map((q) => `
+            <div class="cv-quote-modal-existing-chip">
+                <span class="cv-quote-modal-existing-name">${escapeHtml(q.supplier_name)}</span>
+                <span class="cv-quote-modal-existing-price">${fmtPhp(q.quoted_unit_price)}</span>
+                ${q.benefits ? `<span class="cv-quote-modal-existing-note">${escapeHtml(q.benefits)}</span>` : ''}
+                <button type="button" class="cv-quote-modal-existing-del" data-supplier-id="${Number(q.supplier_id)}" aria-label="Remove">×</button>
+            </div>`).join('');
+
+        wrap.querySelectorAll('.cv-quote-modal-existing-del').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const lineId = parseInt(document.getElementById('cvQuoteModalLineId').value, 10);
+                const supplierId = parseInt(btn.dataset.supplierId, 10);
+                btn.disabled = true;
+                const data = await deleteCanvasserLineQuote(lineId, supplierId);
+                if (!data.success) {
+                    showToast(data.message || 'Could not remove.', 'error');
+                    btn.disabled = false;
+                    return;
+                }
+                showToast('Quote removed.', 'success');
+                await refreshCanvasserView();
+                const line = (state.canvasserLines || []).find((l) => l.requisition_line_id === lineId);
+                renderQuoteModalExisting(line ? line.canvassed_quotes : []);
+            });
+        });
+    }
+
+    function closeCanvasserQuoteModal() {
+        const modal = document.getElementById('cvCanvasserQuoteModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    async function saveCanvasserLineQuote(lineId, supplierId, price, benefits) {
+        const body = new URLSearchParams();
+        body.set('action', 'save_line_quote');
+        body.set('request_id', String(requestId));
+        body.set('requisition_line_id', String(lineId));
+        body.set('supplier_id', String(supplierId));
+        body.set('quoted_unit_price', String(price));
+        body.set('benefits', benefits);
+
+        const res = await fetch(CANVASSER_REQUESTS_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+            credentials: 'include',
+        });
+        return res.json();
+    }
+
+    async function deleteCanvasserLineQuote(lineId, supplierId) {
+        const body = new URLSearchParams();
+        body.set('action', 'delete_line_quote');
+        body.set('request_id', String(requestId));
+        body.set('requisition_line_id', String(lineId));
+        body.set('supplier_id', String(supplierId));
+
+        const res = await fetch(CANVASSER_REQUESTS_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+            credentials: 'include',
+        });
+        return res.json();
+    }
+
+    function initCanvasserQuoteModalListeners() {
+        const modal     = document.getElementById('cvCanvasserQuoteModal');
+        const backdrop  = document.getElementById('cvQuoteModalBackdrop');
+        const closeBtn  = document.getElementById('cvQuoteModalClose');
+        const cancelBtn = document.getElementById('cvQuoteModalCancel');
+        const saveBtn   = document.getElementById('cvQuoteModalSave');
+        const supBtn    = document.getElementById('cvQuoteModalSupplierBtn');
+        const supList   = document.getElementById('cvQuoteModalSupplierList');
+
+        if (closeBtn)  closeBtn.addEventListener('click',  closeCanvasserQuoteModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeCanvasserQuoteModal);
+        if (backdrop)  backdrop.addEventListener('click',  closeCanvasserQuoteModal);
+
+        if (supBtn && supList) {
+            supBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                supList.style.display = supList.style.display === 'block' ? '' : 'block';
+            });
+            document.addEventListener('click', (e) => {
+                if (!supBtn.contains(e.target) && !supList.contains(e.target)) {
+                    supList.style.display = '';
+                }
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async () => {
+                const lineId     = parseInt(document.getElementById('cvQuoteModalLineId').value, 10);
+                const supplierId = parseInt((document.getElementById('cvQuoteModalSupplierId') || {}).value || '0', 10);
+                const priceRaw   = ((document.getElementById('cvQuoteModalPrice') || {}).value || '').trim();
+                const benefits   = ((document.getElementById('cvQuoteModalBenefits') || {}).value || '').trim();
+
+                if (!supplierId) {
+                    showToast('Please select a supplier.', 'error');
+                    return;
+                }
+                if (priceRaw === '' || isNaN(parseFloat(priceRaw)) || parseFloat(priceRaw) < 0) {
+                    showToast('Enter a valid unit price (≥ 0).', 'error');
+                    return;
+                }
+
+                saveBtn.disabled = true;
+                try {
+                    const data = await saveCanvasserLineQuote(lineId, supplierId, priceRaw, benefits);
+                    if (!data.success) {
+                        showToast(data.message || 'Could not save quote.', 'error');
+                        return;
+                    }
+                    showToast('✓ ' + (data.message || 'Quote saved.'));
+                    await refreshCanvasserView();
+                    const line = (state.canvasserLines || []).find((l) => l.requisition_line_id === lineId);
+                    renderQuoteModalExisting(line ? line.canvassed_quotes : []);
+                    // Reset form
+                    document.getElementById('cvQuoteModalSupplierId').value = '';
+                    document.getElementById('cvQuoteModalSupplierText').textContent = 'Select supplier…';
+                    document.getElementById('cvQuoteModalPrice').value = '';
+                    document.getElementById('cvQuoteModalBenefits').value = '';
+                } catch {
+                    showToast('Network error.', 'error');
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            });
+        }
+    }
+
     function applyGsdReadonlyUi() {
         if (!gsdReadonly) {
             return;
@@ -2581,9 +2945,378 @@
         }
     }
 
+    // ── Requester per-line preferred-quote view ──────────────────────────────────
+
+    const state_req = { lines: [], suppliers: [] };
+
+    async function loadRequesterLineView() {
+        const tbody = document.getElementById('cvRequestedItemsTableBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1rem;color:#64748b;">Loading items…</td></tr>';
+        }
+        try {
+            const res = await fetch(
+                `${api}?action=get_requester_line_view&request_id=${encodeURIComponent(String(requestId))}`,
+                { credentials: 'include' }
+            );
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.message || 'Could not load items.', 'error');
+                return;
+            }
+            state_req.lines     = data.lines || [];
+            state_req.suppliers = data.suppliers || [];
+
+            const h = data.header || {};
+            const deptEl    = document.getElementById('cvOfficeDisplay');
+            const facEl     = document.getElementById('cvFacilityDisplay');
+            const dateEl    = document.getElementById('cvRequestDate');
+            const purposeEl = document.getElementById('cvPurpose');
+            if (deptEl)    deptEl.value    = h.office_name    || '—';
+            if (facEl)     facEl.value     = h.facility_label || '—';
+            if (dateEl)    dateEl.value    = h.request_date   || '';
+            if (purposeEl) purposeEl.value = h.purpose        || '';
+
+            renderRequesterLineItems(state_req.lines);
+        } catch (err) {
+            showToast('Network error loading items.', 'error');
+        }
+    }
+
+    async function refreshRequesterLineView() {
+        try {
+            const res = await fetch(
+                `${api}?action=get_requester_line_view&request_id=${encodeURIComponent(String(requestId))}`,
+                { credentials: 'include' }
+            );
+            const data = await res.json();
+            if (data.success) {
+                state_req.lines     = data.lines     || [];
+                state_req.suppliers = data.suppliers || state_req.suppliers;
+                renderRequesterLineItems(state_req.lines);
+            }
+        } catch { /* silent */ }
+    }
+
+    function renderRequesterLineItems(lines) {
+        const tbody = document.getElementById('cvRequestedItemsTableBody');
+        if (!tbody) return;
+        if (!lines || lines.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1.5rem;color:#64748b;">No items found on this requisition.</td></tr>';
+            return;
+        }
+
+        let html    = '';
+        let rowNum  = 0;
+        let lastGrp = null;
+
+        for (const row of lines) {
+            const grp  = (row.group_label || '').trim();
+            const name = row.item_name || '(unnamed)';
+
+            if (grp && grp !== lastGrp) {
+                lastGrp = grp;
+                html += `<tr class="cv-line-group-header-row">
+                    <td colspan="5" class="cv-line-group-header">
+                        <i class="fas fa-layer-group" aria-hidden="true"></i> ${escapeHtml(grp)}
+                    </td></tr>`;
+            } else if (!grp && lastGrp !== '') {
+                lastGrp = '';
+            }
+
+            rowNum++;
+            const subParts = [];
+            if (row.brand)         subParts.push(`<span class="ri-meta-chip">Brand: ${escapeHtml(row.brand)}</span>`);
+            if (row.model)         subParts.push(`<span class="ri-meta-chip">Model: ${escapeHtml(row.model)}</span>`);
+            if (row.specification) subParts.push(`<span class="ri-meta-chip ri-spec-chip">${escapeHtml(row.specification)}</span>`);
+            const subHtml = subParts.length
+                ? `<div class="ri-meta-chips">${subParts.join('')}</div>` : '';
+
+            // Preferred quotes chips
+            const quotes = row.preferred_quotes || [];
+            let quotesHtml = '';
+            if (quotes.length > 0) {
+                quotesHtml = quotes.map(q => {
+                    const price = parseFloat(q.quoted_unit_price || 0);
+                    return `<span class="cv-pref-quote-chip"
+                                  data-line-id="${row.requisition_line_id}"
+                                  data-supplier-id="${q.supplier_id}">
+                        <i class="fas fa-tag" aria-hidden="true"></i>
+                        ${escapeHtml(q.supplier_name)} — ${fmtPhp(price)}
+                        <button type="button"
+                                class="cv-pref-quote-chip-del"
+                                data-line-id="${row.requisition_line_id}"
+                                data-supplier-id="${q.supplier_id}"
+                                aria-label="Remove preferred quote"
+                                title="Remove">×</button>
+                    </span>`;
+                }).join('');
+            }
+
+            html += `<tr class="requested-item-row${grp ? ' in-group' : ''}">
+                <td class="ri-num">${rowNum}</td>
+                <td class="ri-name-cell">
+                    <span class="ri-item-name">${escapeHtml(name)}</span>
+                    ${subHtml}
+                </td>
+                <td>${escapeHtml(String(row.quantity || 1))}</td>
+                <td>${escapeHtml(row.unit_type || 'unit')}</td>
+                <td class="cv-pref-quote-cell">
+                    <div class="cv-pref-quote-chips">${quotesHtml}</div>
+                    <button type="button"
+                            class="cv-add-pref-quote-btn"
+                            data-line-id="${row.requisition_line_id}"
+                            data-line-name="${escapeHtml(name)}">
+                        <i class="fas fa-plus" aria-hidden="true"></i> Add Preferred Quote
+                    </button>
+                </td>
+            </tr>`;
+        }
+
+        tbody.innerHTML = html;
+
+        // "+ Add Preferred Quote" buttons
+        tbody.querySelectorAll('.cv-add-pref-quote-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const lineId   = parseInt(btn.dataset.lineId   || '0', 10);
+                const lineName = btn.dataset.lineName || '';
+                openRequesterPrefQuoteModal(lineId, lineName);
+            });
+        });
+
+        // Delete chips
+        tbody.querySelectorAll('.cv-pref-quote-chip-del').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const lineId     = parseInt(btn.dataset.lineId     || '0', 10);
+                const supplierId = parseInt(btn.dataset.supplierId || '0', 10);
+                await deleteRequesterPrefQuote(lineId, supplierId);
+            });
+        });
+    }
+
+    // ── Preferred-quote modal ─────────────────────────────────────────────────
+
+    let _prefModalCurrentLineId = 0;
+
+    function openRequesterPrefQuoteModal(lineId, lineName) {
+        const modal = document.getElementById('cvRequesterPrefQuoteModal');
+        if (!modal) return;
+        _prefModalCurrentLineId = lineId;
+
+        const nameEl = document.getElementById('cvPrefQuoteModalLineName');
+        if (nameEl) nameEl.textContent = lineName;
+
+        const lineIdEl = document.getElementById('cvPrefQuoteModalLineId');
+        if (lineIdEl) lineIdEl.value = String(lineId);
+
+        // Reset form
+        const suppIdEl   = document.getElementById('cvPrefQuoteModalSupplierId');
+        const suppTextEl = document.getElementById('cvPrefQuoteModalSupplierText');
+        const priceEl    = document.getElementById('cvPrefQuoteModalPrice');
+        const benefitsEl = document.getElementById('cvPrefQuoteModalBenefits');
+        if (suppIdEl)   suppIdEl.value   = '';
+        if (suppTextEl) suppTextEl.textContent = 'Select supplier…';
+        if (priceEl)    priceEl.value    = '';
+        if (benefitsEl) benefitsEl.value = '';
+
+        // Populate supplier dropdown and ensure list starts hidden
+        buildRequesterPrefQuoteSupplierList();
+        const supList = document.getElementById('cvPrefQuoteModalSupplierList');
+        if (supList) supList.style.display = '';
+
+        // Show existing preferred quotes for this line
+        const line = state_req.lines.find(l => l.requisition_line_id === lineId);
+        renderPrefQuoteModalExisting(line ? (line.preferred_quotes || []) : []);
+
+        modal.style.display = 'flex';
+    }
+
+    function closeRequesterPrefQuoteModal() {
+        const modal = document.getElementById('cvRequesterPrefQuoteModal');
+        if (modal) modal.style.display = 'none';
+        _prefModalCurrentLineId = 0;
+    }
+
+    function buildRequesterPrefQuoteSupplierList() {
+        const list = document.getElementById('cvPrefQuoteModalSupplierList');
+        if (!list) return;
+        const suppliers = state_req.suppliers || [];
+        if (suppliers.length === 0) {
+            list.innerHTML = '<div class="supplier-dropdown-empty">No suppliers found.</div>';
+            return;
+        }
+        list.innerHTML = suppliers.map(s => {
+            const imgSrc = escapeHtml(getSupplierImageUrl(s.supplier_image));
+            const img = s.supplier_image
+                ? `<img src="${imgSrc}" alt="" class="supplier-dropdown-img" width="24" height="24" decoding="async" onerror="this.style.display='none'">`
+                : `<span class="supplier-dropdown-img supplier-dropdown-img-placeholder" aria-hidden="true"><i class="fas fa-store"></i></span>`;
+            return `<button type="button" class="supplier-dropdown-item" data-supplier-id="${s.supplier_id}" data-supplier-name="${escapeHtml(s.supplier_name)}">
+                ${img}<span>${escapeHtml(s.supplier_name)}</span></button>`;
+        }).join('');
+
+        list.querySelectorAll('.supplier-dropdown-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const suppIdEl   = document.getElementById('cvPrefQuoteModalSupplierId');
+                const suppTextEl = document.getElementById('cvPrefQuoteModalSupplierText');
+                if (suppIdEl)   suppIdEl.value          = btn.dataset.supplierId;
+                if (suppTextEl) suppTextEl.textContent   = btn.dataset.supplierName;
+                list.style.display = '';
+            });
+        });
+    }
+
+    function renderPrefQuoteModalExisting(quotes) {
+        const wrap = document.getElementById('cvPrefQuoteModalExistingWrap');
+        const cont = document.getElementById('cvPrefQuoteModalExistingQuotes');
+        if (!cont) return;
+        if (!quotes || quotes.length === 0) {
+            if (wrap) wrap.style.display = 'none';
+            return;
+        }
+        if (wrap) wrap.style.display = '';
+        cont.innerHTML = quotes.map(q => {
+            const price = parseFloat(q.quoted_unit_price || 0);
+            return `<div class="cv-quote-modal-existing-row">
+                <span class="cv-quote-modal-existing-supplier">${escapeHtml(q.supplier_name)}</span>
+                <span class="cv-quote-modal-existing-price">${fmtPhp(price)}</span>
+                ${q.benefits ? `<span class="cv-quote-modal-existing-note">${escapeHtml(q.benefits)}</span>` : ''}
+                <button type="button" class="cv-quote-modal-existing-del" data-supplier-id="${q.supplier_id}" aria-label="Remove">
+                    <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                </button>
+            </div>`;
+        }).join('');
+
+        cont.querySelectorAll('.cv-quote-modal-existing-del').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const supplierId = parseInt(btn.dataset.supplierId || '0', 10);
+                await deleteRequesterPrefQuote(_prefModalCurrentLineId, supplierId);
+                closeRequesterPrefQuoteModal();
+            });
+        });
+    }
+
+    async function saveRequesterPrefQuote() {
+        const lineId     = _prefModalCurrentLineId;
+        const suppIdEl   = document.getElementById('cvPrefQuoteModalSupplierId');
+        const priceEl    = document.getElementById('cvPrefQuoteModalPrice');
+        const benefitsEl = document.getElementById('cvPrefQuoteModalBenefits');
+        const saveBtn    = document.getElementById('cvPrefQuoteModalSave');
+
+        const supplierId = parseInt((suppIdEl && suppIdEl.value) || '0', 10);
+        const price      = (priceEl && priceEl.value.trim()) || '';
+        const benefits   = (benefitsEl && benefitsEl.value.trim()) || '';
+
+        if (!lineId || !supplierId) {
+            showToast('Please select a supplier.', 'error');
+            return;
+        }
+        if (price === '' || isNaN(parseFloat(price)) || parseFloat(price) < 0) {
+            showToast('Please enter a valid unit price.', 'error');
+            return;
+        }
+
+        if (saveBtn) saveBtn.disabled = true;
+        try {
+            const fd = new FormData();
+            fd.append('request_id',          String(requestId));
+            fd.append('requisition_line_id', String(lineId));
+            fd.append('supplier_id',         String(supplierId));
+            fd.append('quoted_unit_price',   price);
+            fd.append('benefits',            benefits);
+
+            const res  = await fetch(`${api}?action=save_preferred_quote`, {
+                method: 'POST', credentials: 'include', body: fd,
+            });
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.message || 'Could not save quote.', 'error');
+                return;
+            }
+            showToast('Preferred quote saved.');
+            closeRequesterPrefQuoteModal();
+            await refreshRequesterLineView();
+        } catch {
+            showToast('Network error saving quote.', 'error');
+        } finally {
+            if (saveBtn) saveBtn.disabled = false;
+        }
+    }
+
+    async function deleteRequesterPrefQuote(lineId, supplierId) {
+        if (!lineId || !supplierId) return;
+        const fd = new FormData();
+        fd.append('request_id',          String(requestId));
+        fd.append('requisition_line_id', String(lineId));
+        fd.append('supplier_id',         String(supplierId));
+        try {
+            const res  = await fetch(`${api}?action=delete_preferred_quote`, {
+                method: 'POST', credentials: 'include', body: fd,
+            });
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.message || 'Could not remove quote.', 'error');
+                return;
+            }
+            showToast('Preferred quote removed.');
+            await refreshRequesterLineView();
+        } catch {
+            showToast('Network error removing quote.', 'error');
+        }
+    }
+
+    function initRequesterPrefQuoteModalListeners() {
+        const backdrop = document.getElementById('cvPrefQuoteModalBackdrop');
+        if (backdrop) backdrop.addEventListener('click', closeRequesterPrefQuoteModal);
+        const closeBtn = document.getElementById('cvPrefQuoteModalClose');
+        if (closeBtn) closeBtn.addEventListener('click', closeRequesterPrefQuoteModal);
+        const cancelBtn = document.getElementById('cvPrefQuoteModalCancel');
+        if (cancelBtn) cancelBtn.addEventListener('click', closeRequesterPrefQuoteModal);
+    
+        const saveBtn = document.getElementById('cvPrefQuoteModalSave');
+        if (saveBtn) saveBtn.addEventListener('click', saveRequesterPrefQuote);
+    
+        const dropdownBtn = document.getElementById('cvPrefQuoteModalSupplierBtn');
+        const dropdownList = document.getElementById('cvPrefQuoteModalSupplierList');
+        if (dropdownBtn && dropdownList) {
+            dropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownList.style.display = dropdownList.style.display === 'block' ? '' : 'block';
+            });
+
+            document.addEventListener('click', (e) => {
+                const modal = document.getElementById('cvRequesterPrefQuoteModal');
+                if (!modal || modal.style.display === 'none') return;
+                if (dropdownBtn.contains(e.target) || dropdownList.contains(e.target)) return;
+                dropdownList.style.display = '';
+            });
+        }
+    
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('cvRequesterPrefQuoteModal');
+                if (modal && modal.style.display !== 'none') {
+                    closeRequesterPrefQuoteModal();
+                }
+            }
+        });
+    }
+
+    // ── End requester preferred-quote view ────────────────────────────────────
+
     async function loadForm() {
     state.isHydrating = true;
     try {
+        // Canvassers use the new flat-table endpoint (reads from requisition_line / requisition_line_quotes)
+        if (canvasserRegister) {
+            await loadCanvasserView();
+            return;
+        }
+        // Requesters (owners) use per-line preferred-quote view
+        if (requesterEditView) {
+            await loadRequesterLineView();
+            return;
+        }
+
         const res = await fetch(`${api}?action=get&request_id=${encodeURIComponent(String(requestId))}`, {
             credentials: 'include',
         });
@@ -2797,26 +3530,14 @@
     }
 
     async function saveDraft() {
-        if (!canvasserRegister) {
+        if (!canvasserRegister && !requesterEditView) {
             return;
         }
-        setCanvasserActionBusy(true);
-        try {
-            const result = await persistCanvassToServer('draft');
-            if (!result.ok) {
-                showToast(result.message || 'Save failed.', 'error');
-                setCanvasserActionBusy(false);
-                return;
-            }
-            showToast('✓ Draft saved successfully.');
-            markFormSaved();
-            setTimeout(() => {
-                window.history.back();
-            }, 800);
-        } catch {
-            showToast('Network error.', 'error');
-            setCanvasserActionBusy(false);
-        }
+        // Quotes are now saved per-line via the + Quote modal. "Save draft" just navigates back.
+        showToast('Preferred quotes are saved automatically. Returning to status page…');
+        setTimeout(() => {
+            window.location.href = 'dean_requisition_status_progress.php?rid=' + requestId;
+        }, 1200);
     }
 
     async function completeCanvassing() {
@@ -2827,45 +3548,43 @@
             showToast('Missing request.', 'error');
             return;
         }
-        const noQuoteSupplier = state.selectedSuppliers.find((s) => !supplierRowHasQuotedPrice(s));
-        if (noQuoteSupplier) {
-            showToast('Each supplier must have at least one quoted price. Remove supplier rows with no quote before completing.', 'error');
+
+        // Validate every line has at least one canvassed quote
+        const lines = state.canvasserLines || [];
+        if (lines.length === 0) {
+            showToast('No items found on this requisition.', 'error');
             return;
         }
+        const unquoted = lines.filter((l) => !l.canvassed_quotes || l.canvassed_quotes.length === 0);
+        if (unquoted.length > 0) {
+            const names = unquoted.slice(0, 3).map((l) => l.item_name || 'item').join(', ');
+            showToast(
+                `Add at least one supplier quote for every item before completing. Missing: ${names}${unquoted.length > 3 ? ` and ${unquoted.length - 3} more` : ''}.`,
+                'error'
+            );
+            return;
+        }
+
         const ok = await showConfirmModal(
-            'Save your supplier quotes and mark canvassing as complete? The canvass step will be approved and the request status will be set to Ongoing.'
+            'Mark canvassing as complete? All your supplier quotes are already saved. The canvass step will be approved and the request status will be set to Ongoing.'
         );
         if (!ok) {
             return;
         }
         setCanvasserActionBusy(true);
         try {
-            // First save the canvass as submitted
-            let persistResult = await persistCanvassToServer('submitted');
-            if (!persistResult.ok) {
-                if (persistResult.code === 'canvas_finalized') {
-                    persistResult = { ok: true };
-                } else {
-                    showToast(persistResult.message || 'Save failed.', 'error');
-                    return;
-                }
-            }
-            
-            // Then mark canvass as accepted through approval API
+            // Quotes are saved per-line — just record the canvass approval
             const data = await postCanvasApproval('accept');
             if (!data.success) {
                 showToast(
-                    data.message ||
-                        'Could not record canvass completion. If your quotes were saved, try Complete again.',
+                    data.message || 'Could not record canvass completion. Try again.',
                     'error'
                 );
                 return;
             }
             applyCanvassOptimisticFromApi(data);
             showToast(data.message || 'Canvassing complete.');
-            markFormSaved();
-            await loadForm();
-            markFormSaved();
+            await loadCanvasserView();
         } catch {
             showToast('Network error.', 'error');
         } finally {
@@ -2892,7 +3611,7 @@
             }
             applyCanvassOptimisticFromApi(data);
             showToast(data.message || 'Canvass step reopened.');
-            await loadForm();
+            await loadCanvasserView();
         } catch {
             showToast('Network error.', 'error');
         } finally {
@@ -2902,6 +3621,13 @@
 
     async function saveForm() {
         if (canvasserRegister) {
+            return;
+        }
+        if (requesterEditView) {
+            showToast('Your preferred quotes are saved automatically. Track canvass progress from the status page.');
+            setTimeout(() => {
+                window.location.href = 'dean_requisition_status_progress.php?rid=' + requestId;
+            }, 1800);
             return;
         }
         if (state.items.length === 0) {
@@ -3724,6 +4450,12 @@
     }
 
     applyGsdReadonlyUi();
+    if (canvasserRegister) {
+        initCanvasserQuoteModalListeners();
+    }
+    if (requesterEditView) {
+        initRequesterPrefQuoteModalListeners();
+    }
     loadForm();
 
     window.CWIRMSCanvassForm = {

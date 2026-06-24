@@ -83,6 +83,9 @@ function createEmptyRequestedItem() {
         item_id: null,
         name: '',
         brand: '',
+        model: '',
+        specification: '',
+        group_label: '',
         category: '',
         quantity: 1,
         unit_type: 'piece',
@@ -1474,6 +1477,9 @@ function normalizeRequestedItem(raw = {}) {
         item_id: raw.item_id != null ? Number(raw.item_id) : null,
         name: String(raw.name || ''),
         brand: String(raw.brand || ''),
+        model: String(raw.model || ''),
+        specification: String(raw.specification || ''),
+        group_label: String(raw.group_label || ''),
         category: String(raw.category || ''),
         quantity: Math.max(1, Number(raw.quantity) || 1),
         unit_type: String(raw.unit_type || 'piece'),
@@ -1488,6 +1494,9 @@ function serializeRequestedItemsForApi() {
             item_id: item.item_id,
             name: item.name.trim(),
             brand: item.brand,
+            model: item.model,
+            specification: item.specification,
+            group_label: item.group_label,
             category: item.category,
             quantity: item.quantity,
             unit_type: item.unit_type,
@@ -1520,36 +1529,106 @@ function renderItems() {
         return;
     }
 
+    const disabled = state.viewOnly;
+
+    if (disabled) {
+        // View-only mode: group items by group_label; show brand/model/spec inline as meta.
+        const chunks = [];
+        const groupMap = new Map();
+
+        state.requestedItems.forEach((item, index) => {
+            const normalized = normalizeRequestedItem(item);
+            const gl = normalized.group_label.trim();
+            if (gl) {
+                if (!groupMap.has(gl)) {
+                    const g = { type: 'group', label: gl, rows: [] };
+                    groupMap.set(gl, g);
+                    chunks.push(g);
+                }
+                groupMap.get(gl).rows.push({ normalized, index });
+            } else {
+                chunks.push({ type: 'item', normalized, index });
+            }
+        });
+
+        const renderViewRow = (normalized, index, grouped = false) => {
+            const metaParts = [normalized.brand, normalized.model, normalized.specification]
+                .filter((s) => s.trim() !== '');
+            const metaHtml = metaParts.length
+                ? `<span class="rf-items-row__meta">${escapeHtml(metaParts.join(' · '))}</span>`
+                : '';
+            return `
+            <div class="rf-items-row${grouped ? ' rf-items-row--grouped' : ''}">
+                <span class="rf-items-row__index">${index + 1}</span>
+                <span class="rf-items-row__desc-text">${escapeHtml(normalized.name)}${metaHtml}</span>
+                <div class="rf-items-row__controls">
+                    <span class="rf-items-row__unit">${escapeHtml(normalized.unit_type)}</span>
+                    <span class="rf-items-row__qty">${escapeHtml(String(normalized.quantity))}</span>
+                </div>
+            </div>`;
+        };
+
+        requestedItemsBody.innerHTML = chunks
+            .map((chunk) => {
+                if (chunk.type === 'item') {
+                    return renderViewRow(chunk.normalized, chunk.index, false);
+                }
+                const rowsHtml = chunk.rows
+                    .map(({ normalized, index }) => renderViewRow(normalized, index, true))
+                    .join('');
+                return `
+                <div class="rf-items-group">
+                    <div class="rf-items-group__header">
+                        <i class="fas fa-layer-group" aria-hidden="true"></i>
+                        Items grouped under: <strong>${escapeHtml(chunk.label)}</strong>
+                    </div>
+                    ${rowsHtml}
+                </div>`;
+            })
+            .join('');
+        return;
+    }
+
+    // Edit mode: main row + details sub-row (brand / model / specification / group_label).
     requestedItemsBody.innerHTML = state.requestedItems
         .map((item, index) => {
             const normalized = normalizeRequestedItem(item);
-            const disabled = state.viewOnly;
-
-            if (disabled) {
-                return `
+            return `
+            <div class="rf-items-entry" data-item-index="${index}">
                 <div class="rf-items-row">
                     <span class="rf-items-row__index">${index + 1}</span>
-                    <span class="rf-items-row__desc-text">${escapeHtml(normalized.name)}</span>
+                    <input type="text" class="rf-item-field rf-items-row__desc" data-item-field="name" data-item-index="${index}"
+                        value="${escapeHtml(normalized.name)}" list="itemNameSuggestions" placeholder="e.g. Whiteboard marker" autocomplete="off">
                     <div class="rf-items-row__controls">
-                        <span class="rf-items-row__unit">${escapeHtml(normalized.unit_type)}</span>
-                        <span class="rf-items-row__qty">${escapeHtml(String(normalized.quantity))}</span>
+                        ${buildUnitSelect(index, normalized.unit_type, false)}
+                        <input type="number" class="rf-item-field rf-item-field--qty" data-item-field="quantity" data-item-index="${index}"
+                            min="1" step="1" value="${escapeHtml(String(normalized.quantity))}">
+                        <button type="button" class="rf-item-remove-btn" data-item-index="${index}" title="Remove item" aria-label="Remove item">
+                            <i class="fas fa-trash-can" aria-hidden="true"></i>
+                        </button>
                     </div>
                 </div>
-                `;
-            }
-
-            return `
-            <div class="rf-items-row">
-                <span class="rf-items-row__index">${index + 1}</span>
-                <input type="text" class="rf-item-field rf-items-row__desc" data-item-field="name" data-item-index="${index}"
-                    value="${escapeHtml(normalized.name)}" list="itemNameSuggestions" placeholder="e.g. Whiteboard marker" autocomplete="off">
-                <div class="rf-items-row__controls">
-                    ${buildUnitSelect(index, normalized.unit_type, false)}
-                    <input type="number" class="rf-item-field rf-item-field--qty" data-item-field="quantity" data-item-index="${index}"
-                        min="1" step="1" value="${escapeHtml(String(normalized.quantity))}">
-                    <button type="button" class="rf-item-remove-btn" data-item-index="${index}" title="Remove item" aria-label="Remove item">
-                        <i class="fas fa-trash-can" aria-hidden="true"></i>
-                    </button>
+                <div class="rf-items-details">
+                    <label class="rf-items-detail-field">
+                        <span class="rf-items-detail-field__label">Brand</span>
+                        <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="brand" data-item-index="${index}"
+                            value="${escapeHtml(normalized.brand)}" placeholder="e.g. Canon">
+                    </label>
+                    <label class="rf-items-detail-field">
+                        <span class="rf-items-detail-field__label">Model</span>
+                        <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="model" data-item-index="${index}"
+                            value="${escapeHtml(normalized.model)}" placeholder="e.g. PIXMA G3010">
+                    </label>
+                    <label class="rf-items-detail-field rf-items-detail-field--spec">
+                        <span class="rf-items-detail-field__label">Specification</span>
+                        <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="specification" data-item-index="${index}"
+                            value="${escapeHtml(normalized.specification)}" placeholder="e.g. Color inkjet, A4">
+                    </label>
+                    <label class="rf-items-detail-field">
+                        <span class="rf-items-detail-field__label">Group name <span class="rf-items-detail-field__hint">(optional)</span></span>
+                        <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="group_label" data-item-index="${index}"
+                            value="${escapeHtml(normalized.group_label)}" placeholder="e.g. Computer Set">
+                    </label>
                 </div>
             </div>
             `;
@@ -1597,6 +1676,8 @@ function syncRequestedItemFromField(index, field, rawValue) {
         item.unit_type = String(rawValue || 'unit');
     } else if (field === 'quantity') {
         item.quantity = Math.max(1, Number(rawValue) || 1);
+    } else if (field === 'brand' || field === 'model' || field === 'specification' || field === 'group_label') {
+        item[field] = String(rawValue || '');
     }
 
     state.requestedItems[index] = item;
@@ -2188,6 +2269,14 @@ if (requestedItemsBody) {
         if (fieldName === 'name') {
             if (state.requestedItems[index]) {
                 state.requestedItems[index].name = String(field.value || '');
+                state.hasUnsavedChanges = true;
+            }
+            return;
+        }
+        // Fast-path for simple text detail fields — no re-render needed during typing.
+        if (fieldName === 'brand' || fieldName === 'model' || fieldName === 'specification' || fieldName === 'group_label') {
+            if (state.requestedItems[index]) {
+                state.requestedItems[index][fieldName] = String(field.value || '');
                 state.hasUnsavedChanges = true;
             }
             return;

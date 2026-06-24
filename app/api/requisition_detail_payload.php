@@ -22,21 +22,26 @@ function requisitionNullableInt($v): ?int
  */
 function requisitionSqlSelectListAggregates(): string
 {
+    // suppliers_concat: awarded suppliers from requisition_line_awards (canonical award table).
+    // list_min_price:   cheapest canvassed quote from requisition_line_quotes (canonical quote table).
+    // items_concat:     top-level lines only (group_label IS NULL = department-submitted lines).
     return '(SELECT GROUP_CONCAT(rl.item_name ORDER BY rl.sort_order ASC, rl.requisition_line_id ASC SEPARATOR \'||\')
-        FROM requisition_line rl WHERE rl.request_id = r.request_id) AS items_concat,
+        FROM requisition_line rl
+        WHERE rl.request_id = r.request_id
+          AND rl.deleted_at IS NULL
+          AND (rl.group_label IS NULL OR rl.group_label = \'\')) AS items_concat,
         (SELECT GROUP_CONCAT(
             COALESCE(NULLIF(TRIM(s.supplier_name), \'\'), \'—\')
-            ORDER BY cd.sort_order ASC, rassi.canvass_detail_id ASC
+            ORDER BY rla.award_id ASC
             SEPARATOR \'||\')
-        FROM request_approval_suggested_supplier_item rassi
-        INNER JOIN requisition_canvass_detail cd
-            ON cd.canvass_detail_id = rassi.canvass_detail_id
-           AND cd.request_id = rassi.request_id
-        LEFT JOIN suppliers s ON s.supplier_id = rassi.supplier_id
-        WHERE rassi.request_id = r.request_id) AS suppliers_concat,
-        (SELECT MIN(cds.price) FROM requisition_canvass_detail cd2
-        INNER JOIN requisition_canvass_detail_supplier cds ON cds.canvass_detail_id = cd2.canvass_detail_id
-        WHERE cd2.request_id = r.request_id AND cds.price IS NOT NULL) AS list_min_price';
+        FROM requisition_line_awards rla
+        INNER JOIN requisition_line rl2 ON rl2.requisition_line_id = rla.requisition_line_id
+        LEFT JOIN suppliers s ON s.supplier_id = rla.supplier_id
+        WHERE rl2.request_id = r.request_id) AS suppliers_concat,
+        (SELECT MIN(rlq.quoted_unit_price)
+        FROM requisition_line_quotes rlq
+        INNER JOIN requisition_line rl3 ON rl3.requisition_line_id = rlq.requisition_line_id
+        WHERE rl3.request_id = r.request_id AND rlq.quoted_unit_price IS NOT NULL) AS list_min_price';
 }
 
 /**
@@ -149,10 +154,10 @@ function requisitionVerifierChainLockedForRequest(PDO $db, int $requestId): bool
 function cwirmsDistinctSupplierIdsForRequest(PDO $db, int $requestId): array
 {
     $stmt = $db->prepare(
-        'SELECT DISTINCT cds.supplier_id
-         FROM requisition_canvass_detail cd
-         INNER JOIN requisition_canvass_detail_supplier cds ON cds.canvass_detail_id = cd.canvass_detail_id
-         WHERE cd.request_id = ?'
+        'SELECT DISTINCT rlq.supplier_id
+         FROM requisition_line_quotes rlq
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+         WHERE rl.request_id = ?'
     );
     $stmt->execute([$requestId]);
     $ids = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN, 0));
@@ -178,30 +183,40 @@ function requisitionInsertHeader(PDO $db, int $userId, int $officeId, int $facil
  */
 function requisitionInsertLinesForRequest(PDO $db, int $requestId, array $items, array $suppliers): void
 {
-    $lineStmt = $db->prepare('INSERT INTO requisition_line (request_id, sort_order, item_id, item_name, item_brand, item_category, photo_url, quantity, unit_type) VALUES (?, ?, ?, ?, ?, ?, \'\', ?, ?)');
+    // group_label is NULL for department-submitted lines (top-level); canvasser-created
+    // component lines set group_label to the parent line's item_name.
+    $lineStmt = $db->prepare(
+        'INSERT INTO requisition_line
+             (request_id, sort_order, item_id, item_name, item_brand, model, specification, item_category, photo_url, quantity, unit_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, \'\', ?, ?)'
+    );
     $sortOrder = 0;
-    foreach ($items as $itemIndex => $item) {
+    foreach ($items as $item) {
         if (!is_array($item)) {
             continue;
         }
-        $itemName = trim((string) ($item['name'] ?? ''));
+        $itemName      = trim((string) ($item['name'] ?? ''));
         if ($itemName === '') {
             continue;
         }
-        $itemBrand = trim((string) ($item['brand'] ?? ''));
-        $itemCategory = trim((string) ($item['category'] ?? ''));
-        $itemId = isset($item['item_id']) ? (int) $item['item_id'] : null;
-        $quantity = max(1, (int) ($item['quantity'] ?? 1));
-        $unitTypeRaw = strtolower(trim((string) ($item['unit_type'] ?? 'piece')));
-        $unitType = $unitTypeRaw !== '' ? $unitTypeRaw : 'piece';
+        $itemBrand     = trim((string) ($item['brand'] ?? ''));
+        $model         = trim((string) ($item['model'] ?? ''));
+        $specification = trim((string) ($item['specification'] ?? ''));
+        $itemCategory  = trim((string) ($item['category'] ?? ''));
+        $itemId        = isset($item['item_id']) ? (int) $item['item_id'] : null;
+        $quantity      = max(1, (int) ($item['quantity'] ?? 1));
+        $unitTypeRaw   = strtolower(trim((string) ($item['unit_type'] ?? 'piece')));
+        $unitType      = $unitTypeRaw !== '' ? $unitTypeRaw : 'piece';
 
         $lineStmt->execute([
             $requestId,
             $sortOrder,
             ($itemId > 0) ? $itemId : null,
             $itemName,
-            $itemBrand !== '' ? $itemBrand : null,
-            $itemCategory !== '' ? $itemCategory : null,
+            $itemBrand     !== '' ? $itemBrand     : null,
+            $model         !== '' ? $model         : null,
+            $specification !== '' ? $specification : null,
+            $itemCategory  !== '' ? $itemCategory  : null,
             $quantity,
             $unitType,
         ]);
@@ -216,20 +231,32 @@ function requisitionInsertLinesForRequest(PDO $db, int $requestId, array $items,
  */
 function requisitionFetchDetailMatrixRows(PDO $db, int $requestId): array
 {
-    $sql = 'SELECT rl.item_name, rl.item_brand, rl.item_category, rl.quantity, rl.unit_type, rl.item_id,
-                   cds.supplier_id, cds.price,
-                   s.supplier_name, s.supplier_image
+    // Joins directly to requisition_line_quotes (canonical quote table).
+    // Includes model, specification, and group_label so callers can render
+    // grouped / component lines without extra queries.
+    $sql = 'SELECT
+                rl.requisition_line_id,
+                rl.item_name,
+                rl.item_brand,
+                rl.model,
+                rl.specification,
+                rl.item_category,
+                rl.group_label,
+                rl.quantity,
+                rl.unit_type,
+                rl.item_id,
+                rlq.supplier_id,
+                rlq.quoted_unit_price AS price,
+                rlq.quote_type,
+                rlq.benefits,
+                s.supplier_name,
+                s.supplier_image
             FROM requisition_line rl
-            LEFT JOIN requisition_canvass_detail cd
-              ON cd.canvass_detail_id = (
-                  SELECT MIN(cd2.canvass_detail_id)
-                  FROM requisition_canvass_detail cd2
-                  WHERE cd2.request_id = rl.request_id AND cd2.requisition_line_id = rl.requisition_line_id
-              )
-            LEFT JOIN requisition_canvass_detail_supplier cds ON cds.canvass_detail_id = cd.canvass_detail_id
-            LEFT JOIN suppliers s ON s.supplier_id = cds.supplier_id
+            LEFT JOIN requisition_line_quotes rlq ON rlq.requisition_line_id = rl.requisition_line_id
+            LEFT JOIN suppliers s ON s.supplier_id = rlq.supplier_id
             WHERE rl.request_id = ?
-            ORDER BY rl.sort_order ASC, rl.requisition_line_id ASC, cds.supplier_id ASC';
+              AND rl.deleted_at IS NULL
+            ORDER BY rl.sort_order ASC, rl.requisition_line_id ASC, rlq.supplier_id ASC';
     $stmt = $db->prepare($sql);
     $stmt->execute([$requestId]);
 

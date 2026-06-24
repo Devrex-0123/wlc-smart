@@ -401,6 +401,9 @@ $isOwner = false;
         $checkOwner->execute([$requestId, $_SESSION['user_id']]);
         $isOwner = (bool) $checkOwner->fetchColumn();
     }
+    if ($isOwner) {
+        $isRequesterOwnedCanvass = true;
+    }
 
 $gsdVerificationStatus = 'pending';
 $showCanvassPricingOverview = $isGsdCanvassReview;
@@ -485,6 +488,10 @@ $isCanvassStructureUiHidden = $isReviewerCanvassReadonly
     || ($verifierChainLocked && ($isRequesterOwnedCanvass || $isCanvasserCanvassView));
 $isCanvasMatrixReadonly = $isReviewerCanvassReadonly
     || ($verifierChainLocked && ($isRequesterOwnedCanvass || $isCanvasserCanvassView));
+// New per-line preferred-quote view for the request owner (replaces old breakdown + matrix UI).
+// Covers both the direct owner path (no ?from=) and the department-user path (?from=dean).
+$isRequesterEditView = ($isRequesterOwnedCanvass || $isDeanCanvassView)
+    && !$isReviewerCanvassReadonly && !$verifierChainLocked;
 $prAfterCanvassAccepted = ($requestId > 0 && $accessError === null)
     ? requisitionCanvassFormAcceptedForRequest($db, $requestId)
     : false;
@@ -613,7 +620,7 @@ $pageTitle = $rfRequestId > 0
 <body class="page-canvass-form">
 
 <main class="requisition-main">
-    <div class="requisition-card<?php echo $isCanvasMatrixReadonly ? ' gsd-canvass-readonly' : ''; ?>" id="canvassCard" data-request-id="<?php echo (int) $requestId; ?>" data-api="../../app/api/canvass_detail.php" data-dean-api="../../app/api/dean_requisition.php" data-gsd-readonly="<?php echo $isCanvasMatrixReadonly ? '1' : '0'; ?>" data-canvasser-register="<?php echo $isCanvasserCanvassView ? '1' : '0'; ?>">
+        <div class="requisition-card<?php echo $isCanvasMatrixReadonly ? ' gsd-canvass-readonly' : ''; ?>" id="canvassCard" data-request-id="<?php echo (int) $requestId; ?>" data-api="../../app/api/canvass_detail.php" data-dean-api="../../app/api/dean_requisition.php" data-gsd-readonly="<?php echo $isCanvasMatrixReadonly ? '1' : '0'; ?>" data-canvasser-register="<?php echo $isCanvasserCanvassView ? '1' : '0'; ?>" data-canvasser-api="../../app/api/canvasser_requests.php" data-requester-edit="<?php echo $isRequesterEditView ? '1' : '0'; ?>">
         <a href="<?php echo htmlspecialchars($accessError === null ? $backHref : $accessErrorReturnHref); ?>" class="requisition-close-btn" aria-label="Back" data-tooltip="Back">
             <i class="fas fa-times"></i>
         </a>
@@ -734,7 +741,9 @@ $pageTitle = $rfRequestId > 0
                 ? 'Line items as recorded on the original requisition (read-only).'
                 : ($isCanvasserCanvassView
                     ? 'Requester’s line items (read-only). Canvass quotation lines set by the requester appear below — you only add suppliers and prices.'
-                    : 'What you originally submitted. Use <strong>Canvass items</strong> below for quotation lines (you can match or refine these).'); ?></p>
+                    : ($isRequesterEditView
+                        ? 'These are the items you requested. Add your <strong>preferred supplier quotes</strong> for each item using the button in the last column.'
+                        : 'What you originally submitted. Use <strong>Canvass items</strong> below for quotation lines (you can match or refine these).')); ?></p>
             <div class="requested-items-table-wrap">
                 <table class="requested-items-table" id="cvRequestedItemsTable">
                     <thead>
@@ -743,17 +752,23 @@ $pageTitle = $rfRequestId > 0
                             <th scope="col">Item / Sub-description</th>
                             <th scope="col">Qty</th>
                             <th scope="col">Unit</th>
+                            <?php if ($isCanvasserCanvassView): ?>
+                            <th scope="col">Quotes</th>
+                            <?php elseif ($isRequesterEditView): ?>
+                            <th scope="col">Preferred Quote</th>
+                            <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody id="cvRequestedItemsTableBody">
                         <tr class="requested-items-empty">
-                            <td colspan="4">Loading…</td>
+                            <td colspan="<?php echo ($isCanvasserCanvassView || $isRequesterEditView) ? 5 : 4; ?>">Loading…</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </section>
 
+        <?php if (!$isRequesterEditView): ?>
         <section class="rf-section rf-section-canvass-lines">
         <div class="table-section">
             <?php if (!$isCanvassStructureUiHidden && !$isCanvasserCanvassView): ?>
@@ -797,8 +812,9 @@ $pageTitle = $rfRequestId > 0
             <div id="cvItemChips" class="item-chips"><p class="item-chips-empty">No canvass items yet.</p></div>
         </div>
         </section>
+        <?php endif; // !$isRequesterEditView — hide legacy canvass breakdown for requester ?>
 
-            <?php if ($isRequesterOwnedCanvass || $isReviewerCanvassReadonly || $isCanvasserCanvassView || ($requestId > 0 && !$isReviewerCanvassReadonly && !$isCanvasserCanvassView && !$isGsdCanvassReview && !$isComptrollerCanvassReview && !$isPresidentCanvassReview)): ?>
+            <?php if (!$isRequesterEditView): ?>
             <section class="rf-section rf-section-preferred cv-preferred-section" id="cvPreferredSection">
                 <h2 class="rf-section-heading">Preferred Supplier Matrix</h2>
                 <div class="cv-preferred-section-head" id="cvPreferredSectionHead">
@@ -822,7 +838,7 @@ $pageTitle = $rfRequestId > 0
                 </div>
             </section>
             <?php endif; ?>
-
+            <?php if (!$isRequesterEditView): ?>
             <section class="rf-section rf-section-canvassed supplier-section" id="cvCanvasSection" role="region" aria-label="Suppliers and pricing">
                 <h2 class="rf-section-heading">Canvassed Supplier Matrix</h2>
                     <?php if ($isCanvasserCanvassView && !$verifierChainLocked): ?>
@@ -873,6 +889,8 @@ $pageTitle = $rfRequestId > 0
                     </div>
                 </div>
             </section>
+
+            <?php endif; ?>
 
         <?php if ($showCanvassPricingOverview): ?>
         <section class="rf-section rf-section-abstract-total">
@@ -984,6 +1002,107 @@ $pageTitle = $rfRequestId > 0
 </main>
 
 <div id="cvFormToast" class="toast success" style="display:none;"></div>
+
+<?php if ($isCanvasserCanvassView): ?>
+<div id="cvCanvasserQuoteModal" class="cv-canvasser-quote-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cvQuoteModalTitle">
+    <div class="cv-canvasser-quote-modal-backdrop" id="cvQuoteModalBackdrop"></div>
+    <div class="cv-canvasser-quote-modal-card">
+        <div class="cv-canvasser-quote-modal-header">
+            <h3 id="cvQuoteModalTitle">Add / Edit Quote</h3>
+            <button type="button" class="cv-canvasser-quote-modal-close" id="cvQuoteModalClose" aria-label="Close">&times;</button>
+        </div>
+        <p class="cv-quote-modal-line-name" id="cvQuoteModalLineName"></p>
+        <input type="hidden" id="cvQuoteModalLineId" value="">
+
+        <div class="cv-quote-modal-existing" id="cvQuoteModalExistingWrap">
+            <div class="cv-quote-modal-existing-label">Canvassed quotes for this item:</div>
+            <div id="cvQuoteModalExistingQuotes"></div>
+        </div>
+
+        <?php if (!$verifierChainLocked): ?>
+        <hr class="cv-quote-modal-divider">
+        <div class="cv-quote-modal-form">
+            <div class="cv-quote-modal-form-title">Add / update a quote</div>
+            <div class="field-group">
+                <label for="cvQuoteModalSupplierBtn">Supplier <em style="color:#b91c1c">*</em></label>
+                <div class="cv-quote-modal-supplier-dropdown" id="cvQuoteModalSupplierDropdown">
+                    <button type="button" id="cvQuoteModalSupplierBtn" class="supplier-dropdown-btn cv-quote-modal-supplier-btn">
+                        <span id="cvQuoteModalSupplierText">Select supplier…</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <input type="hidden" id="cvQuoteModalSupplierId" value="">
+                    <div id="cvQuoteModalSupplierList" class="supplier-dropdown-list cv-quote-modal-supplier-list"></div>
+                </div>
+            </div>
+            <div class="field-group">
+                <label for="cvQuoteModalPrice">Unit Price (PHP) <em style="color:#b91c1c">*</em></label>
+                <input type="number" id="cvQuoteModalPrice" min="0" step="0.01" placeholder="0.00" autocomplete="off">
+            </div>
+            <div class="field-group">
+                <label for="cvQuoteModalBenefits">Benefits / Notes <span style="color:#64748b;font-weight:400;">(optional)</span></label>
+                <textarea id="cvQuoteModalBenefits" rows="2" placeholder="e.g. Includes VAT, free delivery, warranty…"></textarea>
+            </div>
+        </div>
+        <div class="cv-canvasser-quote-modal-actions">
+            <button type="button" class="btn-secondary" id="cvQuoteModalCancel">Cancel</button>
+            <button type="button" class="btn-submit" id="cvQuoteModalSave"><i class="fas fa-check" aria-hidden="true"></i> Save quote</button>
+        </div>
+        <?php else: ?>
+        <p style="margin:1rem 0 0;font-size:0.9rem;color:#64748b;">This canvass is locked — no changes can be made.</p>
+        <div class="cv-canvasser-quote-modal-actions">
+            <button type="button" class="btn-secondary" id="cvQuoteModalCancel">Close</button>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($isRequesterEditView): ?>
+<div id="cvRequesterPrefQuoteModal" class="cv-canvasser-quote-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cvPrefQuoteModalTitle">
+    <div class="cv-canvasser-quote-modal-backdrop" id="cvPrefQuoteModalBackdrop"></div>
+    <div class="cv-canvasser-quote-modal-card">
+        <div class="cv-canvasser-quote-modal-header">
+            <h3 id="cvPrefQuoteModalTitle">Add / Edit Preferred Quote</h3>
+            <button type="button" class="cv-canvasser-quote-modal-close" id="cvPrefQuoteModalClose" aria-label="Close">&times;</button>
+        </div>
+        <p class="cv-quote-modal-line-name" id="cvPrefQuoteModalLineName"></p>
+        <input type="hidden" id="cvPrefQuoteModalLineId" value="">
+
+        <div class="cv-quote-modal-existing" id="cvPrefQuoteModalExistingWrap">
+            <div class="cv-quote-modal-existing-label">Your preferred quotes for this item:</div>
+            <div id="cvPrefQuoteModalExistingQuotes"></div>
+        </div>
+
+        <hr class="cv-quote-modal-divider">
+        <div class="cv-quote-modal-form">
+            <div class="cv-quote-modal-form-title">Add / update a preferred quote</div>
+            <div class="field-group">
+                <label for="cvPrefQuoteModalSupplierBtn">Supplier <em style="color:#b91c1c">*</em></label>
+                <div class="cv-quote-modal-supplier-dropdown" id="cvPrefQuoteModalSupplierDropdown">
+                    <button type="button" id="cvPrefQuoteModalSupplierBtn" class="supplier-dropdown-btn cv-quote-modal-supplier-btn">
+                        <span id="cvPrefQuoteModalSupplierText">Select supplier…</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <input type="hidden" id="cvPrefQuoteModalSupplierId" value="">
+                    <div id="cvPrefQuoteModalSupplierList" class="supplier-dropdown-list cv-quote-modal-supplier-list"></div>
+                </div>
+            </div>
+            <div class="field-group">
+                <label for="cvPrefQuoteModalPrice">Unit Price (PHP) <em style="color:#b91c1c">*</em></label>
+                <input type="number" id="cvPrefQuoteModalPrice" min="0" step="0.01" placeholder="0.00" autocomplete="off">
+            </div>
+            <div class="field-group">
+                <label for="cvPrefQuoteModalBenefits">Benefits / Notes <span style="color:#64748b;font-weight:400;">(optional)</span></label>
+                <textarea id="cvPrefQuoteModalBenefits" rows="2" placeholder="e.g. Includes VAT, free delivery, warranty…"></textarea>
+            </div>
+        </div>
+        <div class="cv-canvasser-quote-modal-actions">
+            <button type="button" class="btn-secondary" id="cvPrefQuoteModalCancel">Cancel</button>
+            <button type="button" class="btn-submit" id="cvPrefQuoteModalSave"><i class="fas fa-check" aria-hidden="true"></i> Save preferred quote</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if ($isCanvasserCanvassView && !$verifierChainLocked): ?>
 <div id="canvasserNewSupplierModal" class="canvasser-supplier-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="canvasserNewSupplierTitle">
