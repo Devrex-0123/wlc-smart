@@ -7,6 +7,7 @@
 
     const gsdReadonly = card.dataset.gsdReadonly === '1';
     const gsdReviewView = card.dataset.gsdReview === '1';
+    const gsdOutcomeReadonlyView = card.dataset.gsdOutcomeReadonly === '1';
     const canvasserRegister = card.dataset.canvasserRegister === '1';
     const requesterEditView = card.dataset.requesterEdit === '1';
     const CANVASSER_REQUESTS_API = card.dataset.canvasserApi || '../../app/api/canvasser_requests.php';
@@ -416,7 +417,7 @@
             .toLowerCase();
         const canChangeSuggested =
             canSelectSuggestedSupplierInTable && gsdDecision !== 'accept' && gsdDecision !== 'reject';
-        const showGsdSuggestUi = gsdReadonly && canChangeSuggested;
+        const showGsdSuggestUi = gsdReadonly && canChangeSuggested && !gsdReviewView;
         return { gsdDecision, canChangeSuggested, showGsdSuggestUi };
     }
 
@@ -542,6 +543,7 @@
                 };
             }
             emitCanvassPricingUpdate();
+            updateGsdVerifyButtonState();
         } catch {
             showToast('Network error saving quote selection.', 'error');
         }
@@ -845,7 +847,7 @@
     }
 
     function buildCanvassPricingSnapshot() {
-        if (gsdReviewView && Array.isArray(state.gsdLines) && state.gsdLines.length > 0) {
+        if ((gsdReviewView || gsdOutcomeReadonlyView) && Array.isArray(state.gsdLines) && state.gsdLines.length > 0) {
             return buildGsdPricingSnapshotFromLines(state.gsdLines);
         }
 
@@ -1933,6 +1935,15 @@
         }
     }
 
+    function approvalRoleKeyFromLabel(label) {
+        const lc = String(label || '').toLowerCase();
+        if (lc.includes('canvasser')) return 'canvas';
+        if (lc.includes('g.s.d') || lc.includes('gsd')) return 'gsd';
+        if (lc.includes('comptroller')) return 'comp';
+        if (lc.includes('president')) return 'pres';
+        return '';
+    }
+
     function applyCanvassApproval(appr) {
         cachedCanvassApproval = appr && typeof appr === 'object' ? appr : null;
         if (canvasserRegister) {
@@ -1941,20 +1952,28 @@
         const strip = document.getElementById('cvApprovalStrip');
         if (!strip) return;
         const roles = strip.querySelectorAll('.approval-role');
-        const details = [
-            document.getElementById('cvApprCanvasserDetail'),
-            document.getElementById('cvApprGsdDetail'),
-            document.getElementById('cvApprCompDetail'),
-            document.getElementById('cvApprPresDetail'),
-        ];
-        const statuses = appr && typeof appr === 'object'
-            ? [appr.canvas_status, appr.gsd_status, appr.comp_status, appr.pres_status]
-            : [null, null, null, null];
+        const statusByKey = appr && typeof appr === 'object'
+            ? {
+                canvas: appr.canvas_status,
+                gsd: appr.gsd_status,
+                comp: appr.comp_status,
+                pres: appr.pres_status,
+            }
+            : { canvas: null, gsd: null, comp: null, pres: null };
+        const detailByKey = {
+            canvas: document.getElementById('cvApprCanvasserDetail'),
+            gsd: document.getElementById('cvApprGsdDetail'),
+            comp: document.getElementById('cvApprCompDetail'),
+            pres: document.getElementById('cvApprPresDetail'),
+        };
 
-        roles.forEach((role, i) => {
+        roles.forEach((role) => {
+            const nameEl = role.querySelector('.approval-name');
+            const key = approvalRoleKeyFromLabel(nameEl ? nameEl.textContent : '');
+            if (!key) return;
             const circle = role.querySelector('.circle-icon');
             if (!circle) return;
-            const raw = statuses[i];
+            const raw = statusByKey[key];
             let step = 'inactive';
             if (approvalStepIsAccept(raw)) step = 'active';
             else if (approvalStepIsReject(raw)) step = 'rejected';
@@ -1966,26 +1985,22 @@
             }
         });
 
-        if (details[0]) {
-            const cRaw = statuses[0];
-            let t = approvalDetailForStep(cRaw);
-            if (approvalStepIsAccept(cRaw) && appr && appr.canvassed_by) {
+        Object.keys(detailByKey).forEach((key) => {
+            const detailEl = detailByKey[key];
+            if (!detailEl) return;
+            const raw = statusByKey[key];
+            let t = approvalDetailForStep(raw);
+            if (key === 'canvas' && approvalStepIsAccept(raw) && appr && appr.canvassed_by) {
                 const name = String(appr.canvassed_by).trim();
                 if (name) t = name;
             }
-            details[0].textContent = t;
-            if (t && t !== 'Rejected' && t !== 'Verified') {
-                details[0].setAttribute('title', t);
+            detailEl.textContent = t;
+            if (key === 'canvas' && t && t !== 'Rejected' && t !== 'Verified') {
+                detailEl.setAttribute('title', t);
             } else {
-                details[0].removeAttribute('title');
+                detailEl.removeAttribute('title');
             }
-        }
-        for (let j = 1; j < 4; j += 1) {
-            if (details[j]) {
-                details[j].textContent = approvalDetailForStep(statuses[j]);
-                details[j].removeAttribute('title');
-            }
-        }
+        });
         updateSuggestedSupplierNotice();
         
         if (gsdReadonly && typeof window.__imrmsGsdAssigneeSyncApproval === 'function') {
@@ -2786,6 +2801,7 @@
     function buildGsdPricingSnapshotFromLines(lines) {
         let selectedCount = 0;
         let grandTotal = 0;
+        let hasDiscount = false;
         const currency = 'PHP';
         const out = (lines || []).map((row, index) => {
             const qty = Math.max(1, Number(row.quantity) || 1);
@@ -2798,6 +2814,8 @@
             let supplierName = award ? String(award.supplier_name || '') : null;
             let unitPrice = null;
             let lineTotal = null;
+            let discountLabel = null;
+            let discountPercent = null;
 
             if (supplierId && selectionSource) {
                 selectedCount += 1;
@@ -2807,7 +2825,13 @@
                 const match = quotes.find((q) => Number(q.supplier_id) === supplierId);
                 if (match && match.quoted_unit_price != null && !Number.isNaN(Number(match.quoted_unit_price))) {
                     unitPrice = Math.round(Number(match.quoted_unit_price) * 100) / 100;
-                    lineTotal = Math.round(unitPrice * qty * 100) / 100;
+                    const discountPct = parseFloat(match.discount_percent) || 0;
+                    if (discountPct > 0) {
+                        discountPercent = discountPct;
+                        discountLabel = `${discountPct}%`;
+                        hasDiscount = true;
+                    }
+                    lineTotal = Math.round(unitPrice * qty * (1 - discountPct / 100) * 100) / 100;
                     grandTotal += lineTotal;
                     if (!supplierName && match.supplier_name) {
                         supplierName = String(match.supplier_name);
@@ -2829,7 +2853,8 @@
                 selection_source: selectionSource,
                 unit_price: unitPrice,
                 line_total: lineTotal,
-                discount_label: null,
+                discount_percent: discountPercent,
+                discount_label: discountLabel,
             };
         });
 
@@ -2839,7 +2864,7 @@
             selected_count: selectedCount,
             grand_total: Math.round(grandTotal * 100) / 100,
             currency,
-            show_discount_column: false,
+            show_discount_column: hasDiscount,
         };
     }
 
@@ -2873,13 +2898,9 @@
         const body = document.getElementById('cvRequestedItemsTableBody');
         if (!body) return;
 
-        const { canChangeSuggested } = getGsdSuggestSelectionContext();
-        const canSelect = canChangeSuggested;
-
         if (!Array.isArray(lines) || lines.length === 0) {
             body.innerHTML =
-                '<tr class="requested-items-empty"><td colspan="5">No line items with supplier quotes yet.</td></tr>';
-            emitCanvassPricingUpdate();
+                '<tr class="requested-items-empty"><td colspan="4">No line items found.</td></tr>';
             return;
         }
 
@@ -2892,14 +2913,13 @@
             if (group !== lastGroup) {
                 if (group) {
                     html += `<tr class="cv-canvasser-group-header-row">
-                        <td colspan="5" class="cv-canvasser-group-header">
+                        <td colspan="4" class="cv-canvasser-group-header">
                             <i class="fas fa-layer-group" aria-hidden="true"></i> ${escapeHtml(group)}
                         </td>
                     </tr>`;
                 }
                 lastGroup = group;
             }
-
             rowNum++;
             const name = escapeHtml(row.item_name || '—');
             const brand = String(row.brand || '').trim();
@@ -2911,42 +2931,84 @@
                 : '';
             const qty = row.quantity != null ? row.quantity : 1;
             const unit = escapeHtml(String(row.unit_type || 'unit'));
-            const lid = Number(row.requisition_line_id || 0);
-            const award = row.award || null;
-
-            const pQuotes = Array.isArray(row.preferred_quotes) ? row.preferred_quotes : [];
-            const cQuotes = Array.isArray(row.canvassed_quotes) ? row.canvassed_quotes : [];
-            let quotesHtml = '';
-            pQuotes.forEach((q) => {
-                quotesHtml += buildGsdQuoteOptionHtml(lid, q, 'preferred', award, canSelect);
-            });
-            cQuotes.forEach((q) => {
-                quotesHtml += buildGsdQuoteOptionHtml(lid, q, 'canvassed', award, canSelect);
-            });
-            if (!quotesHtml) {
-                quotesHtml = '<span class="cv-line-quote-empty">No quotes for this item</span>';
-            }
-
             html += `<tr class="cv-gsd-item-row${group ? ' cv-canvasser-item-grouped' : ''}">
                 <td class="requested-items-table-num">${rowNum}</td>
                 <td class="requested-items-table-item">${name}${metaRow}</td>
                 <td class="requested-items-table-qty">${escapeHtml(String(qty))}</td>
                 <td class="requested-items-table-unit">${unit}</td>
-                <td class="cv-gsd-item-quotes-cell">
-                    <div class="cv-canvasser-item-quotes cv-gsd-item-quotes">${quotesHtml}</div>
-                </td>
             </tr>`;
         });
 
         body.innerHTML = html;
-        bindSuggestedSupplierSelectionHandlers(body);
-        emitCanvassPricingUpdate();
+    }
+
+    async function loadGsdOutcomeReadonlyView() {
+        let data = window.CWIRMS_GSD_OUTCOME || null;
+        if (!data || typeof data !== 'object') {
+            try {
+                const res = await fetch(
+                    `${api}?action=get_canvass_outcome_view&request_id=${encodeURIComponent(String(requestId))}`,
+                    { credentials: 'include' }
+                );
+                if (!res.ok) {
+                    const errText = await res.text();
+                    console.error('[GSD outcome HTTP error]', res.status, errText);
+                    showToast(`Could not load GSD canvass outcome (${res.status}).`, 'error');
+                    return;
+                }
+                const raw = await res.text();
+                try {
+                    data = JSON.parse(raw);
+                } catch (parseErr) {
+                    console.error('[GSD outcome JSON parse error]', parseErr, raw.slice(0, 500));
+                    showToast('Could not read GSD canvass outcome response.', 'error');
+                    return;
+                }
+            } catch (err) {
+                console.error('[GSD outcome fetch error]', err);
+                showToast('Network error loading GSD canvass outcome.', 'error');
+                return;
+            }
+        }
+        if (!data.success) {
+            showToast(data.message || 'Could not load GSD canvass outcome.', 'error');
+            return;
+        }
+
+        try {
+            const h = data.header || {};
+            const deptEl = document.getElementById('cvOfficeDisplay');
+            const facEl = document.getElementById('cvFacilityDisplay');
+            const dateEl = document.getElementById('cvRequestDate');
+            const purposeEl = document.getElementById('cvPurpose');
+            if (deptEl) deptEl.value = h.office_name || '—';
+            if (facEl) facEl.value = h.facility_label || '—';
+            if (dateEl) dateEl.value = h.request_date || '—';
+            if (purposeEl) purposeEl.value = h.purpose || '';
+
+            state.gsdLines = data.lines || [];
+            state.availableSuppliers = data.suppliers || state.availableSuppliers;
+            renderGsdLineItems(state.gsdLines);
+            gsdPopulatePreferredState(state.gsdLines);
+            renderGsdSectionB(state.gsdLines, { readonly: true });
+            renderGsdSectionC(state.gsdLines, { readonly: true });
+            syncGsdOutcomeSectionVisibility(state.gsdLines);
+            applyCanvassApproval(data.approval);
+            try {
+                emitCanvassPricingUpdate();
+            } catch (pricingErr) {
+                console.error('[GSD outcome pricing sync error]', pricingErr);
+            }
+        } catch (err) {
+            console.error('[GSD outcome render error]', err);
+            showToast('Loaded GSD outcome data but could not render all sections.', 'error');
+        }
     }
 
     async function loadGsdReviewView() {
         const tbody = document.getElementById('cvRequestedItemsTableBody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:1rem;color:#64748b;">Loading items…</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1rem;color:#64748b;">Loading items…</td></tr>';
         }
         try {
             const res = await fetch(
@@ -2970,9 +3032,37 @@
             if (purposeEl) purposeEl.value = h.purpose || '';
 
             state.gsdLines = data.lines || [];
+            state.availableSuppliers = data.suppliers || state.availableSuppliers;
+            gsdRestoreCanvasserName(state.gsdLines);
             renderGsdLineItems(state.gsdLines);
+            buildGsdCanvassQuoteModalSupplierList(state.availableSuppliers);
+            initGsdCanvassQuoteModalListeners();
+            bindGsdOfficerNameInputOnce();
+            gsdPopulatePreferredState(state.gsdLines);
+            renderGsdSectionB(state.gsdLines);
+            renderGsdSectionC(state.gsdLines);
+            // Auto-select cheapest if no awards yet
+            await gsdAutoSelectCheapest(state.gsdLines);
+            emitCanvassPricingUpdate();
+            // Wire Add Supplier button
+            const addSupBtn = document.getElementById('cvGsdAddSupBtn');
+            if (addSupBtn && !addSupBtn.dataset.gsdBound) {
+                addSupBtn.dataset.gsdBound = '1';
+                addSupBtn.addEventListener('click', () => {
+                    initGsdAddSupModalListeners();
+                    openGsdAddSupModal();
+                });
+            }
+            // Wire Save Draft button
+            const saveDraftBtn = document.getElementById('btn-save-draft');
+            if (saveDraftBtn && !saveDraftBtn.dataset.gsdBound) {
+                saveDraftBtn.dataset.gsdBound = '1';
+                saveDraftBtn.addEventListener('click', saveGSDDraft);
+            }
             applyCanvassApproval(data.approval);
-        } catch {
+            updateGsdVerifyButtonState();
+        } catch (err) {
+            console.error('[GSD review load error]', err);
             showToast('Network error loading GSD review.', 'error');
         }
     }
@@ -2986,11 +3076,1417 @@
             const data = await res.json();
             if (!data.success) return;
             state.gsdLines = data.lines || [];
+            gsdRestoreCanvasserName(state.gsdLines);
+            if (data.suppliers) {
+                state.availableSuppliers = data.suppliers;
+                buildGsdCanvassQuoteModalSupplierList(state.availableSuppliers);
+            }
             renderGsdLineItems(state.gsdLines);
+            gsdPopulatePreferredState(state.gsdLines);
+            renderGsdSectionB(state.gsdLines);
+            renderGsdSectionC(state.gsdLines);
+            emitCanvassPricingUpdate();
         } catch { /* silent */ }
     }
 
     window.__cwirmsRefreshGsdReviewView = refreshGsdReviewView;
+
+    function gsdAllLinesAwarded() {
+        const lines = state.gsdLines || [];
+        const linesWithQuotes = lines.filter(
+            (l) => (l.preferred_quotes || []).length > 0 || (l.canvassed_quotes || []).length > 0
+        );
+        return linesWithQuotes.length > 0 && linesWithQuotes.every((l) => l.award != null);
+    }
+
+    window.__cwirmsGsdAllAwardsReady = gsdAllLinesAwarded;
+
+    async function prepareGsdVerify() {
+        const flushed = await gsdFlushPendingCanvassQuotes();
+        if (!flushed.ok) {
+            return flushed;
+        }
+        if (!gsdAllLinesAwarded()) {
+            return {
+                ok: false,
+                message: 'Select a supplier quote for every line item before verifying.',
+            };
+        }
+        return { ok: true };
+    }
+
+    window.__cwirmsPrepareGsdVerify = prepareGsdVerify;
+
+    function updateGsdVerifyButtonState() {
+        const approveBtn = document.getElementById('comptrollerApproveBtn');
+        const hintEl = document.getElementById('gsdVerifyHint');
+        if (!approveBtn || !gsdReviewView) return;
+        const gsdDone = String((cachedCanvassApproval && cachedCanvassApproval.gsd_status) || '').trim().toLowerCase();
+        if (gsdDone === 'accept' || gsdDone === 'reject') return;
+        const allSet = gsdAllLinesAwarded();
+        approveBtn.disabled = !allSet;
+        if (hintEl) {
+            if (allSet) {
+                hintEl.textContent = 'All quotes selected. You can now verify this request.';
+                hintEl.className = 'gsd-verify-hint gsd-verify-hint-ready';
+            } else {
+                const lines = state.gsdLines || [];
+                const missing = lines.filter(
+                    (l) => ((l.preferred_quotes || []).length > 0 || (l.canvassed_quotes || []).length > 0) && !l.award
+                ).length;
+                hintEl.textContent = `Select a supplier quote for ${missing} remaining line item${missing !== 1 ? 's' : ''} before verifying.`;
+                hintEl.className = 'gsd-verify-hint gsd-verify-hint-pending';
+            }
+        }
+    }
+
+    window.__cwirmsUpdateGsdVerifyButtonState = updateGsdVerifyButtonState;
+
+    let _gsdOfficerNameInputBound = false;
+    function bindGsdOfficerNameInputOnce() {
+        if (_gsdOfficerNameInputBound) return;
+        const nameInput = document.getElementById('cvGsdOfficerNameInput');
+        if (!nameInput) return;
+        _gsdOfficerNameInputBound = true;
+        nameInput.addEventListener('input', () => {
+            const val = nameInput.value.trim();
+            updateGsdVerifyButtonState();
+            const detailEl = document.getElementById('cvApprGsdDetail');
+            if (detailEl) detailEl.textContent = val ? val : '';
+            const labelEl = document.getElementById('cvGsdCanvassedByLabel');
+            const nameEl = document.getElementById('cvGsdCanvassedByName');
+            if (nameEl) nameEl.textContent = val;
+            if (labelEl) labelEl.hidden = !val;
+        });
+    }
+
+    // ── GSD Sections A / B / C rendering ─────────────────────────────────────
+
+    function gsdRestoreCanvasserName(lines) {
+        const input = document.getElementById('cvGsdCanvasserInput');
+        if (!input || input.value.trim()) return;
+        for (const line of (lines || [])) {
+            for (const q of (line.canvassed_quotes || [])) {
+                if (q.canvasser_name) { input.value = q.canvasser_name; return; }
+            }
+        }
+    }
+
+    function gsdGetInitials(name) {
+        return (String(name || '?')).split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2) || '??';
+    }
+
+    const GSD_AV_COLORS = ['#3b82f6','#8b5cf6','#f59e0b','#ef4444','#10b981','#0ea5e9','#f97316','#ec4899'];
+    function gsdAvatarColor(name) {
+        let h = 0;
+        for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0x7fffffff;
+        return GSD_AV_COLORS[h % GSD_AV_COLORS.length];
+    }
+
+    function gsdFmtPeso(v) {
+        const n = parseFloat(v);
+        if (Number.isNaN(n)) return '₱0.00';
+        return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function gsdGroupBySupplier(lines, quoteType) {
+        const map = new Map();
+        (lines || []).forEach((line) => {
+            const quotes = quoteType === 'preferred' ? (line.preferred_quotes || []) : (line.canvassed_quotes || []);
+            quotes.forEach((q) => {
+                const sid = Number(q.supplier_id);
+                if (!map.has(sid)) {
+                    map.set(sid, {
+                        supplier_id: sid,
+                        supplier_name: String(q.supplier_name || ''),
+                        supplier_image: String(q.supplier_image || ''),
+                        benefits: q.benefits || '',
+                        discount_percent: q.discount_percent || null,
+                        items: [],
+                    });
+                }
+                const unit = String(line.unit_type || 'unit');
+                const unitShort = unit === 'piece' ? 'pcs' : (unit === 'ream' ? 'reams' : unit);
+                map.get(sid).items.push({
+                    requisition_line_id: Number(line.requisition_line_id),
+                    item_name: String(line.item_name || ''),
+                    quantity: Number(line.quantity || 1),
+                    unit_type: unit,
+                    unit_short: unitShort,
+                    quoted_unit_price: q.quoted_unit_price,
+                    benefits: q.benefits || '',
+                    discount_percent: q.discount_percent || null,
+                });
+            });
+        });
+        return map;
+    }
+
+    function gsdPopulatePreferredState(gsdLines) {
+        // Build state.items and state.requestedLines from gsdLines so renderPreferredTable works
+        state.requestedLines = (gsdLines || []).map((line) => ({
+            requisition_line_id: Number(line.requisition_line_id),
+            quantity: Number(line.quantity || 1),
+            unit_type: String(line.unit_type || 'unit'),
+        }));
+        state.items = (gsdLines || []).map((line) => ({
+            name: String(line.item_name || ''),
+            brand: String(line.brand || ''),
+            model: String(line.model || ''),
+            specification: String(line.specification || ''),
+            canvass_detail_id: Number(line.canvass_detail_id || 0),
+            requisition_line_id: Number(line.requisition_line_id),
+            suggested_supplier_ids: [],
+            selected_supplier_id: 0,
+            selected_supplier_source: null,
+        }));
+        // Build preferredSuppliers from per-line preferred_quotes, keyed by item index
+        const catalogById = new Map(
+            (state.availableSuppliers || []).map((s) => [Number(s.supplier_id), s])
+        );
+        const prefSupMap = new Map();
+        (gsdLines || []).forEach((line, lineIdx) => {
+            (line.preferred_quotes || []).forEach((q) => {
+                const sid = String(q.supplier_id);
+                const cat = catalogById.get(Number(q.supplier_id)) || {};
+                if (!prefSupMap.has(sid)) {
+                    prefSupMap.set(sid, {
+                        supplier_id: q.supplier_id,
+                        supplier_name: q.supplier_name || cat.supplier_name || '',
+                        supplier_image: q.supplier_image || cat.supplier_image || '',
+                        contact_person: cat.contact_person || '',
+                        phone_number: cat.phone_number || '',
+                        email: cat.email || '',
+                        shop_url: cat.shop_url || '',
+                        address: cat.address || '',
+                        city: cat.city || '',
+                        country: cat.country || '',
+                        postal_code: cat.postal_code || '',
+                        tin: cat.tin || '',
+                        quoted_prices: {}, quote_photos: {},
+                        quoted_item_indices: [], is_preferred: 0,
+                    });
+                }
+                const sup = prefSupMap.get(sid);
+                sup.quoted_prices[lineIdx] = String(q.quoted_unit_price ?? '');
+                if (!sup.quoted_item_indices.includes(lineIdx)) sup.quoted_item_indices.push(lineIdx);
+            });
+        });
+        state.preferredSuppliers = [...prefSupMap.values()];
+        state.preferredPriceDrafts = {};
+        state.preferredSupplierItems = {};
+        state.preferredQuotePhotos = {};
+        hydratePreferredSupplierItemsFromApi();
+        hydratePreferredPriceDraftsFromApi();
+        renderPreferredTable();
+    }
+
+    function gsdHasSectionBData(lines) {
+        return (lines || []).some((line) =>
+            (line.canvassed_quotes || []).some((q) => {
+                const price = q.quoted_unit_price;
+                return price != null && price !== '' && !Number.isNaN(Number(price)) && Number(price) >= 0;
+            })
+        );
+    }
+
+    function syncGsdOutcomeSectionVisibility(lines) {
+        if (!gsdReviewView && !gsdOutcomeReadonlyView) {
+            return;
+        }
+        const hasB = gsdHasSectionBData(lines);
+        const sectionB = document.getElementById('cvGsdSectionB');
+        const sectionC = document.getElementById('cvGsdSectionC');
+        const abstractSection = document.getElementById('cvGsdAbstractTotalSection');
+        [sectionB, sectionC, abstractSection].forEach((el) => {
+            if (el) {
+                el.hidden = !hasB;
+            }
+        });
+        const pricingSection = document.getElementById('cvPricingOverviewSection');
+        if (pricingSection) {
+            pricingSection.hidden = !hasB;
+        }
+    }
+
+    function renderGsdSectionA(lines) {
+        const container = document.getElementById('cvGsdPrefCards');
+        if (!container) return;
+        const map = gsdGroupBySupplier(lines, 'preferred');
+        if (map.size === 0) {
+            container.innerHTML = '<p class="gsd-cv-empty-note">No preferred quotes submitted by the requester yet.</p>';
+            return;
+        }
+        let html = '';
+        map.forEach((sup) => {
+            const initials = gsdGetInitials(sup.supplier_name);
+            const color = gsdAvatarColor(sup.supplier_name);
+            let total = 0;
+            let itemsHtml = '';
+            sup.items.forEach((item) => {
+                const price = parseFloat(item.quoted_unit_price) || 0;
+                total += price * item.quantity;
+                itemsHtml += `<div class="gsd-cv-item-row">
+                    <span class="gsd-cv-item-name">${escapeHtml(item.item_name)}</span>
+                    <span class="gsd-cv-item-qty">\xd7${item.quantity} ${escapeHtml(item.unit_short)}</span>
+                    <span class="gsd-cv-item-price">${gsdFmtPeso(price)}</span>
+                </div>`;
+            });
+            html += `<div class="gsd-cv-pref-card">
+                <div class="gsd-cv-pref-card-hd">
+                    <div class="gsd-cv-sup-avatar" style="background:${color}">${escapeHtml(initials)}</div>
+                    <span class="gsd-cv-pref-card-name">${escapeHtml(sup.supplier_name)}</span>
+                    <span class="gsd-cv-pref-badge">preferred</span>
+                </div>
+                <div class="gsd-cv-pref-card-bd">
+                    ${itemsHtml}
+                    <div class="gsd-cv-total-row">
+                        <span class="gsd-cv-total-label">Total</span>
+                        <span>${gsdFmtPeso(total)}</span>
+                    </div>
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function renderGsdSectionB(lines, options) {
+        const readonly = Boolean(options && options.readonly);
+        const container = document.getElementById('cvGsdCanvCards');
+        if (!container) return;
+        const map = gsdGroupBySupplier(lines, 'canvassed');
+        if (map.size === 0) {
+            container.innerHTML = readonly
+                ? '<p class="gsd-cv-empty-note">No G.S.D. canvassed quotes were recorded.</p>'
+                : '<p class="gsd-cv-empty-note">No canvassed quotes yet. Click <strong>+ Add Supplier</strong> to add one.</p>';
+            syncGsdOutcomeSectionVisibility(lines);
+            return;
+        }
+        if (readonly) {
+            let html = '';
+            map.forEach((sup) => {
+                const supplierId = sup.supplier_id;
+                const initials = gsdGetInitials(sup.supplier_name);
+                const color = gsdAvatarColor(sup.supplier_name);
+                const imgSrc = sup.supplier_image ? escapeHtml(resolvePublicUploadUrl(sup.supplier_image)) : '';
+                const avatarHtml = `<div class="gsd-cv-sup-avatar" style="background:${color}">${imgSrc ? `<img src="${imgSrc}" class="gsd-sup-av-img" onerror="this.style.display='none'" alt="">` : ''}${escapeHtml(initials)}</div>`;
+                const fullSup = (state.availableSuppliers || []).find((s) => Number(s.supplier_id) === supplierId) || {};
+                const benefits = sup.items?.[0]?.benefits || '';
+                const discVal = sup.discount_percent ? String(sup.discount_percent) : '';
+                let itemsHtml = '';
+                (lines || []).forEach((line) => {
+                    const q = (line.canvassed_quotes || []).find((quote) => Number(quote.supplier_id) === supplierId);
+                    if (!q || q.quoted_unit_price == null) {
+                        return;
+                    }
+                    const price = parseFloat(q.quoted_unit_price) || 0;
+                    itemsHtml += `<div class="gsd-cv-canv-item-row gsd-cv-canv-item-row--readonly">
+                        <div class="gsd-cv-canv-item-info">
+                            <span class="gsd-cv-canv-item-name">${escapeHtml(line.item_name || '')}</span>
+                            <span class="gsd-cv-canv-item-qty">Qty: ${Number(line.quantity || 1)} ${escapeHtml(line.unit_type || 'unit')}</span>
+                        </div>
+                        <span class="gsd-cv-canv-item-price-readonly">${gsdFmtPeso(price)}</span>
+                    </div>`;
+                });
+                html += `<div class="gsd-cv-canv-card gsd-cv-canv-card--readonly">
+                    <div class="gsd-cv-canv-card-hd">
+                        ${avatarHtml}
+                        <div class="gsd-cv-sup-info">
+                            <span class="gsd-cv-pref-card-name">${escapeHtml(sup.supplier_name)}</span>
+                            ${fullSup.contact_person ? `<div class="gsd-cv-sup-meta"><i class="fas fa-user" aria-hidden="true"></i> ${escapeHtml(fullSup.contact_person)}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="gsd-cv-canv-card-bd">
+                        ${itemsHtml}
+                        ${benefits ? `<div class="gsd-cv-benefits-readonly"><span class="gsd-cv-benefits-lbl">Benefits</span> ${escapeHtml(benefits)}</div>` : ''}
+                        ${discVal ? `<div class="gsd-cv-disc-readonly"><span class="gsd-cv-benefits-lbl">Discount</span> ${escapeHtml(discVal)}%</div>` : ''}
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+            syncGsdOutcomeSectionVisibility(lines);
+            return;
+        }
+        container.innerHTML = '';
+        map.forEach((sup) => {
+            container.appendChild(gsdBuildCanvCard(sup, lines));
+        });
+        syncGsdOutcomeSectionVisibility(lines);
+    }
+
+    // Build a single item price-row element for a supplier card
+    function gsdBuildItemRowEl(line, supplierId) {
+        const q = (line.canvassed_quotes || []).find((q) => Number(q.supplier_id) === supplierId);
+        const price = q && q.quoted_unit_price != null ? parseFloat(q.quoted_unit_price) : '';
+        const displayPrice = price !== '' && !Number.isNaN(price) ? price.toFixed(2) : '';
+        const row = document.createElement('div');
+        row.className = 'gsd-cv-canv-item-row';
+        row.dataset.lineId = String(line.requisition_line_id);
+        row.innerHTML = `
+            <button type="button" class="gsd-cv-item-rm-btn" data-line-id="${line.requisition_line_id}" title="Remove item">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+            <div class="gsd-cv-canv-item-info">
+                <span class="gsd-cv-canv-item-name">${escapeHtml(line.item_name || '')}</span>
+                <span class="gsd-cv-canv-item-qty">Qty: ${Number(line.quantity || 1)} ${escapeHtml(line.unit_type || 'unit')}</span>
+            </div>
+            <div class="gsd-cv-price-wrap">
+                <span class="gsd-cv-price-lbl">PHP</span>
+                <input type="number" class="gsd-cv-price-inp"
+                    data-line-id="${line.requisition_line_id}"
+                    data-supplier-id="${supplierId}"
+                    value="${escapeHtml(displayPrice)}"
+                    min="0" step="0.01" placeholder="0">
+            </div>`;
+        return row;
+    }
+
+    // Refresh "Add item" select to show only lines not yet added to the card
+    function gsdRefreshAddItemSelect(card, lines, supplierId) {
+        const sel = card.querySelector('.gsd-cv-add-item-sel');
+        if (!sel) return;
+        const shownIds = new Set(
+            [...card.querySelectorAll('.gsd-cv-canv-item-row')].map((r) => parseInt(r.dataset.lineId, 10))
+        );
+        const remaining = (lines || []).filter((l) => !shownIds.has(Number(l.requisition_line_id)));
+        const wrap = sel.closest('.gsd-cv-add-item-row');
+        if (remaining.length === 0) {
+            if (wrap) wrap.style.display = 'none';
+        } else {
+            if (wrap) wrap.style.display = '';
+            sel.innerHTML = `<option value="">+ Add item…</option>` +
+                remaining.map((l) => `<option value="${l.requisition_line_id}">${escapeHtml(l.item_name || '')} — Qty ${Number(l.quantity || 1)} ${escapeHtml(l.unit_type || '')}</option>`).join('');
+        }
+    }
+
+    // Wire price-save and per-row remove for a single item row
+    function gsdWireItemRow(rowEl, card, lines, supplierId) {
+        const priceInp = rowEl.querySelector('.gsd-cv-price-inp');
+        if (priceInp) {
+            let _t = null;
+            priceInp.addEventListener('change', () => {
+                clearTimeout(_t);
+                _t = setTimeout(() => {
+                    const lineId = parseInt(priceInp.dataset.lineId, 10);
+                    const price = priceInp.value.trim();
+                    if (price === '' || isNaN(parseFloat(price)) || parseFloat(price) < 0) return;
+                    const benInput = card.querySelector('.gsd-cv-benefits-inp');
+                    const ben = benInput ? benInput.value.trim() : '';
+                    const discRow = card.querySelector('.gsd-cv-disc-row');
+                    const discInpEl = card.querySelector('.gsd-cv-disc-inp');
+                    const disc = (discRow && discRow.style.display !== 'none' && discInpEl) ? discInpEl.value.trim() : '';
+                    const parsedDiscount = disc !== '' ? parseFloat(disc) : null;
+                    // Local state update only — no API call until Save Draft is clicked
+                    const line = (state.gsdLines || []).find((l) => Number(l.requisition_line_id) === lineId);
+                    if (line) {
+                        const qList = line.canvassed_quotes || (line.canvassed_quotes = []);
+                        const existing = qList.find((q) => Number(q.supplier_id) === supplierId);
+                        if (existing) {
+                            existing.quoted_unit_price = parseFloat(price);
+                            existing.discount_percent = parsedDiscount;
+                        } else {
+                            const allSup = (state.availableSuppliers || []).find((s) => Number(s.supplier_id) === supplierId);
+                            qList.push({
+                                supplier_id: supplierId,
+                                supplier_name: allSup ? allSup.supplier_name : '',
+                                quoted_unit_price: parseFloat(price),
+                                benefits: ben,
+                                quote_type: 'canvassed',
+                                discount_percent: parsedDiscount,
+                            });
+                        }
+                    }
+                    renderGsdSectionC(state.gsdLines);
+                    emitCanvassPricingUpdate();
+                    markUnsaved();
+                }, 300);
+            });
+        }
+        const rmBtn = rowEl.querySelector('.gsd-cv-item-rm-btn');
+        if (rmBtn) {
+            rmBtn.addEventListener('click', async () => {
+                const lineId = parseInt(rmBtn.dataset.lineId, 10);
+                const body = new URLSearchParams();
+                body.set('action', 'remove_canvass_line');
+                body.set('request_id', String(requestId));
+                body.set('supplier_id', String(supplierId));
+                body.set('requisition_line_id', String(lineId));
+                try {
+                    const res = await fetch(GSD_REQUESTS_API, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: body.toString(),
+                        credentials: 'include',
+                    });
+                    const data = await res.json();
+                    if (!data.success) { showToast(data.message || 'Could not remove item.', 'error'); return; }
+                    const line = (state.gsdLines || []).find((l) => Number(l.requisition_line_id) === lineId);
+                    if (line) {
+                        line.canvassed_quotes = (line.canvassed_quotes || []).filter((q) => Number(q.supplier_id) !== supplierId);
+                        if (line.award && Number(line.award.supplier_id) === supplierId) line.award = null;
+                    }
+                    rowEl.remove();
+                    gsdRefreshAddItemSelect(card, lines, supplierId);
+                    renderGsdSectionC(state.gsdLines);
+                } catch { showToast('Network error.', 'error'); }
+            });
+        }
+    }
+
+    function gsdBuildCanvCard(sup, lines) {
+        const supplierId = sup.supplier_id;
+        const initials = gsdGetInitials(sup.supplier_name);
+        const color = gsdAvatarColor(sup.supplier_name);
+        const imgSrc = sup.supplier_image ? escapeHtml(resolvePublicUploadUrl(sup.supplier_image)) : '';
+        const avatarHtml = `<div class="gsd-cv-sup-avatar" style="background:${color}">${imgSrc ? `<img src="${imgSrc}" class="gsd-sup-av-img" onerror="this.style.display='none'" alt="">` : ''}${escapeHtml(initials)}</div>`;
+        const card = document.createElement('div');
+        card.className = 'gsd-cv-canv-card';
+        card.dataset.supplierId = String(supplierId);
+
+        const fullSup = (state.availableSuppliers || []).find((s) => Number(s.supplier_id) === supplierId) || {};
+        const contactPerson = fullSup.contact_person || '';
+        const tin = fullSup.tin || '';
+        const address = fullSup.address || '';
+
+        const benefitsVal = escapeHtml(sup.items?.[0]?.benefits || '');
+        const discVal = sup.discount_percent ? String(sup.discount_percent) : '';
+
+        card.innerHTML = `
+            <div class="gsd-cv-canv-card-hd">
+                ${avatarHtml}
+                <div class="gsd-cv-sup-info">
+                    <span class="gsd-cv-pref-card-name">${escapeHtml(sup.supplier_name)}</span>
+                    ${contactPerson ? `<div class="gsd-cv-sup-meta"><i class="fas fa-user" aria-hidden="true"></i> ${escapeHtml(contactPerson)}</div>` : ''}
+                    ${tin ? `<div class="gsd-cv-sup-meta"><span class="gsd-cv-sup-meta-lbl">TIN</span> ${escapeHtml(tin)}</div>` : ''}
+                    ${address ? `<div class="gsd-cv-sup-meta"><i class="fas fa-location-dot" aria-hidden="true"></i> ${escapeHtml(address)}</div>` : ''}
+                </div>
+                <button type="button" class="gsd-cv-remove-btn" data-supplier-id="${supplierId}">
+                    <i class="fas fa-trash-alt" aria-hidden="true"></i> Remove
+                </button>
+            </div>
+            <div class="gsd-cv-canv-card-bd">
+                <div class="gsd-cv-item-rows"></div>
+                <div class="gsd-cv-add-item-row">
+                    <select class="gsd-cv-add-item-sel"><option value="">+ Add item…</option></select>
+                </div>
+                <div class="gsd-cv-benefits-row">
+                    <span class="gsd-cv-benefits-lbl">Benefits</span>
+                    <input type="text" class="gsd-cv-benefits-inp" data-supplier-id="${supplierId}"
+                        value="${benefitsVal}" placeholder="e.g. Includes VAT, free delivery…">
+                </div>
+                <div class="gsd-cv-disc-row" style="${discVal ? '' : 'display:none'}">
+                    <span class="gsd-cv-benefits-lbl">Discount %</span>
+                    <input type="number" class="gsd-cv-disc-inp" min="0" max="100" step="0.01"
+                        placeholder="0" value="${escapeHtml(discVal)}">
+                </div>
+                <button type="button" class="gsd-cv-add-disc-btn">${discVal ? '− Remove discount' : '+ Add discount'}</button>
+            </div>`;
+
+        // Populate rows only for lines that already have a quote for this supplier
+        const rowsContainer = card.querySelector('.gsd-cv-item-rows');
+        const activeLines = (lines || []).filter((line) =>
+            (line.canvassed_quotes || []).some((q) => Number(q.supplier_id) === supplierId)
+        );
+        activeLines.forEach((line) => {
+            const rowEl = gsdBuildItemRowEl(line, supplierId);
+            rowsContainer.appendChild(rowEl);
+            gsdWireItemRow(rowEl, card, lines, supplierId);
+        });
+
+        // Populate the "add item" dropdown with remaining lines
+        gsdRefreshAddItemSelect(card, lines, supplierId);
+
+        // Wire "add item" select
+        const addItemSel = card.querySelector('.gsd-cv-add-item-sel');
+        if (addItemSel) {
+            addItemSel.addEventListener('change', () => {
+                const lineId = parseInt(addItemSel.value, 10);
+                if (!lineId) return;
+                const line = (lines || []).find((l) => Number(l.requisition_line_id) === lineId);
+                if (!line) return;
+                const rowEl = gsdBuildItemRowEl(line, supplierId);
+                rowsContainer.appendChild(rowEl);
+                gsdWireItemRow(rowEl, card, lines, supplierId);
+                gsdRefreshAddItemSelect(card, lines, supplierId);
+                addItemSel.value = '';
+            });
+        }
+
+        // Wire remove-supplier button
+        card.querySelector('.gsd-cv-remove-btn').addEventListener('click', async () => {
+            await gsdRemoveSupplier(supplierId, card);
+        });
+
+        // Wire discount toggle
+        const discBtn = card.querySelector('.gsd-cv-add-disc-btn');
+        const discRow = card.querySelector('.gsd-cv-disc-row');
+        const discInp = card.querySelector('.gsd-cv-disc-inp');
+        if (discBtn && discRow && discInp) {
+            discBtn.addEventListener('click', () => {
+                const isOpen = discRow.style.display !== 'none';
+                if (isOpen) {
+                    discRow.style.display = 'none';
+                    discInp.value = '';
+                    discBtn.textContent = '+ Add discount';
+                    // Clear discount in local state for all lines on this card
+                    card.querySelectorAll('.gsd-cv-price-inp').forEach((inp) => {
+                        const lineId = parseInt(inp.dataset.lineId, 10);
+                        const line = (state.gsdLines || []).find((l) => Number(l.requisition_line_id) === lineId);
+                        if (!line) return;
+                        const existing = (line.canvassed_quotes || []).find((q) => Number(q.supplier_id) === supplierId);
+                        if (existing) existing.discount_percent = null;
+                    });
+                    renderGsdSectionC(state.gsdLines);
+                    emitCanvassPricingUpdate();
+                    markUnsaved();
+                } else {
+                    discRow.style.display = 'flex';
+                    discBtn.textContent = '− Remove discount';
+                    discInp.focus();
+                }
+            });
+            let _discTimer = null;
+            discInp.addEventListener('change', () => {
+                clearTimeout(_discTimer);
+                _discTimer = setTimeout(() => {
+                    const discountPercent = discInp.value.trim();
+                    const parsedDiscount = discountPercent !== '' ? parseFloat(discountPercent) : null;
+                    // Update discount in local state for all lines that already have a price for this supplier
+                    card.querySelectorAll('.gsd-cv-price-inp').forEach((inp) => {
+                        const lineId = parseInt(inp.dataset.lineId, 10);
+                        const price = inp.value.trim();
+                        if (price === '' || isNaN(parseFloat(price)) || parseFloat(price) < 0) return;
+                        const line = (state.gsdLines || []).find((l) => Number(l.requisition_line_id) === lineId);
+                        if (!line) return;
+                        const existing = (line.canvassed_quotes || []).find((q) => Number(q.supplier_id) === supplierId);
+                        if (existing) existing.discount_percent = parsedDiscount;
+                    });
+                    renderGsdSectionC(state.gsdLines);
+                    emitCanvassPricingUpdate();
+                    markUnsaved();
+                }, 400);
+            });
+        }
+
+        // Benefits change — mark unsaved only (benefits are read from DOM on save)
+        const benInputEl = card.querySelector('.gsd-cv-benefits-inp');
+        if (benInputEl) {
+            benInputEl.addEventListener('change', () => markUnsaved());
+        }
+
+        return card;
+    }
+
+    async function gsdPostCanvassQuote(lineId, supplierId, price, benefits, canvasserName, discountPercent) {
+        const body = new URLSearchParams();
+        body.set('action', 'add_canvass_quote');
+        body.set('request_id', String(requestId));
+        body.set('requisition_line_id', String(lineId));
+        body.set('supplier_id', String(supplierId));
+        body.set('unit_price', price);
+        body.set('benefits', benefits || '');
+        body.set('canvasser_name', canvasserName || '');
+        body.set('discount_percent', discountPercent != null ? String(discountPercent) : '');
+        try {
+            const res = await fetch(GSD_REQUESTS_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+                credentials: 'include',
+            });
+            const data = await res.json();
+            if (!data.success) {
+                return { ok: false, message: data.message || 'Could not save price.' };
+            }
+            const line = (state.gsdLines || []).find((l) => Number(l.requisition_line_id) === lineId);
+            if (line) {
+                const qList = line.canvassed_quotes || (line.canvassed_quotes = []);
+                const existing = qList.find((q) => Number(q.supplier_id) === supplierId);
+                if (existing) {
+                    existing.quoted_unit_price = parseFloat(price);
+                    existing.discount_percent = discountPercent != null && discountPercent !== '' ? parseFloat(discountPercent) : null;
+                } else {
+                    const allSup = (state.availableSuppliers || []).find((s) => Number(s.supplier_id) === supplierId);
+                    qList.push({
+                        supplier_id: supplierId,
+                        supplier_name: allSup ? allSup.supplier_name : '',
+                        quoted_unit_price: parseFloat(price),
+                        benefits,
+                        quote_type: 'canvassed',
+                        discount_percent: discountPercent != null && discountPercent !== '' ? parseFloat(discountPercent) : null,
+                    });
+                }
+            }
+            return { ok: true };
+        } catch {
+            return { ok: false, message: 'Network error saving price.' };
+        }
+    }
+
+    async function gsdSaveCanvPrice(lineId, supplierId, price, benefits, canvasserName, discountPercent) {
+        const result = await gsdPostCanvassQuote(lineId, supplierId, price, benefits, canvasserName, discountPercent);
+        if (!result.ok) {
+            showToast(result.message || 'Could not save price.', 'error');
+            return;
+        }
+        renderGsdSectionC(state.gsdLines);
+        emitCanvassPricingUpdate();
+    }
+
+    async function gsdFlushPendingCanvassQuotes() {
+        const canvasserInput = document.getElementById('cvGsdCanvasserInput');
+        const canvasserName = canvasserInput ? canvasserInput.value.trim() : '';
+        const saves = [];
+        document.querySelectorAll('#cvGsdCanvCards .gsd-cv-canv-card').forEach((card) => {
+            const supplierId = parseInt(card.dataset.supplierId, 10);
+            const benInput = card.querySelector('.gsd-cv-benefits-inp');
+            const ben = benInput ? benInput.value.trim() : '';
+            const discRow = card.querySelector('.gsd-cv-disc-row');
+            const discInp = card.querySelector('.gsd-cv-disc-inp');
+            const disc = (discRow && discRow.style.display !== 'none' && discInp) ? discInp.value.trim() : '';
+            card.querySelectorAll('.gsd-cv-price-inp').forEach((inp) => {
+                const price = inp.value.trim();
+                if (price !== '' && !isNaN(parseFloat(price)) && parseFloat(price) >= 0) {
+                    saves.push(gsdPostCanvassQuote(
+                        parseInt(inp.dataset.lineId, 10),
+                        supplierId,
+                        price,
+                        ben,
+                        canvasserName,
+                        disc
+                    ));
+                }
+            });
+        });
+        if (saves.length === 0) {
+            return { ok: true };
+        }
+        const results = await Promise.all(saves);
+        const failed = results.find((r) => !r.ok);
+        if (failed) {
+            return { ok: false, message: failed.message || 'Save your canvass quotes before selecting a supplier.' };
+        }
+        markSaved();
+        return { ok: true };
+    }
+
+    function markUnsaved() {
+        const btn = document.getElementById('btn-save-draft');
+        const banner = document.getElementById('gsd-unsaved-banner');
+        if (btn && !btn.classList.contains('gsd-unsaved')) {
+            btn.classList.add('gsd-unsaved');
+            btn.innerHTML = '<span class="gsd-unsaved-dot" aria-hidden="true"></span> ⚠ Unsaved changes — Save draft';
+        }
+        if (banner) banner.style.display = '';
+    }
+
+    function markSaved() {
+        const btn = document.getElementById('btn-save-draft');
+        const banner = document.getElementById('gsd-unsaved-banner');
+        if (btn) {
+            btn.classList.remove('gsd-unsaved');
+            btn.innerHTML = '<i class="fas fa-floppy-disk" aria-hidden="true"></i> Save draft';
+        }
+        if (banner) banner.style.display = 'none';
+    }
+
+    async function saveGSDDraft() {
+        const btn = document.getElementById('btn-save-draft');
+        const hint = document.getElementById('gsd-save-hint');
+        const canvasserInput = document.getElementById('cvGsdCanvasserInput');
+        const canvasserName = canvasserInput ? canvasserInput.value.trim() : '';
+
+        if (!canvasserName) {
+            if (hint) { hint.textContent = 'Please enter the canvasser name before saving.'; hint.className = 'gsd-save-hint error'; }
+            if (canvasserInput) canvasserInput.focus();
+            return;
+        }
+
+        const saves = [];
+        document.querySelectorAll('#cvGsdCanvCards .gsd-cv-canv-card').forEach((card) => {
+            const supplierId = parseInt(card.dataset.supplierId, 10);
+            const benInput = card.querySelector('.gsd-cv-benefits-inp');
+            const ben = benInput ? benInput.value.trim() : '';
+            const discRow = card.querySelector('.gsd-cv-disc-row');
+            const discInp = card.querySelector('.gsd-cv-disc-inp');
+            const disc = (discRow && discRow.style.display !== 'none' && discInp) ? discInp.value.trim() : '';
+            card.querySelectorAll('.gsd-cv-price-inp').forEach((inp) => {
+                const price = inp.value.trim();
+                if (price !== '' && !isNaN(parseFloat(price)) && parseFloat(price) >= 0) {
+                    saves.push(gsdPostCanvassQuote(parseInt(inp.dataset.lineId, 10), supplierId, price, ben, canvasserName, disc));
+                }
+            });
+        });
+
+        if (saves.length === 0) {
+            if (hint) { hint.textContent = 'Add at least one price before saving.'; hint.className = 'gsd-save-hint error'; }
+            return;
+        }
+
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Saving…'; }
+        if (hint) { hint.textContent = 'Saving…'; hint.className = 'gsd-save-hint'; }
+
+        const results = await Promise.all(saves);
+        const failed = results.filter((r) => !r.ok).length;
+
+        if (btn) btn.disabled = false;
+        if (failed === 0) {
+            if (btn) { btn.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i> Saved'; btn.classList.add('saved'); }
+            if (hint) { hint.textContent = 'Draft saved successfully. You can continue editing.'; hint.className = 'gsd-save-hint success'; }
+            setTimeout(() => {
+                markSaved();
+                if (btn) btn.classList.remove('saved');
+                if (hint) { hint.textContent = 'Saves your supplier quotes and canvasser name without approving.'; hint.className = 'gsd-save-hint'; }
+            }, 3000);
+        } else {
+            if (btn) btn.innerHTML = '<i class="fas fa-floppy-disk" aria-hidden="true"></i> Save draft';
+            if (hint) { hint.textContent = `${failed} item(s) could not be saved. Please try again.`; hint.className = 'gsd-save-hint error'; }
+        }
+    }
+
+    async function gsdSaveSupplierDiscount(card, discountPercent) {
+        const supplierId = parseInt(card.dataset.supplierId, 10);
+        const canvasserInput = document.getElementById('cvGsdCanvasserInput');
+        const canvasserName = canvasserInput ? canvasserInput.value.trim() : '';
+        const benInput = card.querySelector('.gsd-cv-benefits-inp');
+        const ben = benInput ? benInput.value.trim() : '';
+        const priceInputs = card.querySelectorAll('.gsd-cv-price-inp');
+        const saves = [];
+        priceInputs.forEach((inp) => {
+            const price = inp.value.trim();
+            if (price !== '' && !isNaN(parseFloat(price)) && parseFloat(price) >= 0) {
+                saves.push(gsdPostCanvassQuote(parseInt(inp.dataset.lineId, 10), supplierId, price, ben, canvasserName, discountPercent));
+            }
+        });
+        if (saves.length > 0) {
+            const results = await Promise.all(saves);
+            if (results.every((r) => r.ok)) {
+                renderGsdSectionC(state.gsdLines);
+            }
+        }
+    }
+
+    async function gsdRemoveSupplier(supplierId, cardEl) {
+        const body = new URLSearchParams();
+        body.set('action', 'remove_canvass_supplier');
+        body.set('request_id', String(requestId));
+        body.set('supplier_id', String(supplierId));
+        try {
+            const res = await fetch(GSD_REQUESTS_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+                credentials: 'include',
+            });
+            const data = await res.json();
+            if (!data.success) { showToast(data.message || 'Could not remove supplier.', 'error'); return; }
+            // Update state
+            (state.gsdLines || []).forEach((line) => {
+                line.canvassed_quotes = (line.canvassed_quotes || []).filter((q) => Number(q.supplier_id) !== supplierId);
+                if (line.award && Number(line.award.supplier_id) === supplierId) line.award = null;
+            });
+            cardEl.remove();
+            const container = document.getElementById('cvGsdCanvCards');
+            if (container && !container.querySelector('.gsd-cv-canv-card')) {
+                container.innerHTML = '<p class="gsd-cv-empty-note">No canvassed quotes yet. Click <strong>+ Add Supplier</strong> to add one.</p>';
+            }
+            renderGsdSectionC(state.gsdLines);
+            emitCanvassPricingUpdate();
+            updateGsdVerifyButtonState();
+            showToast('Supplier removed.');
+        } catch {
+            showToast('Network error removing supplier.', 'error');
+        }
+    }
+
+    function renderGsdSectionC(lines, options) {
+        const readonly = Boolean(options && options.readonly);
+        const container = document.getElementById('cvGsdSelGrid');
+        if (!container) return;
+
+        // Aggregate all suppliers (preferred + canvassed)
+        const suppMap = new Map();
+        (lines || []).forEach((line) => {
+            const qty = Number(line.quantity || 1);
+            const addToMap = (q, source) => {
+                const sid = Number(q.supplier_id);
+                if (!suppMap.has(sid)) {
+                    suppMap.set(sid, {
+                        supplier_id: sid,
+                        name: String(q.supplier_name || ''),
+                        supplier_image: String(q.supplier_image || ''),
+                        source,
+                        items: [],
+                        raw_total: 0,
+                        discount_pct: null,
+                    });
+                }
+                const price = parseFloat(q.quoted_unit_price) || 0;
+                suppMap.get(sid).items.push({ name: String(line.item_name || ''), qty, price });
+                suppMap.get(sid).raw_total += price * qty;
+                if (source === 'canvassed' && q.discount_percent && !suppMap.get(sid).discount_pct) {
+                    suppMap.get(sid).discount_pct = parseFloat(q.discount_percent);
+                }
+            };
+            (line.preferred_quotes || []).forEach((q) => addToMap(q, 'preferred'));
+            (line.canvassed_quotes || []).forEach((q) => addToMap(q, 'canvassed'));
+        });
+
+        if (suppMap.size === 0) {
+            container.innerHTML = '<p class="gsd-cv-empty-note">Add supplier quotes in Sections A and B above to see selection cards here.</p>';
+            syncGsdOutcomeSectionVisibility(lines);
+            return;
+        }
+
+        // Compute effective totals
+        suppMap.forEach((sup) => {
+            const disc = sup.discount_pct && sup.discount_pct > 0 ? sup.discount_pct / 100 : 0;
+            sup.effective_total = Math.round(sup.raw_total * (1 - disc) * 100) / 100;
+        });
+
+        // Sort cheapest first
+        const sorted = [...suppMap.values()].sort((a, b) => a.effective_total - b.effective_total);
+
+        // Determine current selection (consensus across all awarded lines)
+        const awardedIds = new Set();
+        (lines || []).forEach((line) => { if (line.award) awardedIds.add(Number(line.award.supplier_id)); });
+        let selectedSupplierId = awardedIds.size === 1 ? [...awardedIds][0] : null;
+
+        let html = '';
+        sorted.forEach((sup, idx) => {
+            const rank = idx + 1;
+            const isSelected = sup.supplier_id === selectedSupplierId;
+            const initials = gsdGetInitials(sup.name);
+            const color = gsdAvatarColor(sup.name);
+            const selImgSrc = sup.supplier_image ? escapeHtml(resolvePublicUploadUrl(sup.supplier_image)) : '';
+            const selAvatarHtml = `<div class="gsd-cv-sel-avatar" style="background:${color}">${selImgSrc ? `<img src="${selImgSrc}" class="gsd-sup-av-img" onerror="this.style.display='none'" alt="">` : ''}${escapeHtml(initials)}</div>`;
+            const disc = sup.discount_pct && sup.discount_pct > 0 ? sup.discount_pct : null;
+            const rankHtml = rank === 1
+                ? `<span class="gsd-cv-rank-badge rank1">🏆 #1 Cheapest</span>`
+                : `<span class="gsd-cv-rank-badge">#${rank}</span>`;
+            const itemRowsHtml = sup.items.map((it) =>
+                `<div class="gsd-cv-sel-item-row">
+                    <span class="gsd-cv-sel-item-nm">${escapeHtml(it.name)}</span>
+                    <span class="gsd-cv-sel-item-pr">${gsdFmtPeso(it.price)}</span>
+                </div>`
+            ).join('');
+            const discHtml = disc ? `<div class="gsd-cv-sel-disc-note">☑ ${disc}% discount applied</div>` : '';
+            const trophyHtml = rank === 1 ? ' 🏆' : '';
+
+            html += `<div class="gsd-cv-sel-card${isSelected ? ' gsd-selected' : ''}" data-supplier-id="${sup.supplier_id}" data-source="${sup.source}">
+                <div class="gsd-cv-sel-card-hd">
+                    <input type="radio" class="gsd-cv-sel-radio" name="gsd_sel_sup" value="${sup.supplier_id}" ${isSelected ? 'checked' : ''}${readonly ? ' disabled' : ''}>
+                    ${selAvatarHtml}
+                    <span class="gsd-cv-sel-name">${escapeHtml(sup.name)}</span>
+                </div>
+                <div class="gsd-cv-sel-badges">
+                    <span class="gsd-cv-src-badge ${sup.source}">${sup.source === 'preferred' ? 'Preferred' : 'Canvassed'}</span>
+                    ${rankHtml}
+                </div>
+                ${itemRowsHtml}
+                ${discHtml}
+                <div class="gsd-cv-sel-total">
+                    <span class="gsd-cv-sel-total-lbl">TOTAL</span>
+                    <span class="gsd-cv-sel-total-amt">${gsdFmtPeso(sup.effective_total)}${trophyHtml}</span>
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+
+        if (!readonly) {
+            // Wire card clicks
+            container.querySelectorAll('.gsd-cv-sel-card').forEach((cardEl) => {
+                cardEl.addEventListener('click', async () => {
+                    const sid = parseInt(cardEl.dataset.supplierId, 10);
+                    const src = cardEl.dataset.source;
+                    const saved = await gsdSelectSupplierAllLines(sid, src);
+                    if (!saved) {
+                        return;
+                    }
+                    renderGsdSectionC(state.gsdLines);
+                });
+            });
+        }
+        syncGsdOutcomeSectionVisibility(lines);
+    }
+
+    async function gsdSelectSupplierAllLines(supplierId, source) {
+        if (source === 'canvassed') {
+            const flushed = await gsdFlushPendingCanvassQuotes();
+            if (!flushed.ok) {
+                showToast(flushed.message || 'Save your canvass quotes before selecting a supplier.', 'error');
+                return false;
+            }
+        }
+
+        const lines = state.gsdLines || [];
+        const relevant = lines.filter((line) => {
+            const quotes = source === 'preferred' ? (line.preferred_quotes || []) : (line.canvassed_quotes || []);
+            return quotes.some((q) => Number(q.supplier_id) === supplierId);
+        });
+        if (relevant.length === 0) {
+            showToast('No line items match this supplier selection.', 'error');
+            return false;
+        }
+
+        let savedCount = 0;
+        let lastError = '';
+        for (const line of relevant) {
+            const body = new URLSearchParams();
+            body.set('action', 'save_suggested_supplier_item');
+            body.set('request_id', String(requestId));
+            body.set('requisition_line_id', String(line.requisition_line_id));
+            body.set('suggested_supplier_id', String(supplierId));
+            body.set('selection_source', source);
+            try {
+                const res = await fetch(GSD_REQUESTS_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body.toString(),
+                    credentials: 'include',
+                });
+                const data = await res.json();
+                if (data.success) {
+                    line.award = {
+                        supplier_id: supplierId,
+                        supplier_name: data.suggested_supplier_name || '',
+                        selection_source: source,
+                    };
+                    savedCount += 1;
+                } else {
+                    lastError = data.message || 'Could not save supplier selection.';
+                }
+            } catch {
+                lastError = 'Network error saving supplier selection.';
+            }
+        }
+
+        if (savedCount !== relevant.length) {
+            showToast(lastError || 'Could not save supplier selection for every line item.', 'error');
+            emitCanvassPricingUpdate();
+            updateGsdVerifyButtonState();
+            return false;
+        }
+
+        emitCanvassPricingUpdate();
+        updateGsdVerifyButtonState();
+        return true;
+    }
+
+    async function gsdAutoSelectCheapest(lines) {
+        const hasAward = (lines || []).some((l) => l.award != null);
+        if (hasAward) return;
+        // Build supplier totals same as renderGsdSectionC
+        const suppMap = new Map();
+        (lines || []).forEach((line) => {
+            const qty = Number(line.quantity || 1);
+            const addToMap = (q, source) => {
+                const sid = Number(q.supplier_id);
+                if (!suppMap.has(sid)) suppMap.set(sid, { supplier_id: sid, source, raw_total: 0, discount_pct: null });
+                suppMap.get(sid).raw_total += (parseFloat(q.quoted_unit_price) || 0) * qty;
+                if (source === 'canvassed' && q.discount_percent && !suppMap.get(sid).discount_pct) {
+                    suppMap.get(sid).discount_pct = parseFloat(q.discount_percent);
+                }
+            };
+            (line.preferred_quotes || []).forEach((q) => addToMap(q, 'preferred'));
+            (line.canvassed_quotes || []).forEach((q) => addToMap(q, 'canvassed'));
+        });
+        if (suppMap.size === 0) return;
+        suppMap.forEach((sup) => {
+            const disc = sup.discount_pct && sup.discount_pct > 0 ? sup.discount_pct / 100 : 0;
+            sup.effective_total = sup.raw_total * (1 - disc);
+        });
+        const sorted = [...suppMap.values()].sort((a, b) => a.effective_total - b.effective_total);
+        if (sorted.length > 0) {
+            const saved = await gsdSelectSupplierAllLines(sorted[0].supplier_id, sorted[0].source);
+            if (saved) {
+                renderGsdSectionC(lines);
+            }
+        }
+    }
+
+    // ── GSD Section B: Add Supplier modal ────────────────────────────────────
+
+    // ── GSD Add Supplier modal (redesigned) ──────────────────────────────────
+
+    let _gsdAddSupSelectedSup = null; // { supplier_id, supplier_name, tin, address }
+    let _gsdAddSupRegOpen = false;
+
+    function _gsdSupInitials(name) {
+        const w = String(name || '?').trim().split(/\s+/);
+        return ((w[0][0] || '') + (w[1] ? w[1][0] : '')).toUpperCase() || '?';
+    }
+
+    function _gsdSupRenderResults(query) {
+        const container = document.getElementById('gsdAddSupResultsList');
+        if (!container) return;
+        const q = (query || '').trim().toLowerCase();
+        const all = state.availableSuppliers || [];
+        const filtered = q ? all.filter((s) => (s.supplier_name || '').toLowerCase().includes(q)) : all;
+
+        if (filtered.length === 0) {
+            container.innerHTML = `<div class="gsd-sup-empty-state">
+                <i class="fas fa-search-slash" aria-hidden="true"></i>
+                <span class="gsd-sup-empty-text">No supplier found for "<strong>${escapeHtml(query)}</strong>"</span>
+                <button type="button" class="gsd-sup-empty-reg-btn" data-prefill="${escapeHtml(query)}">
+                    Register "${escapeHtml(query)}" as new supplier
+                </button>
+            </div>`;
+            container.querySelector('.gsd-sup-empty-reg-btn')?.addEventListener('click', (e) => {
+                _gsdSupOpenRegisterForm(e.currentTarget.dataset.prefill || '');
+            });
+            return;
+        }
+
+        const rowsHtml = filtered.map((s) => {
+            const sid = Number(s.supplier_id);
+            const name = escapeHtml(s.supplier_name || '');
+            const tin = s.tin ? escapeHtml(String(s.tin)) : '';
+            const addr = s.address ? escapeHtml(String(s.address)) : '';
+            const meta = [tin ? `TIN: ${tin}` : '', addr].filter(Boolean).join(' · ');
+            const initials = escapeHtml(_gsdSupInitials(s.supplier_name || ''));
+            const rowImgSrc = s.supplier_image ? escapeHtml(resolvePublicUploadUrl(s.supplier_image)) : '';
+            const isSelected = _gsdAddSupSelectedSup && _gsdAddSupSelectedSup.supplier_id === sid;
+            return `<div class="gsd-sup-row${isSelected ? ' gsd-sup-selected' : ''}" data-supplier-id="${sid}"
+                         data-supplier-name="${name}" data-tin="${tin}" data-address="${addr}">
+                <div class="gsd-sup-avatar-sq">${rowImgSrc ? `<img src="${rowImgSrc}" class="gsd-sup-av-img" onerror="this.style.display='none'" alt="">` : ''}${initials}</div>
+                <div class="gsd-sup-row-info">
+                    <div class="gsd-sup-row-name">${name}</div>
+                    ${meta ? `<div class="gsd-sup-row-meta">${meta}</div>` : ''}
+                </div>
+                <i class="fas fa-circle-check gsd-sup-row-check" aria-hidden="true"></i>
+            </div>`;
+        }).join('');
+
+        const hintRow = `<div class="gsd-sup-register-hint-row">
+            <i class="fas fa-circle-info" aria-hidden="true"></i>
+            Not here?&nbsp;
+            <button type="button" class="gsd-sup-register-hint-btn">Register as new supplier</button>
+        </div>`;
+
+        container.innerHTML = rowsHtml + hintRow;
+
+        container.querySelectorAll('.gsd-sup-row').forEach((row) => {
+            row.addEventListener('click', () => {
+                const sid = parseInt(row.dataset.supplierId, 10);
+                const name = row.dataset.supplierName || '';
+                _gsdAddSupSelectedSup = { supplier_id: sid, supplier_name: name, tin: row.dataset.tin || '', address: row.dataset.address || '' };
+                _gsdSupCloseRegisterForm();
+                _gsdSupRenderResults(document.getElementById('gsdAddSupSearch')?.value || '');
+                _gsdSupSetHint(`${name} selected`);
+                _gsdSupCheckSaveState();
+            });
+        });
+
+        container.querySelector('.gsd-sup-register-hint-btn')?.addEventListener('click', () => {
+            _gsdSupOpenRegisterForm(document.getElementById('gsdAddSupSearch')?.value || '');
+        });
+    }
+
+    function _gsdSupOpenRegisterForm(prefillName) {
+        _gsdAddSupRegOpen = true;
+        _gsdAddSupSelectedSup = null;
+        const panel = document.getElementById('gsdAddSupRegPanel');
+        const nameInp = document.getElementById('gsdAddSupRegName');
+        if (panel) panel.style.display = '';
+        if (nameInp) { nameInp.value = prefillName || ''; nameInp.focus(); }
+        _gsdSupSetHint('Fill in supplier details');
+        _gsdSupCheckSaveState();
+    }
+
+    function _gsdSupCloseRegisterForm() {
+        _gsdAddSupRegOpen = false;
+        const panel = document.getElementById('gsdAddSupRegPanel');
+        if (panel) panel.style.display = 'none';
+        ['gsdAddSupRegName','gsdAddSupRegContact','gsdAddSupRegPhone','gsdAddSupRegTin','gsdAddSupRegAddress']
+            .forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
+        _gsdSupCheckSaveState();
+    }
+
+    function _gsdSupSetHint(text) {
+        const el = document.getElementById('gsdAddSupHintText');
+        if (el) el.textContent = text;
+    }
+
+    function _gsdSupCheckSaveState() {
+        const btn = document.getElementById('gsdAddSupModalConfirm');
+        if (!btn) return;
+        const regName = (document.getElementById('gsdAddSupRegName')?.value || '').trim();
+        const ready = _gsdAddSupSelectedSup || (_gsdAddSupRegOpen && regName.length > 0);
+        btn.disabled = !ready;
+    }
+
+    function _gsdSupAddCardToSection(supplierId, supplierName) {
+        const container = document.getElementById('cvGsdCanvCards');
+        if (!container) return;
+        if (container.querySelector(`[data-supplier-id="${supplierId}"]`)) {
+            showToast('This supplier is already added.', 'error');
+            return false;
+        }
+        container.querySelectorAll('.gsd-cv-empty-note').forEach((e) => e.remove());
+        const found = (state.availableSuppliers || []).find((s) => Number(s.supplier_id) === supplierId);
+        const sup = { supplier_id: supplierId, supplier_name: supplierName, supplier_image: found?.supplier_image || '', benefits: '', discount_percent: null, items: [] };
+        container.appendChild(gsdBuildCanvCard(sup, state.gsdLines));
+        return true;
+    }
+
+    function _gsdSupResetModal() {
+        _gsdAddSupSelectedSup = null;
+        _gsdSupCloseRegisterForm();
+        const searchInp = document.getElementById('gsdAddSupSearch');
+        if (searchInp) searchInp.value = '';
+        _gsdSupRenderResults('');
+        _gsdSupSetHint('Search to find a supplier');
+        _gsdSupCheckSaveState();
+        const modal = document.getElementById('gsdAddSupModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    // kept for backward-compat (called externally by the Add Supplier button wiring)
+    function gsdBuildAddSupList() { _gsdSupRenderResults(''); }
+    function gsdFilterAddSupList(q) { _gsdSupRenderResults(q); }
+
+    let _gsdAddSupModalBound = false;
+    function initGsdAddSupModalListeners() {
+        if (_gsdAddSupModalBound) return;
+        const modal = document.getElementById('gsdAddSupModal');
+        if (!modal) return;
+        _gsdAddSupModalBound = true;
+
+        document.getElementById('gsdAddSupModalClose')?.addEventListener('click', () => _gsdSupResetModal());
+        document.getElementById('gsdAddSupModalCancel')?.addEventListener('click', () => _gsdSupResetModal());
+        document.getElementById('gsdAddSupModalBackdrop')?.addEventListener('click', () => _gsdSupResetModal());
+
+        document.getElementById('gsdAddSupRegClose')?.addEventListener('click', () => {
+            _gsdSupCloseRegisterForm();
+            _gsdSupSetHint('Search to find a supplier');
+        });
+
+        document.getElementById('gsdAddSupRegName')?.addEventListener('input', () => _gsdSupCheckSaveState());
+
+        const searchInp = document.getElementById('gsdAddSupSearch');
+        if (searchInp) {
+            searchInp.addEventListener('input', () => {
+                _gsdAddSupSelectedSup = null;
+                _gsdSupCloseRegisterForm();
+                _gsdSupSetHint('Search to find a supplier');
+                _gsdSupRenderResults(searchInp.value);
+                _gsdSupCheckSaveState();
+            });
+        }
+
+        document.getElementById('gsdAddSupModalConfirm')?.addEventListener('click', async () => {
+            const btn = document.getElementById('gsdAddSupModalConfirm');
+            if (btn) btn.disabled = true;
+
+            if (_gsdAddSupSelectedSup) {
+                const ok = _gsdSupAddCardToSection(_gsdAddSupSelectedSup.supplier_id, _gsdAddSupSelectedSup.supplier_name);
+                if (ok) { showToast('Supplier added. Enter prices for each item.'); _gsdSupResetModal(); }
+                else if (btn) btn.disabled = false;
+                return;
+            }
+
+            if (_gsdAddSupRegOpen) {
+                const name = (document.getElementById('gsdAddSupRegName')?.value || '').trim();
+                if (!name) { showToast('Supplier name is required.', 'error'); if (btn) btn.disabled = false; return; }
+                const body = new URLSearchParams();
+                body.set('action', 'register_supplier');
+                body.set('supplier_name', name);
+                body.set('contact_person', document.getElementById('gsdAddSupRegContact')?.value || '');
+                body.set('phone_number', document.getElementById('gsdAddSupRegPhone')?.value || '');
+                body.set('tin', document.getElementById('gsdAddSupRegTin')?.value || '');
+                body.set('address', document.getElementById('gsdAddSupRegAddress')?.value || '');
+                try {
+                    const res = await fetch(GSD_REQUESTS_API, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString(), credentials: 'include' });
+                    const data = await res.json();
+                    if (!data.success) { showToast(data.message || 'Could not register supplier.', 'error'); if (btn) btn.disabled = false; return; }
+                    // Add to local suppliers array so it appears in future searches
+                    state.availableSuppliers = state.availableSuppliers || [];
+                    state.availableSuppliers.push({ supplier_id: data.supplier_id, supplier_name: data.supplier_name, tin: data.tin || '', address: data.address || '', contact_person: data.contact_person || '', phone_number: data.phone_number || '', supplier_image: null });
+                    buildGsdCanvassQuoteModalSupplierList(state.availableSuppliers);
+                    const ok = _gsdSupAddCardToSection(data.supplier_id, data.supplier_name);
+                    if (ok) { showToast(`"${data.supplier_name}" registered and added.`); _gsdSupResetModal(); }
+                    else if (btn) btn.disabled = false;
+                } catch { showToast('Network error.', 'error'); if (btn) btn.disabled = false; }
+                return;
+            }
+
+            if (btn) btn.disabled = false;
+        });
+    }
+
+    function openGsdAddSupModal() {
+        const modal = document.getElementById('gsdAddSupModal');
+        if (!modal) return;
+        _gsdAddSupSelectedSup = null;
+        _gsdAddSupRegOpen = false;
+        const searchInp = document.getElementById('gsdAddSupSearch');
+        if (searchInp) searchInp.value = '';
+        _gsdSupCloseRegisterForm();
+        _gsdSupSetHint('Search to find a supplier');
+        _gsdSupCheckSaveState();
+        _gsdSupRenderResults('');
+        modal.style.display = 'flex';
+    }
+
+    // ── GSD Canvass Quote Modal ──
+
+    function buildGsdCanvassQuoteModalSupplierList(suppliers) {
+        const list = document.getElementById('gsdCqSupplierList');
+        if (!list) return;
+        list.innerHTML = (suppliers || []).map((s) => {
+            return `<div class="supplier-dropdown-item" data-supplier-id="${Number(s.supplier_id)}" data-supplier-name="${escapeHtml(s.supplier_name || '')}" role="option" tabindex="0">
+                <span>${escapeHtml(s.supplier_name || '')}</span>
+            </div>`;
+        }).join('') || '<div class="supplier-dropdown-empty">No suppliers found.</div>';
+        list.style.display = 'none';
+
+        list.querySelectorAll('.supplier-dropdown-item').forEach((item) => {
+            item.addEventListener('click', () => {
+                document.getElementById('gsdCqSupplierId').value = item.dataset.supplierId;
+                const nameSearch = document.getElementById('gsdCqSupplierNameSearch');
+                if (nameSearch) nameSearch.value = item.dataset.supplierName || '';
+                document.getElementById('gsdCqSupplierText').textContent = item.dataset.supplierName || '';
+                list.style.display = 'none';
+            });
+        });
+    }
+
+    function openGsdCanvassQuoteModal(lineId, lineName) {
+        const modal = document.getElementById('gsdCqModal');
+        if (!modal) return;
+        document.getElementById('gsdCqLineName').textContent = lineName;
+        document.getElementById('gsdCqLineId').value = String(lineId);
+        const sid = document.getElementById('gsdCqSupplierId');
+        const stxt = document.getElementById('gsdCqSupplierText');
+        const price = document.getElementById('gsdCqPrice');
+        const ben = document.getElementById('gsdCqBenefits');
+        const disc = document.getElementById('gsdCqDiscount');
+        const cname = document.getElementById('gsdCqCanvasserName');
+        if (sid) sid.value = '';
+        if (stxt) stxt.textContent = 'Select supplier…';
+        if (price) price.value = '';
+        if (ben) ben.value = '';
+        if (disc) disc.value = '';
+        if (cname) cname.value = '';
+        const nameSearch = document.getElementById('gsdCqSupplierNameSearch');
+        if (nameSearch) nameSearch.value = '';
+        const list = document.getElementById('gsdCqSupplierList');
+        if (list) list.style.display = 'none';
+        modal.style.display = 'flex';
+        modal.removeAttribute('aria-hidden');
+    }
+
+    function closeGsdCanvassQuoteModal() {
+        const modal = document.getElementById('gsdCqModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    let _gsdCqModalListenersInit = false;
+    function initGsdCanvassQuoteModalListeners() {
+        const modal = document.getElementById('gsdCqModal');
+        if (!modal || _gsdCqModalListenersInit) return;
+        _gsdCqModalListenersInit = true;
+
+        const closeBtn = document.getElementById('gsdCqModalClose');
+        const cancelBtn = document.getElementById('gsdCqModalCancel');
+        const backdrop = document.getElementById('gsdCqModalBackdrop');
+        const saveBtn = document.getElementById('gsdCqModalSave');
+        const supBtn = document.getElementById('gsdCqSupplierBtn');
+        const supList = document.getElementById('gsdCqSupplierList');
+
+        if (closeBtn) closeBtn.addEventListener('click', closeGsdCanvassQuoteModal);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeGsdCanvassQuoteModal);
+        if (backdrop) backdrop.addEventListener('click', closeGsdCanvassQuoteModal);
+
+        // Text-input supplier search (supBtn is hidden; search handled via text input)
+        const supSearchInput = document.getElementById('gsdCqSupplierNameSearch');
+        const supDropWrap = document.getElementById('gsdCqSupplierDropdown');
+        if (supSearchInput && supList) {
+            const filterGsdSupplierList = (q) => {
+                const lq = q.trim().toLowerCase();
+                const items = supList.querySelectorAll('.supplier-dropdown-item');
+                items.forEach((item) => {
+                    const name = (item.dataset.supplierName || '').toLowerCase();
+                    item.style.display = (!lq || name.includes(lq)) ? '' : 'none';
+                });
+                supList.style.display = items.length > 0 ? 'block' : 'none';
+            };
+            supSearchInput.addEventListener('focus', () => filterGsdSupplierList(supSearchInput.value));
+            supSearchInput.addEventListener('input', () => {
+                const sid = document.getElementById('gsdCqSupplierId');
+                if (sid) sid.value = '';
+                filterGsdSupplierList(supSearchInput.value);
+            });
+        }
+        document.addEventListener('click', (e) => {
+            if (!supList) return;
+            const wrap = supDropWrap || document.getElementById('gsdCqSupplierDropdown');
+            if (wrap && wrap.contains(e.target)) return;
+            supList.style.display = 'none';
+        });
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async () => {
+                const lineId = parseInt(document.getElementById('gsdCqLineId').value, 10);
+                const supplierId = parseInt((document.getElementById('gsdCqSupplierId') || {}).value || '0', 10);
+                const priceRaw = ((document.getElementById('gsdCqPrice') || {}).value || '').trim();
+                const benefits = ((document.getElementById('gsdCqBenefits') || {}).value || '').trim();
+                const discountRaw = ((document.getElementById('gsdCqDiscount') || {}).value || '').trim();
+                const canvasserName = ((document.getElementById('gsdCqCanvasserName') || {}).value || '').trim();
+
+                if (!supplierId) {
+                    const typed = document.getElementById('gsdCqSupplierNameSearch');
+                    if (typed && typed.value.trim()) {
+                        showToast('Select a supplier from the list.', 'error');
+                    } else {
+                        showToast('Please select a supplier.', 'error');
+                    }
+                    return;
+                }
+                if (!canvasserName) { showToast('Canvassed By Name is required.', 'error'); return; }
+                if (priceRaw === '' || isNaN(parseFloat(priceRaw)) || parseFloat(priceRaw) < 0) {
+                    showToast('Enter a valid unit price (≥ 0).', 'error');
+                    return;
+                }
+
+                saveBtn.disabled = true;
+                try {
+                    const body = new URLSearchParams();
+                    body.set('action', 'add_canvass_quote');
+                    body.set('request_id', String(requestId));
+                    body.set('requisition_line_id', String(lineId));
+                    body.set('supplier_id', String(supplierId));
+                    body.set('unit_price', priceRaw);
+                    body.set('benefits', benefits);
+                    body.set('discount_percent', discountRaw);
+                    body.set('canvasser_name', canvasserName);
+
+                    const res = await fetch(GSD_REQUESTS_API, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: body.toString(),
+                        credentials: 'include',
+                    });
+                    const data = await res.json();
+                    if (!data.success) {
+                        showToast(data.message || 'Could not save quote.', 'error');
+                        return;
+                    }
+                    showToast(data.message || 'Canvass quote saved.');
+                    closeGsdCanvassQuoteModal();
+                    await refreshGsdReviewView();
+                } catch {
+                    showToast('Network error.', 'error');
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            });
+        }
+    }
 
     // ── Quote Modal ──
 
@@ -3549,6 +5045,10 @@
         }
         if (gsdReviewView) {
             await loadGsdReviewView();
+            return;
+        }
+        if (gsdOutcomeReadonlyView) {
+            await loadGsdOutcomeReadonlyView();
             return;
         }
         // Requesters (owners) use per-line preferred-quote view
@@ -4733,12 +6233,15 @@
     if (requesterEditView) {
         initRequesterPrefQuoteModalListeners();
     }
-    loadForm();
 
     window.CWIRMSCanvassForm = {
         buildPricingSnapshot: buildCanvassPricingSnapshot,
         formatPricingOverviewQtyLabel,
+        gsdHasSectionBData,
+        getGsdLines: () => state.gsdLines || [],
     };
+
+    loadForm();
 
     window.IMRMS_DEAN_CANVASS_SYNC = {
         async refreshApprovalStrip() {

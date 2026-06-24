@@ -81,7 +81,8 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
                 rla.selection_source,
                 rla.awarded_qty,
                 s.supplier_name,
-                rlq.quoted_unit_price
+                rlq.quoted_unit_price,
+                rlq.discount_percent
          FROM requisition_line_awards rla
          INNER JOIN requisition_line rl ON rl.requisition_line_id = rla.requisition_line_id
          LEFT  JOIN suppliers s ON s.supplier_id = rla.supplier_id
@@ -100,9 +101,10 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
         }
     }
 
-    $lines       = [];
+    $lines         = [];
     $selectedCount = 0;
-    $grandTotal  = 0.0;
+    $grandTotal    = 0.0;
+    $hasDiscount   = false;
 
     foreach ($lineRows as $idx => $row) {
         $lineId = (int) ($row['requisition_line_id'] ?? 0);
@@ -116,16 +118,24 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
             $source = $supplierId > 0 ? 'canvassed' : null;
         }
 
-        $unitPrice    = null;
-        $lineTotal    = null;
-        $supplierName = $award ? (string) ($award['supplier_name'] ?? '') : null;
+        $unitPrice       = null;
+        $lineTotal       = null;
+        $discountPercent = null;
+        $discountLabel   = null;
+        $supplierName    = $award ? (string) ($award['supplier_name'] ?? '') : null;
 
         if ($supplierId > 0) {
             $selectedCount++;
             $rawPrice = $award['quoted_unit_price'] ?? null;
             if ($rawPrice !== null && is_numeric($rawPrice) && (float) $rawPrice >= 0) {
                 $unitPrice = round((float) $rawPrice, 2);
-                $lineTotal = round($unitPrice * $qty, 2);
+                $discountPercent = cwirmsNormalizeCanvassSupplierDiscountPercent($award['discount_percent'] ?? null);
+                if ($discountPercent !== null) {
+                    $hasDiscount = true;
+                    $discountLabel = rtrim(rtrim(number_format($discountPercent, 2, '.', ''), '0'), '.') . '%';
+                }
+                $discountFactor = $discountPercent !== null ? (1 - $discountPercent / 100) : 1.0;
+                $lineTotal = round($unitPrice * $qty * $discountFactor, 2);
                 $grandTotal += $lineTotal;
             }
         } else {
@@ -149,7 +159,8 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
             'selection_source'    => $source,
             'unit_price'          => $unitPrice,
             'line_total'          => $lineTotal,
-            'discount_label'      => null,
+            'discount_percent'    => $discountPercent,
+            'discount_label'      => $discountLabel,
         ];
     }
 
@@ -159,8 +170,7 @@ function cwirmsCanvassPricingOverviewForRequest(PDO $db, int $requestId): array
         'selected_count'     => $selectedCount,
         'grand_total'        => round($grandTotal, 2),
         'currency'           => $currency,
-        // Supplier discounts are not yet migrated (Phase 3). Column is hidden until then.
-        'show_discount_column' => false,
+        'show_discount_column' => $hasDiscount,
     ];
 }
 

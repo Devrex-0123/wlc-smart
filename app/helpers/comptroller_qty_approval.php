@@ -144,12 +144,18 @@ function cwirmsComptrollerPricingOverviewForRequest(PDO $db, int $requestId): ar
             $acceptedQty = $requestedQty;
         }
 
-        $deferredQty        = max(0, $requestedQty - $acceptedQty);
-        $unitPrice          = isset($line['unit_price']) && is_numeric($line['unit_price'])
+        $deferredQty       = max(0, $requestedQty - $acceptedQty);
+        $unitPrice         = isset($line['unit_price']) && is_numeric($line['unit_price'])
             ? (float) $line['unit_price']
             : null;
-        $approvedLineTotal  = $unitPrice !== null ? round($unitPrice * $acceptedQty, 2) : null;
-        $deferredAmount     = $unitPrice !== null ? round($unitPrice * $deferredQty, 2) : null;
+        $discountPercent   = cwirmsNormalizeCanvassSupplierDiscountPercent($line['discount_percent'] ?? null);
+        $discountFactor    = $discountPercent !== null ? (1 - $discountPercent / 100) : 1.0;
+        $approvedLineTotal = $unitPrice !== null
+            ? round($unitPrice * $acceptedQty * $discountFactor, 2)
+            : null;
+        $deferredAmount    = $unitPrice !== null
+            ? round($unitPrice * $deferredQty * $discountFactor, 2)
+            : null;
 
         if ($approvedLineTotal !== null) {
             $approvedGrandTotal += $approvedLineTotal;

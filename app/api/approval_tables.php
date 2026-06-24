@@ -678,6 +678,31 @@ function ensureRequisitionLineQuotesTable(PDO $db): void
     }
 }
 
+function ensureRequisitionLineQuotesGsdColumns(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    ensureRequisitionLineQuotesTable($db);
+
+    $cols = ['canvasser_name' => "VARCHAR(100) NULL DEFAULT NULL", 'discount_percent' => "DECIMAL(5,2) NULL DEFAULT NULL"];
+    foreach ($cols as $col => $def) {
+        $chk = $db->prepare(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'requisition_line_quotes'
+               AND COLUMN_NAME = ?"
+        );
+        $chk->execute([$col]);
+        if (((int) $chk->fetchColumn()) === 0) {
+            $db->exec("ALTER TABLE requisition_line_quotes ADD COLUMN `{$col}` {$def}");
+        }
+    }
+}
+
 function ensureRequisitionLineAwardsTable(PDO $db): void
 {
     static $checked = false;

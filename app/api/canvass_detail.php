@@ -12,7 +12,11 @@ require_once __DIR__ . '/../helpers/canvass_pricing_overview.php';
 
 function sendJson(array $payload): void
 {
-    echo json_encode($payload);
+    $json = json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($json === false) {
+        $json = json_encode(['success' => false, 'message' => 'Could not encode response.']);
+    }
+    echo $json;
     exit;
 }
 
@@ -372,6 +376,36 @@ function userIsPresidentVerifier(PDO $db, int $userId): bool
     return in_array($r, $allowed, true);
 }
 
+function userMayViewGsdCanvassOutcome(PDO $db, int $requestId, int $userId): bool
+{
+    if ($requestId <= 0 || $userId <= 0) {
+        return false;
+    }
+    if (userIsGsdOfficer($db, $userId)) {
+        return true;
+    }
+    if (userIsComptroller($db, $userId) || userIsPresidentVerifier($db, $userId) || userIsInventoryManager($db, $userId)) {
+        return true;
+    }
+    $ownerStmt = $db->prepare('SELECT user_id FROM requisition_item WHERE request_id = ? LIMIT 1');
+    $ownerStmt->execute([$requestId]);
+    $ownerId = (int) ($ownerStmt->fetchColumn() ?: 0);
+
+    return $ownerId > 0 && $ownerId === $userId;
+}
+
+function assertGsdCanvassOutcomeVerified(PDO $db, int $requestId): void
+{
+    $stmt = $db->prepare(
+        'SELECT LOWER(TRIM(COALESCE(gsd_status, \'pending\'))) FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+    );
+    $stmt->execute([$requestId]);
+    $status = strtolower(trim((string) ($stmt->fetchColumn() ?: 'pending')));
+    if ($status !== 'accept') {
+        sendJson(['success' => false, 'message' => 'GSD outcome is available after G.S.D. verification.']);
+    }
+}
+
 function canvasserEmailLocalPartForCanvassApi(PDO $db, int $userId): string
 {
     $stmt = $db->prepare('SELECT Email FROM user WHERE user_id = ?');
@@ -729,6 +763,30 @@ try {
         require_once __DIR__ . '/../helpers/canvass_pricing_overview.php';
         $overview = cwirmsCanvassPricingOverviewForRequest($db, $requestId);
         sendJson(['success' => true, 'pricing_overview' => $overview]);
+    }
+
+    if ($action === 'get_canvass_outcome_view') {
+        assertLoggedIn();
+        $requestId = (int) ($_GET['request_id'] ?? 0);
+        if ($requestId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request id.']);
+        }
+        if (!userMayViewGsdCanvassOutcome($db, $requestId, $uid)) {
+            sendJson(['success' => false, 'message' => 'Forbidden.']);
+        }
+        if (!requisitionInventoryAccepted($db, $requestId)) {
+            sendJson(['success' => false, 'message' => 'Open this form after the inventory manager accepts the requisition.']);
+        }
+        assertGsdCanvassOutcomeVerified($db, $requestId);
+        ensureRequisitionLineQuotesGsdColumns($db);
+        ensureRequisitionLineAwardsTable($db);
+        require_once __DIR__ . '/../../helpers/gsd_canvass_outcome.php';
+        try {
+            $payload = cwirmsBuildGsdCanvassOutcomeView($db, $requestId);
+            sendJson(array_merge(['success' => true], $payload));
+        } catch (Throwable $e) {
+            sendJson(['success' => false, 'message' => 'Could not load GSD canvass outcome: ' . $e->getMessage()]);
+        }
     }
 
     if ($action === 'get') {
