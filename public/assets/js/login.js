@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (consentHint) {
             if (!opened) {
-                consentHint.textContent = "Open both documents above to continue.";
+                consentHint.textContent = "Please read both documents above before continuing.";
             } else if (!privacyCheckbox.checked) {
                 consentHint.textContent = "Now tick the box to confirm your agreement.";
             } else {
@@ -273,7 +273,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (current !== lastEmail) {
             if (lastEmail !== "") resetServerAttempts();
             if (loginBtn.disabled && countdownInterval) {
-                loginBtn.textContent = "Login";
+                loginBtn.textContent = "Sign in";
                 unlockInputs();
                 clearMessage();
                 if (countdownInterval) clearInterval(countdownInterval);
@@ -316,7 +316,7 @@ document.addEventListener("DOMContentLoaded", function () {
             } else {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
-                loginBtn.textContent = "Login";
+                loginBtn.textContent = "Sign in";
                 unlockInputs();
                 clearMessage();
                 resetServerAttempts();
@@ -326,7 +326,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         lockoutTimeout = setTimeout(() => {
             if (countdownInterval) clearInterval(countdownInterval);
-            loginBtn.textContent = "Login";
+            loginBtn.textContent = "Sign in";
             unlockInputs();
             clearMessage();
             resetServerAttempts();
@@ -418,7 +418,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (result.consent_required) {
                 showMessage(result.message || "You must agree to the Privacy Notice and Terms & Conditions to continue.", "error");
                 applyConsentRequired();
-                loginBtn.textContent = "Login";
+                loginBtn.textContent = "Sign in";
                 unlockInputs();
                 refreshLoginButton();
                 return;
@@ -498,7 +498,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (remaining > 0) {
                 const label = loginIdentifier.includes('@') ? 'email or password' : 'username or password';
                 showMessage(`Wrong ${label}. ${remaining} attempt(s) left.`, "error");
-                loginBtn.textContent = "Login";
+                loginBtn.textContent = "Sign in";
                 unlockInputs();
                 refreshLoginButton();
             } else {
@@ -507,7 +507,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         } catch (err) {
             showMessage("Cannot connect to server. Check your internet connection.", "error");
-            loginBtn.textContent = "Login";
+            loginBtn.textContent = "Sign in";
             unlockInputs();
             refreshLoginButton();
         }
