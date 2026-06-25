@@ -20,6 +20,8 @@ class User {
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$username]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
+
+        error_log("findByUsername for '$username' found: " . ($result ? 'YES' : 'NO'));
     }
 
     public function findById($userId) {

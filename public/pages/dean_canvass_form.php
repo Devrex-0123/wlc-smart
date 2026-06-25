@@ -57,7 +57,17 @@ if ($requestId <= 0) {
                 $uStmt->execute([(int) $reqRow['user_id']]);
                 $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
                 $em = (string) ($owner['Email'] ?? '');
-                $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                
+                // Get stored requester name
+                $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ?');
+                $nameStmt->execute([$requestId]);
+                $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+                
+                if ($storedName !== '') {
+                    $requesterDisplayName = $storedName;
+                } else {
+                    $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                }
                 $requesterRoleDisplay = (string) ($owner['role'] ?? '');
             }
         }
@@ -104,12 +114,22 @@ if ($requestId <= 0) {
                     $accessError = 'This requisition is not assigned to you for canvassing, or the canvass step is already complete.';
                 } else {
                     $isCanvasserCanvassView = true;
-                    $uStmt = $db->prepare('SELECT Email, role FROM user WHERE user_id = ?');
-                    $uStmt->execute([(int) $reqRow['user_id']]);
-                    $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
-                    $em = (string) ($owner['Email'] ?? '');
+                $uStmt = $db->prepare('SELECT Email, role FROM user WHERE user_id = ?');
+                $uStmt->execute([(int) $reqRow['user_id']]);
+                $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
+                $em = (string) ($owner['Email'] ?? '');
+                
+                // Get stored requester name
+                $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ?');
+                $nameStmt->execute([$requestId]);
+                $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+                
+                if ($storedName !== '') {
+                    $requesterDisplayName = $storedName;
+                } else {
                     $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
-                    $requesterRoleDisplay = (string) ($owner['role'] ?? '');
+                }
+                $requesterRoleDisplay = (string) ($owner['role'] ?? '');
                 }
             }
         }
@@ -141,7 +161,17 @@ if ($requestId <= 0) {
                 $uStmt->execute([(int) $reqRow['user_id']]);
                 $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
                 $em = (string) ($owner['Email'] ?? '');
-                $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                
+                // Get stored requester name
+                $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ?');
+                $nameStmt->execute([$requestId]);
+                $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+                
+                if ($storedName !== '') {
+                    $requesterDisplayName = $storedName;
+                } else {
+                    $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                }
                 $requesterRoleDisplay = (string) ($owner['role'] ?? '');
             }
         }
@@ -179,7 +209,17 @@ if ($requestId <= 0) {
                 $uStmt->execute([(int) $reqRow['user_id']]);
                 $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
                 $em = (string) ($owner['Email'] ?? '');
-                $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                
+                // Get stored requester name
+                $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ?');
+                $nameStmt->execute([$requestId]);
+                $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+                
+                if ($storedName !== '') {
+                    $requesterDisplayName = $storedName;
+                } else {
+                    $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                }
                 $requesterRoleDisplay = (string) ($owner['role'] ?? '');
             }
         }
@@ -214,7 +254,17 @@ if ($requestId <= 0) {
                 $uStmt->execute([(int) $reqRow['user_id']]);
                 $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
                 $em = (string) ($owner['Email'] ?? '');
-                $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                
+                // Get stored requester name
+                $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ?');
+                $nameStmt->execute([$requestId]);
+                $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+                
+                if ($storedName !== '') {
+                    $requesterDisplayName = $storedName;
+                } else {
+                    $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                }
                 $requesterRoleDisplay = (string) ($owner['role'] ?? '');
             }
         }
@@ -244,7 +294,17 @@ if ($requestId <= 0) {
                 $uStmt->execute([(int) $reqRow['user_id']]);
                 $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
                 $em = (string) ($owner['Email'] ?? '');
-                $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                
+                // Get stored requester name
+                $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ?');
+                $nameStmt->execute([$requestId]);
+                $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+                
+                if ($storedName !== '') {
+                    $requesterDisplayName = $storedName;
+                } else {
+                    $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                }
                 $requesterRoleDisplay = (string) ($owner['role'] ?? '');
             }
         }
@@ -255,7 +315,7 @@ if ($requestId <= 0) {
         : '';
     $backHref = 'dean_requisition_status_progress.php' . ($deanProgressQs !== '' ? ('?' . $deanProgressQs) : '');
     $accessErrorReturnHref = $backHref;
-    $isDeanRole = (strtolower(trim((string) ($user['role'] ?? ''))) === 'dean');
+    $isDeanRole = (strtolower(trim((string) ($user['role'] ?? ''))) === 'user');
     if (!$isDeanRole) {
         $accessError = 'Only dean users can open this view.';
     } else {
@@ -278,17 +338,27 @@ if ($requestId <= 0) {
                 $uStmt->execute([(int) $reqRow['user_id']]);
                 $owner = $uStmt->fetch(PDO::FETCH_ASSOC);
                 $em = (string) ($owner['Email'] ?? '');
-                $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                
+                // Get stored requester name from requisition_item
+                $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ?');
+                $nameStmt->execute([$requestId]);
+                $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+                
+                if ($storedName !== '') {
+                    $requesterDisplayName = $storedName;
+                } else {
+                    $requesterDisplayName = $em !== '' ? (explode('@', $em)[0] ?? $em) : '—';
+                }
                 $requesterRoleDisplay = (string) ($owner['role'] ?? '');
             }
         }
     }
-} else {
+    } else {
     $backHref =
         'dean_requisition_status_progress.php?rid=' .
         $requestId .
         ($progressFrom === 'status' ? '&from=status' : '');
-    $own = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
+    $own = $db->prepare('SELECT request_id, user_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
     $own->execute([$requestId, $_SESSION['user_id']]);
     if (!$own->fetch(PDO::FETCH_ASSOC)) {
         $accessError = 'This requisition was not found or does not belong to your account.';
@@ -302,6 +372,17 @@ if ($requestId <= 0) {
             $accessError = 'Open the canvass form only after the inventory manager accepts your requisition.';
         } else {
             $isRequesterOwnedCanvass = true;
+            // Get stored requester name from requisition_item
+            $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ?');
+            $nameStmt->execute([$requestId]);
+            $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+            
+            if ($storedName !== '') {
+                $requesterDisplayName = $storedName;
+            } else {
+                // Fallback to current user's display name
+                $requesterDisplayName = $displayName;
+            }
         }
     }
 }
@@ -313,6 +394,14 @@ $isReviewerCanvassReadonly = $isGsdCanvassReview
     || $isComptrollerCanvassHistory
     || $isPresidentCanvassHistory
     || $isDepartmentCanvassView;
+
+$isOwner = false;
+    if ($requestId > 0 && isset($_SESSION['user_id'])) {
+        $checkOwner = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ? AND user_id = ?');
+        $checkOwner->execute([$requestId, $_SESSION['user_id']]);
+        $isOwner = (bool) $checkOwner->fetchColumn();
+    }
+
 $gsdVerificationStatus = 'pending';
 $showCanvassPricingOverview = $isGsdCanvassReview;
 
@@ -374,10 +463,13 @@ if ($accessError === null && $requestId > 0 && ($canViewQtyPricingOverview || $i
         if ($comptrollerCompStatus === '') {
             $comptrollerCompStatus = 'pending';
         }
-        $comptrollerPricingReadonly = $isComptrollerCanvassHistory
-            || in_array($comptrollerCompStatus, ['accept', 'reject'], true);
+        $comptrollerPricingReadonly = $isComptrollerCanvassHistory || in_array($comptrollerCompStatus, ['accept', 'reject'], true);
         $pricingOverviewInteractive = $isComptrollerCanvassReview && !$comptrollerPricingReadonly;
         $comptrollerPricingOverview = cwirmsComptrollerPricingOverviewForRequest($db, $requestId);
+
+        if ($isGsdCanvassReview) {
+            $showCanvassPricingOverview = false;
+        }
     }
 }
 $approvalMsg = trim((string) ($_GET['approval_msg'] ?? ''));
@@ -706,7 +798,7 @@ $pageTitle = $rfRequestId > 0
         </div>
         </section>
 
-            <?php if ($isRequesterOwnedCanvass || $isReviewerCanvassReadonly || $isCanvasserCanvassView): ?>
+            <?php if ($isRequesterOwnedCanvass || $isReviewerCanvassReadonly || $isCanvasserCanvassView || ($requestId > 0 && !$isReviewerCanvassReadonly && !$isCanvasserCanvassView && !$isGsdCanvassReview && !$isComptrollerCanvassReview && !$isPresidentCanvassReview)): ?>
             <section class="rf-section rf-section-preferred cv-preferred-section" id="cvPreferredSection">
                 <h2 class="rf-section-heading">Preferred Supplier Matrix</h2>
                 <div class="cv-preferred-section-head" id="cvPreferredSectionHead">
@@ -733,11 +825,11 @@ $pageTitle = $rfRequestId > 0
 
             <section class="rf-section rf-section-canvassed supplier-section" id="cvCanvasSection" role="region" aria-label="Suppliers and pricing">
                 <h2 class="rf-section-heading">Canvassed Supplier Matrix</h2>
-                <?php if (!$isCanvassStructureUiHidden): ?>
-                <div class="supplier-picker">
-                    <label for="cvSupplierDropdownBtn">Supplier</label>
-                    <div class="supplier-picker-row">
-                        <div class="supplier-dropdown" id="cvSupplierDropdown">
+                    <?php if ($isCanvasserCanvassView && !$verifierChainLocked): ?>
+                    <div class="supplier-picker">
+                        <label for="cvSupplierDropdownBtn">Supplier</label>
+                        <div class="supplier-picker-row">
+                            <div class="supplier-dropdown" id="cvSupplierDropdown">
                             <button type="button" id="cvSupplierDropdownBtn" class="supplier-dropdown-btn">
                                 <span class="supplier-dropdown-label">
                                     <img id="cvSupplierDropdownPreview" class="supplier-dropdown-preview" src="" alt="" width="28" height="28" decoding="async" hidden>
@@ -878,7 +970,7 @@ $pageTitle = $rfRequestId > 0
             <button type="button" id="cvCompleteCanvassBtn" class="btn-submit">Complete canvassing</button>
             <button type="button" id="cvCanvasserUndoBtn" class="btn-secondary comptroller-undo-btn" hidden>Undo completion</button>
             <p class="cv-canvasser-save-hint" style="flex-basis:100%;margin:0.35rem 0 0;font-size:0.85rem;color:#64748b;">Save draft keeps your supplier quotes without finishing the step. Complete canvassing saves and records your approval. Use <strong>Undo completion</strong> to reopen the canvass step.</p>
-            <?php elseif ($isRequesterOwnedCanvass): ?>
+            <?php elseif ($isRequesterOwnedCanvass || $isOwner): ?>
             <button type="button" id="cvSaveDraftBtn" class="btn-secondary">Save draft</button>
             <button type="button" id="cvSaveBtn" class="btn-submit">Save and continue</button>
             <?php else: ?>
@@ -923,7 +1015,7 @@ $pageTitle = $rfRequestId > 0
 </div>
 <?php endif; ?>
 
-<?php if ($isRequesterOwnedCanvass && !$verifierChainLocked): ?>
+<?php if (($isOwner || $isRequesterOwnedCanvass) && !$verifierChainLocked && !$isReviewerCanvassReadonly): ?>
 <div id="cvPrefSupModal" class="confirm-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cvPrefSupModalTitle">
     <div class="confirm-modal-backdrop" id="cvPrefSupModalBackdrop"></div>
     <div class="confirm-modal-card" style="max-width:480px;width:92%;">
@@ -1005,10 +1097,10 @@ $pageTitle = $rfRequestId > 0
 <?php if ($accessError === null): ?>
 <script>
 window.CWIRMS_PREF_SUP = <?php echo json_encode([
-    'editable'  => ($isRequesterOwnedCanvass && !$verifierChainLocked),
+    'editable'  => ($isOwner || $isRequesterOwnedCanvass) && !$verifierChainLocked && !$isReviewerCanvassReadonly,
     'requestId' => $requestId,
     'api'       => '../../app/api/canvass_detail.php',
-    'isRequester' => $isRequesterOwnedCanvass,
+    'isRequester' => $isRequesterOwnedCanvass || $isOwner,  
 ]); ?>;
 </script>
 <script src="../assets/js/dean_canvass_form.js"></script>

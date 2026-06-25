@@ -75,9 +75,11 @@ class AuthController {
         $this->ensureSessionStarted();
 
         $identifier = trim((string) $identifier);
+
         $isEmail = str_contains($identifier, '@');
 
         $userModel = new User();
+        
         $user = $userModel->findByUsername($identifier);
         if ($user) {
             $loginKey = (string) ($user['Email'] ?? $identifier);

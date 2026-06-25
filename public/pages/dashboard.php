@@ -23,7 +23,7 @@ if ($username === '') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - WLC-SMART</title>
-    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc34">
+    <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc35">
     <link rel="stylesheet" href="../assets/css/loading.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -196,7 +196,7 @@ if ($username === '') {
 
 <?php require __DIR__ . '/partials/inventory_manager_sidebar_scripts.php'; ?>
 
-<script src="../assets/js/dashboard.js?v=wlc4"></script>
+<script src="../assets/js/dashboard.js?v=wlc5"></script>
 <script src="../assets/js/logout.js?v=wlc1"></script>
 </body>
 </html>

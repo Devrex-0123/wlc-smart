@@ -603,12 +603,23 @@ function poFormatRecord(PDO $db, array $header, array $lines): array
     $modeOfPayment = poResolveModeOfPaymentFromTotal($totalAmount);
     $supplierTin = poEnrichSupplierTin($db, $header);
 
+    $requestedByName = (string) ($header['requested_by_name'] ?? '');
+    $requisitionId = (int) ($header['requisition_id'] ?? 0);
+    if ($requisitionId > 0) {
+        $nameStmt = $db->prepare('SELECT requester_name FROM requisition_item WHERE request_id = ? LIMIT 1');
+        $nameStmt->execute([$requisitionId]);
+        $storedName = trim((string) ($nameStmt->fetchColumn() ?: ''));
+        if ($storedName !== '') {
+            $requestedByName = $storedName;
+        }
+    }
+
     return [
         'id' => (int) ($header['id'] ?? 0),
         'po_number' => (string) ($header['po_number'] ?? ''),
         'requisition_id' => $header['requisition_id'] !== null ? (int) $header['requisition_id'] : null,
         'requested_by_user_id' => $header['requested_by_user_id'] !== null ? (int) $header['requested_by_user_id'] : null,
-        'requested_by' => (string) ($header['requested_by_name'] ?? ''),
+        'requested_by' => $requestedByName, 
         'facility_id' => $header['facility_id'] !== null ? (int) $header['facility_id'] : null,
         'location_facility' => (string) ($header['location_facility'] ?? ''),
         'supplier_id' => $header['supplier_id'] !== null ? (int) $header['supplier_id'] : null,
@@ -1071,12 +1082,14 @@ if ($action === 'finalize_tax') {
             true
         );
         poInsertPaymentReadyNotification($db, $header, $payload['netPayable']);
-        $db->commit();
+        if ($db->inTransaction()) {
+            $db->commit();
+        }
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        poSendJson(['success' => false, 'message' => 'Failed to finalize tax computation.']);
+         poSendJson(['success' => false, 'message' => 'Failed to finalize tax computation: ' . $e->getMessage()]);
     }
 
     $saved = poFetchTaxRecord($db, $poId);
