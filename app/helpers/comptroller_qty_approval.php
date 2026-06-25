@@ -374,8 +374,4 @@ function cwirmsApplyComptrollerCanvasApproval(PDO $db, int $requestId, int $user
     $updReq = $db->prepare('UPDATE requisition_item SET status = ? WHERE request_id = ?');
     $updReq->execute([$requisitionStatus, $requestId]);
 
-    $logIns = $db->prepare(
-        'INSERT INTO comptroller_action_history (request_id, user_id, action) VALUES (?, ?, ?)'
-    );
-    $logIns->execute([$requestId, $userId, $compStatus]);
 }

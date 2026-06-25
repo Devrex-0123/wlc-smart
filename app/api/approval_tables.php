@@ -81,51 +81,7 @@ function ensurePurchaseRequisitionApprovalRow(PDO $db, int $requestId): void
 
 function ensureRequisitionCanvassSubmissionColumn(PDO $db): void
 {
-    static $checked = false;
-    if ($checked) {
-        return;
-    }
-    $checked = true;
-
-    $colCheck = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'requisition_canvass_detail'
-           AND COLUMN_NAME = 'canvass_submission_status'"
-    );
-    $colCheck->execute();
-    $exists = ((int) $colCheck->fetchColumn()) > 0;
-    if (!$exists) {
-        $db->exec(
-            "ALTER TABLE requisition_canvass_detail
-             ADD COLUMN canvass_submission_status ENUM('draft', 'submitted') DEFAULT 'draft'
-             AFTER sort_order"
-        );
-        $db->exec(
-            "CREATE INDEX idx_canvass_detail_submission_status
-             ON requisition_canvass_detail (canvass_submission_status)"
-        );
-    }
-
-    // One-time backfill from legacy storage on canvass_verification_approval (if legacy column exists).
-    $legacyColCheck = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'canvass_verification_approval'
-           AND COLUMN_NAME = 'canvas_submission_status'"
-    );
-    $legacyColCheck->execute();
-    $legacyColumnExists = ((int) $legacyColCheck->fetchColumn()) > 0;
-    if ($legacyColumnExists) {
-        $db->exec(
-            "UPDATE requisition_canvass_detail rcd
-             INNER JOIN canvass_verification_approval cva ON cva.request_id = rcd.request_id
-             SET rcd.canvass_submission_status = CASE
-                 WHEN LOWER(TRIM(COALESCE(cva.canvas_submission_status, 'draft'))) = 'submitted' THEN 'submitted'
-                 ELSE COALESCE(rcd.canvass_submission_status, 'draft')
-             END"
-        );
-    }
+    // No-op: requisition_canvass_detail has been dropped; submission status lives in canvass_verification_approval.
 }
 
 function ensureRequisitionPreferredQuoteColumns(PDO $db): void
@@ -144,196 +100,32 @@ function ensureRequisitionPreferredQuoteColumns(PDO $db): void
 
 function dropRequisitionCanvassDetailPhotoColumns(PDO $db): void
 {
-    static $checked = false;
-    if ($checked) {
-        return;
-    }
-    $checked = true;
-
-    $photoAtCheck = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'requisition_canvass_detail'
-           AND COLUMN_NAME = 'photo_uploaded_at'"
-    );
-    $photoAtCheck->execute();
-    if (((int) $photoAtCheck->fetchColumn()) > 0) {
-        $db->exec('ALTER TABLE requisition_canvass_detail DROP COLUMN photo_uploaded_at');
-    }
-
-    $photoUrlCheck = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'requisition_canvass_detail'
-           AND COLUMN_NAME = 'photo_url'"
-    );
-    $photoUrlCheck->execute();
-    if (((int) $photoUrlCheck->fetchColumn()) > 0) {
-        $db->exec('ALTER TABLE requisition_canvass_detail DROP COLUMN photo_url');
-    }
+    // No-op: requisition_canvass_detail has been dropped.
 }
 
 function ensureCanvassSupplierQuoteSourceColumn(PDO $db): void
 {
-    static $checked = false;
-    if ($checked) {
-        return;
-    }
-    $checked = true;
-
-    $colCheck = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'requisition_canvass_detail_supplier'
-           AND COLUMN_NAME = 'quote_source'"
-    );
-    $colCheck->execute();
-    if (((int) $colCheck->fetchColumn()) === 0) {
-        $db->exec(
-            "ALTER TABLE requisition_canvass_detail_supplier
-             ADD COLUMN quote_source ENUM('preferred','canvasser') NOT NULL DEFAULT 'canvasser' AFTER price"
-        );
-    }
+    // No-op: requisition_canvass_detail_supplier has been dropped.
 }
 
 function ensureCanvassSupplierNotesColumns(PDO $db): void
 {
-    static $checked = false;
-    if ($checked) {
-        return;
-    }
-    $checked = true;
-
-    ensureCanvassSupplierQuoteSourceColumn($db);
-
-    $columns = [
-        'benefits' => 'TEXT NULL DEFAULT NULL',
-    ];
-
-    foreach ($columns as $name => $definition) {
-        $colCheck = $db->prepare(
-            "SELECT COUNT(*) FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = 'requisition_canvass_detail_supplier'
-               AND COLUMN_NAME = ?"
-        );
-        $colCheck->execute([$name]);
-        if (((int) $colCheck->fetchColumn()) === 0) {
-            $db->exec(
-                "ALTER TABLE requisition_canvass_detail_supplier ADD COLUMN {$name} {$definition}"
-            );
-        }
-    }
+    // No-op: requisition_canvass_detail_supplier has been dropped.
 }
 
 function ensureCanvassSupplierDiscountsTable(PDO $db): void
 {
-    static $checked = false;
-    if ($checked) {
-        return;
-    }
-    $checked = true;
-
-    $tableCheck = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.TABLES
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'canvass_supplier_discounts'"
-    );
-    $tableCheck->execute();
-    if (((int) $tableCheck->fetchColumn()) === 0) {
-        $db->exec(
-            'CREATE TABLE canvass_supplier_discounts (
-                id INT(11) NOT NULL AUTO_INCREMENT,
-                canvass_supplier_id INT(11) NOT NULL,
-                label VARCHAR(100) NULL DEFAULT NULL,
-                discount_percent DECIMAL(5,2) NOT NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                KEY idx_csd_canvass_supplier (canvass_supplier_id),
-                CONSTRAINT fk_csd_canvass_supplier FOREIGN KEY (canvass_supplier_id)
-                    REFERENCES requisition_canvass_detail_supplier (canvass_detail_supplier_id)
-                    ON DELETE CASCADE ON UPDATE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci'
-        );
-    }
-
-    $legacyCol = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'requisition_canvass_detail_supplier'
-           AND COLUMN_NAME = 'discount_percent'"
-    );
-    $legacyCol->execute();
-    if (((int) $legacyCol->fetchColumn()) > 0) {
-        $db->exec(
-            'INSERT INTO canvass_supplier_discounts (canvass_supplier_id, label, discount_percent)
-             SELECT agg.anchor_id, NULL, agg.discount_percent
-             FROM (
-                 SELECT MIN(cds.canvass_detail_supplier_id) AS anchor_id, MAX(cds.discount_percent) AS discount_percent
-                 FROM requisition_canvass_detail_supplier cds
-                 WHERE cds.discount_percent IS NOT NULL AND cds.discount_percent > 0
-                 GROUP BY cds.supplier_id
-             ) AS agg'
-        );
-        $db->exec('ALTER TABLE requisition_canvass_detail_supplier DROP COLUMN discount_percent');
-    }
+    // No-op: canvass_supplier_discounts and requisition_canvass_detail_supplier have been dropped.
 }
 
 function ensureSuggestedSupplierSelectionSourceColumn(PDO $db): void
 {
-    static $checked = false;
-    if ($checked) {
-        return;
-    }
-    $checked = true;
-
-    $colCheck = $db->prepare(
-        "SELECT COUNT(*) FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'request_approval_suggested_supplier_item'
-           AND COLUMN_NAME = 'selection_source'"
-    );
-    $colCheck->execute();
-    if (((int) $colCheck->fetchColumn()) === 0) {
-        $db->exec(
-            "ALTER TABLE request_approval_suggested_supplier_item
-             ADD COLUMN selection_source ENUM('preferred','canvassed') NULL AFTER supplier_id"
-        );
-    }
+    // No-op: request_approval_suggested_supplier_item has been dropped.
 }
 
 function ensureComptrollerPartialQtyColumns(PDO $db): void
 {
-    static $checked = false;
-    if ($checked) {
-        return;
-    }
-    $checked = true;
-
-    $columns = [
-        'accepted_qty' => 'INT UNSIGNED NULL',
-        'deferred_qty' => 'INT UNSIGNED NULL DEFAULT 0',
-        'deferred_message' => 'TEXT NULL',
-        'comptroller_qty_status' => "ENUM('fully_approved','deferred') NULL",
-        'comptroller_approved_by_user_id' => 'INT NULL',
-        'comptroller_approved_at' => 'DATETIME NULL',
-    ];
-
-    foreach ($columns as $name => $definition) {
-        $colCheck = $db->prepare(
-            "SELECT COUNT(*) FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = 'request_approval_suggested_supplier_item'
-               AND COLUMN_NAME = ?"
-        );
-        $colCheck->execute([$name]);
-        if (((int) $colCheck->fetchColumn()) === 0) {
-            $db->exec(
-                "ALTER TABLE request_approval_suggested_supplier_item ADD COLUMN {$name} {$definition}"
-            );
-        }
-    }
+    // No-op: request_approval_suggested_supplier_item has been dropped.
 }
 
 function ensurePurchaseOrderTables(PDO $db): void
@@ -520,114 +312,12 @@ function ensurePurchaseOrderFeeColumns(PDO $db): void
 
 function ensurePreferredSupplierItemQuotesTable(PDO $db): void
 {
-    static $checked = false;
-    if ($checked) {
-        return;
-    }
-    $checked = true;
-
-    ensureRequisitionPreferredQuoteColumns($db);
-
-    $db->exec(
-        'CREATE TABLE IF NOT EXISTS requisition_preferred_supplier_item (
-            preferred_supplier_item_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            request_id INT NOT NULL,
-            supplier_id INT NOT NULL,
-            sort_order INT NOT NULL DEFAULT 0,
-            price DECIMAL(12,2) DEFAULT NULL,
-            quote_photo VARCHAR(255) DEFAULT NULL,
-            UNIQUE KEY uq_rpsi_request_supplier_sort (request_id, supplier_id, sort_order),
-            KEY idx_rpsi_supplier (supplier_id),
-            CONSTRAINT rpsi_fk_request FOREIGN KEY (request_id) REFERENCES requisition_item (request_id) ON DELETE CASCADE ON UPDATE CASCADE,
-            CONSTRAINT rpsi_fk_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers (supplier_id) ON DELETE CASCADE ON UPDATE CASCADE
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
-    );
-
-    cwirmsBackfillPreferredQuotesJsonToJunction($db);
+    // No-op: requisition_preferred_supplier_item has been dropped; data lives in requisition_line_quotes.
 }
 
 function cwirmsBackfillPreferredQuotesJsonToJunction(PDO $db): void
 {
-    static $ran = false;
-    if ($ran) {
-        return;
-    }
-    $ran = true;
-
-    try {
-        $countStmt = $db->query('SELECT COUNT(*) FROM requisition_preferred_supplier_item');
-        if ($countStmt && (int) $countStmt->fetchColumn() > 0) {
-            return;
-        }
-
-        $stmt = $db->query(
-            'SELECT request_id, supplier_id, quoted_prices, quote_photos
-             FROM requisition_preferred_suppliers
-             WHERE (quoted_prices IS NOT NULL AND quoted_prices <> \'\')
-                OR (quote_photos IS NOT NULL AND quote_photos <> \'\')'
-        );
-        if (!$stmt) {
-            return;
-        }
-
-        $ins = $db->prepare(
-            'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, price, quote_photo)
-             VALUES (?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE
-                price = COALESCE(VALUES(price), price),
-                quote_photo = COALESCE(VALUES(quote_photo), quote_photo)'
-        );
-
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $requestId = (int) ($row['request_id'] ?? 0);
-            $supplierId = (int) ($row['supplier_id'] ?? 0);
-            if ($requestId <= 0 || $supplierId <= 0) {
-                continue;
-            }
-
-            $prices = [];
-            if (isset($row['quoted_prices']) && $row['quoted_prices'] !== null && $row['quoted_prices'] !== '') {
-                $decoded = json_decode((string) $row['quoted_prices'], true);
-                if (is_array($decoded)) {
-                    $prices = $decoded;
-                }
-            }
-            $photos = [];
-            if (isset($row['quote_photos']) && $row['quote_photos'] !== null && $row['quote_photos'] !== '') {
-                $decoded = json_decode((string) $row['quote_photos'], true);
-                if (is_array($decoded)) {
-                    $photos = $decoded;
-                }
-            }
-
-            $sortOrders = [];
-            foreach (array_keys($prices) as $k) {
-                $sortOrders[(int) $k] = true;
-            }
-            foreach (array_keys($photos) as $k) {
-                $sortOrders[(int) $k] = true;
-            }
-
-            foreach (array_keys($sortOrders) as $sortOrder) {
-                $priceRaw = $prices[$sortOrder] ?? $prices[(string) $sortOrder] ?? null;
-                $photoRaw = $photos[$sortOrder] ?? $photos[(string) $sortOrder] ?? null;
-                $priceVal = null;
-                if ($priceRaw !== null && $priceRaw !== '' && is_numeric($priceRaw)) {
-                    $priceVal = round((float) $priceRaw, 2);
-                }
-                $photoVal = null;
-                if ($photoRaw !== null && trim((string) $photoRaw) !== '') {
-                    $photoVal = substr(trim((string) $photoRaw), 0, 255);
-                }
-                if ($priceVal === null && $photoVal === null) {
-                    continue;
-                }
-                $ins->execute([$requestId, $supplierId, (int) $sortOrder, $priceVal, $photoVal]);
-            }
-        }
-    } catch (Throwable $e) {
-        // ignore migration errors on older schemas
-    }
+    // No-op: requisition_preferred_supplier_item has been dropped.
 }
 
 /**
@@ -817,15 +507,15 @@ function ensureRequisitionLineAwardsTable(PDO $db): void
  */
 function cwirmsLoadPreferredSupplierQuoteMapsForRequest(PDO $db, int $requestId): array
 {
-    ensurePreferredSupplierItemQuotesTable($db);
     $out = [];
     $stmt = $db->prepare(
-        'SELECT supplier_id, sort_order, price, quote_photo
-         FROM requisition_preferred_supplier_item
-         WHERE request_id = ?
-         ORDER BY supplier_id ASC, sort_order ASC'
+        'SELECT rlq.supplier_id, rl.sort_order, rlq.quoted_unit_price AS price, rlq.quote_photo
+         FROM requisition_line_quotes rlq
+         JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+         WHERE rl.request_id = ? AND rlq.quote_type = ?
+         ORDER BY rlq.supplier_id ASC, rl.sort_order ASC'
     );
-    $stmt->execute([$requestId]);
+    $stmt->execute([$requestId, 'preferred']);
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $sid = (int) ($row['supplier_id'] ?? 0);
         $sortOrder = (int) ($row['sort_order'] ?? 0);
@@ -859,13 +549,14 @@ function cwirmsSyncPreferredSupplierQuoteJsonColumns(PDO $db, int $requestId, in
 
 function cwirmsPreferredQuotedPriceForSortOrder(PDO $db, int $requestId, int $supplierId, int $sortOrder): ?string
 {
-    ensurePreferredSupplierItemQuotesTable($db);
     $stmt = $db->prepare(
-        'SELECT price FROM requisition_preferred_supplier_item
-         WHERE request_id = ? AND supplier_id = ? AND sort_order = ?
+        'SELECT rlq.quoted_unit_price
+         FROM requisition_line_quotes rlq
+         JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+         WHERE rl.request_id = ? AND rlq.supplier_id = ? AND rl.sort_order = ? AND rlq.quote_type = ?
          LIMIT 1'
     );
-    $stmt->execute([$requestId, $supplierId, $sortOrder]);
+    $stmt->execute([$requestId, $supplierId, $sortOrder, 'preferred']);
     $raw = $stmt->fetchColumn();
     if ($raw === false || $raw === null || $raw === '' || !is_numeric($raw)) {
         return null;

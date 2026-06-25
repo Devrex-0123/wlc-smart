@@ -466,18 +466,7 @@ try {
             $selectionSource = 'canvassed';
         }
 
-        // Accept requisition_line_id; fall back to canvass_detail_id for transition compatibility.
         $lineId = (int) ($_POST['requisition_line_id'] ?? 0);
-        if ($lineId <= 0) {
-            $canvassDetailId = (int) ($_POST['canvass_detail_id'] ?? 0);
-            if ($canvassDetailId > 0) {
-                $mapStmt = $db->prepare(
-                    'SELECT requisition_line_id FROM requisition_canvass_detail WHERE canvass_detail_id = ? LIMIT 1'
-                );
-                $mapStmt->execute([$canvassDetailId]);
-                $lineId = (int) ($mapStmt->fetchColumn() ?: 0);
-            }
-        }
 
         if ($requestId <= 0 || $lineId <= 0 || $supplierId <= 0) {
             sendJson(['success' => false, 'message' => 'Invalid request, item, or supplier.']);
@@ -566,18 +555,7 @@ try {
         assertGsdOfficer($db);
         $requestId = (int) ($_POST['request_id'] ?? 0);
 
-        // Accept requisition_line_id; fall back to canvass_detail_id for transition compatibility.
         $lineId = (int) ($_POST['requisition_line_id'] ?? 0);
-        if ($lineId <= 0) {
-            $canvassDetailId = (int) ($_POST['canvass_detail_id'] ?? 0);
-            if ($canvassDetailId > 0) {
-                $mapStmt = $db->prepare(
-                    'SELECT requisition_line_id FROM requisition_canvass_detail WHERE canvass_detail_id = ? LIMIT 1'
-                );
-                $mapStmt->execute([$canvassDetailId]);
-                $lineId = (int) ($mapStmt->fetchColumn() ?: 0);
-            }
-        }
 
         if ($requestId <= 0 || $lineId <= 0) {
             sendJson(['success' => false, 'message' => 'Invalid request or item reference.']);
@@ -627,15 +605,15 @@ try {
                 $filterDate = $filterDateRaw;
             }
         }
-        $dateClause = $filterDate !== null ? ' AND DATE(h.acted_at) = ?' : '';
+        $dateClause = $filterDate !== null ? ' AND DATE(h.verified_at) = ?' : '';
 
         $histItems = requisitionSqlHistoryItemsLabel();
         $baseSql = "
-            SELECT h.id, h.request_id, h.action, h.acted_at,
+            SELECT h.request_id AS id, h.request_id, h.gsd_status AS action, h.verified_at AS acted_at,
                    {$histItems},
                    d.`office_name` AS office_name,
                    u.Email AS requester_email
-            FROM gsd_action_history h
+            FROM canvass_verification_approval h
             INNER JOIN requisition_item r ON r.request_id = h.request_id
             LEFT JOIN offices d ON d.office_id = r.office_id
             LEFT JOIN user u ON u.user_id = r.user_id
@@ -648,8 +626,9 @@ try {
                 sendJson(['success' => false, 'message' => 'Request not found.']);
             }
             $sql = $baseSql . '
-                WHERE h.request_id = ? AND h.user_id = ?' . $dateClause . '
-                ORDER BY h.acted_at DESC, h.id DESC
+                WHERE h.request_id = ?
+                AND h.verified_by = (SELECT full_name FROM user WHERE user_id = ?)' . $dateClause . '
+                ORDER BY h.verified_at DESC
                 LIMIT 100
             ';
             $stmt = $db->prepare($sql);
@@ -660,8 +639,8 @@ try {
             $stmt->execute($params);
         } else {
             $sql = $baseSql . '
-                WHERE h.user_id = ?' . $dateClause . '
-                ORDER BY h.acted_at DESC, h.id DESC
+                WHERE h.verified_by = (SELECT full_name FROM user WHERE user_id = ?)' . $dateClause . '
+                ORDER BY h.verified_at DESC
                 LIMIT 500
             ';
             $stmt = $db->prepare($sql);
@@ -864,11 +843,6 @@ try {
 
             $updReq = $db->prepare('UPDATE requisition_item SET status = ? WHERE request_id = ?');
             $updReq->execute([$requisitionStatus, $requestId]);
-
-            $logIns = $db->prepare(
-                'INSERT INTO gsd_action_history (request_id, user_id, action) VALUES (?, ?, ?)'
-            );
-            $logIns->execute([$requestId, (int) $_SESSION['user_id'], $gsdStatus]);
 
             $db->commit();
         } catch (Exception $e) {

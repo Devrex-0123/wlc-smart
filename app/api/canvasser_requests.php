@@ -631,11 +631,6 @@ try {
             $updReq = $db->prepare('UPDATE requisition_item SET status = ? WHERE request_id = ?');
             $updReq->execute([$requisitionStatus, $requestId]);
 
-            $logIns = $db->prepare(
-                'INSERT INTO canvasser_action_history (request_id, user_id, action) VALUES (?, ?, ?)'
-            );
-            $logIns->execute([$requestId, (int) $_SESSION['user_id'], $canvasStatus]);
-
             $db->commit();
         } catch (Exception $e) {
             $db->rollBack();
@@ -675,15 +670,15 @@ try {
                 $filterDate = $filterDateRaw;
             }
         }
-        $dateClause = $filterDate !== null ? ' AND DATE(h.acted_at) = ?' : '';
+        $dateClause = $filterDate !== null ? ' AND DATE(h.canvassed_at) = ?' : '';
 
         $histItems = requisitionSqlHistoryItemsLabel();
         $baseSql = "
-            SELECT h.id, h.request_id, h.action, h.acted_at,
+            SELECT h.request_id AS id, h.request_id, h.canvas_status AS action, h.canvassed_at AS acted_at,
                    {$histItems},
                    d.`office_name` AS office_name,
                    u.Email AS requester_email
-            FROM canvasser_action_history h
+            FROM canvass_verification_approval h
             INNER JOIN requisition_item r ON r.request_id = h.request_id
             LEFT JOIN offices d ON d.office_id = r.office_id
             LEFT JOIN user u ON u.user_id = r.user_id
@@ -696,8 +691,8 @@ try {
                 sendJson(['success' => false, 'message' => 'Request not found.']);
             }
             $sql = $baseSql . '
-                WHERE h.request_id = ? AND h.user_id = ?' . $dateClause . '
-                ORDER BY h.acted_at DESC, h.id DESC
+                WHERE h.request_id = ? AND h.canvas_assignee_user_id = ?' . $dateClause . '
+                ORDER BY h.canvassed_at DESC
                 LIMIT 100
             ';
             $stmt = $db->prepare($sql);
@@ -708,8 +703,8 @@ try {
             $stmt->execute($params);
         } else {
             $sql = $baseSql . '
-                WHERE h.user_id = ?' . $dateClause . '
-                ORDER BY h.acted_at DESC, h.id DESC
+                WHERE h.canvas_assignee_user_id = ?' . $dateClause . '
+                ORDER BY h.canvassed_at DESC
                 LIMIT 500
             ';
             $stmt = $db->prepare($sql);

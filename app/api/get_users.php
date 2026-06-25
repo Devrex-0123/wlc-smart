@@ -39,10 +39,6 @@ try {
             (
                 LOWER(TRIM(u.role)) = 'canvasser'
                 OR EXISTS (
-                    SELECT 1 FROM canvasser_action_history h
-                    WHERE h.user_id = u.user_id
-                )
-                OR EXISTS (
                     SELECT 1 FROM canvass_verification_approval c
                     WHERE c.canvas_assignee_user_id = u.user_id
                 )

@@ -84,9 +84,11 @@ function cwirmsPreferredSupplierIdSet(PDO $db, int $requestId): array
 {
     $set = [];
     try {
-        ensurePreferredSupplierItemQuotesTable($db);
         $stmt = $db->prepare(
-            'SELECT DISTINCT supplier_id FROM requisition_preferred_supplier_item WHERE request_id = ?'
+            "SELECT DISTINCT rlq.supplier_id
+             FROM requisition_line_quotes rlq
+             INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+             WHERE rl.request_id = ? AND rlq.quote_type = 'preferred'"
         );
         $stmt->execute([$requestId]);
         while ($sid = $stmt->fetchColumn()) {
@@ -138,9 +140,12 @@ function cwirmsPreferredSupplierPhotosByRequest(PDO $db, int $requestId): array
 function cwirmsPreferredSupplierLinkExists(PDO $db, int $requestId, int $supplierId): bool
 {
     try {
-        ensurePreferredSupplierItemQuotesTable($db);
         $stmt = $db->prepare(
-            'SELECT 1 FROM requisition_preferred_supplier_item WHERE request_id = ? AND supplier_id = ? LIMIT 1'
+            "SELECT 1
+             FROM requisition_line_quotes rlq
+             INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+             WHERE rl.request_id = ? AND rlq.supplier_id = ? AND rlq.quote_type = 'preferred'
+             LIMIT 1"
         );
         $stmt->execute([$requestId, $supplierId]);
         return (bool) $stmt->fetchColumn();
@@ -156,27 +161,28 @@ function cwirmsUpdatePreferredSupplierQuotePhoto(
     int $itemIndex,
     ?string $photoPath
 ): void {
-    ensurePreferredSupplierItemQuotesTable($db);
-    if (!cwirmsPreferredSupplierLinkExists($db, $requestId, $supplierId)) {
+    $lineStmt = $db->prepare(
+        "SELECT requisition_line_id FROM requisition_line
+         WHERE request_id = ? AND sort_order = ?
+           AND (deleted_at IS NULL OR deleted_at = '')
+         LIMIT 1"
+    );
+    $lineStmt->execute([$requestId, $itemIndex]);
+    $lineId = (int) ($lineStmt->fetchColumn() ?: 0);
+    if ($lineId <= 0) {
         throw new RuntimeException('Preferred supplier not found for this request.');
     }
 
-    if ($photoPath !== null && trim($photoPath) !== '') {
-        $photoVal = substr(trim($photoPath), 0, 255);
-        $upsert = $db->prepare(
-            'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, quote_photo)
-             VALUES (?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE quote_photo = VALUES(quote_photo)'
-        );
-        $upsert->execute([$requestId, $supplierId, $itemIndex, $photoVal]);
-    } else {
-        $upd = $db->prepare(
-            'UPDATE requisition_preferred_supplier_item
-             SET quote_photo = NULL
-             WHERE request_id = ? AND supplier_id = ? AND sort_order = ?'
-        );
-        $upd->execute([$requestId, $supplierId, $itemIndex]);
-    }
+    $photoVal = ($photoPath !== null && trim($photoPath) !== '')
+        ? substr(trim($photoPath), 0, 255)
+        : null;
+
+    $upsert = $db->prepare(
+        "INSERT INTO requisition_line_quotes (requisition_line_id, supplier_id, quote_type, quoted_unit_price, quote_photo)
+         VALUES (?, ?, 'preferred', 0, ?)
+         ON DUPLICATE KEY UPDATE quote_photo = VALUES(quote_photo)"
+    );
+    $upsert->execute([$lineId, $supplierId, $photoVal]);
 }
 
 /**
@@ -184,21 +190,29 @@ function cwirmsUpdatePreferredSupplierQuotePhoto(
  */
 function cwirmsPersistPreferredSupplierQuotes(PDO $db, int $requestId, array $preferredQuotes): void
 {
-    ensurePreferredSupplierItemQuotesTable($db);
-
     $db->beginTransaction();
     try {
-        $touchedSuppliers = [];
+        // Load all line IDs for this request indexed by sort_order
+        $linesBySort = [];
+        $linesStmt = $db->prepare(
+            "SELECT sort_order, requisition_line_id
+             FROM requisition_line
+             WHERE request_id = ?
+               AND (deleted_at IS NULL OR deleted_at = '')"
+        );
+        $linesStmt->execute([$requestId]);
+        while ($lsRow = $linesStmt->fetch(PDO::FETCH_ASSOC)) {
+            $linesBySort[(int) $lsRow['sort_order']] = (int) $lsRow['requisition_line_id'];
+        }
 
         foreach ($preferredQuotes as $pq) {
             if (!is_array($pq)) {
                 continue;
             }
             $sid = (int) ($pq['supplier_id'] ?? 0);
-            if ($sid <= 0 || !cwirmsPreferredSupplierLinkExists($db, $requestId, $sid)) {
+            if ($sid <= 0) {
                 continue;
             }
-            $touchedSuppliers[$sid] = true;
 
             $prices = $pq['prices'] ?? [];
             if (!is_array($prices)) {
@@ -231,33 +245,35 @@ function cwirmsPersistPreferredSupplierQuotes(PDO $db, int $requestId, array $pr
                 }
             }
 
-            $existingStmt = $db->prepare(
-                'SELECT sort_order FROM requisition_preferred_supplier_item
-                 WHERE request_id = ? AND supplier_id = ?'
-            );
-            $existingStmt->execute([$requestId, $sid]);
-            $existingSortOrders = array_map('intval', $existingStmt->fetchAll(PDO::FETCH_COLUMN, 0));
-
-            foreach ($existingSortOrders as $existingSort) {
-                if (!isset($desiredSortOrders[$existingSort])) {
+            // Delete preferred quotes for sort_orders no longer in desired set
+            foreach ($linesBySort as $sortOrder => $lineId) {
+                if (!isset($desiredSortOrders[$sortOrder])) {
                     $del = $db->prepare(
-                        'DELETE FROM requisition_preferred_supplier_item
-                         WHERE request_id = ? AND supplier_id = ? AND sort_order = ?'
+                        "DELETE FROM requisition_line_quotes
+                         WHERE requisition_line_id = ? AND supplier_id = ? AND quote_type = 'preferred'"
                     );
-                    $del->execute([$requestId, $sid, $existingSort]);
+                    $del->execute([$lineId, $sid]);
                 }
             }
 
             $upsert = $db->prepare(
-                'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, price, quote_photo)
-                 VALUES (?, ?, ?, ?, ?)
-                 ON DUPLICATE KEY UPDATE price = VALUES(price), quote_photo = VALUES(quote_photo)'
+                "INSERT INTO requisition_line_quotes
+                     (requisition_line_id, supplier_id, quoted_unit_price, quote_type, quote_photo)
+                 VALUES (?, ?, ?, 'preferred', ?)
+                 ON DUPLICATE KEY UPDATE
+                     quoted_unit_price = VALUES(quoted_unit_price),
+                     quote_photo       = VALUES(quote_photo)"
             );
 
             foreach (array_keys($desiredSortOrders) as $sortOrder) {
                 $sortOrder = (int) $sortOrder;
+                $lineId = $linesBySort[$sortOrder] ?? null;
+                if ($lineId === null) {
+                    continue;
+                }
+
                 $priceRaw = $prices[$sortOrder] ?? $prices[(string) $sortOrder] ?? null;
-                $priceVal = null;
+                $priceVal = 0.0;
                 if ($priceRaw !== null && $priceRaw !== '') {
                     if (!is_numeric($priceRaw)) {
                         throw new RuntimeException('Preferred supplier prices must be numbers.');
@@ -278,7 +294,7 @@ function cwirmsPersistPreferredSupplierQuotes(PDO $db, int $requestId, array $pr
                     }
                 }
 
-                $upsert->execute([$requestId, $sid, $sortOrder, $priceVal, $photoVal]);
+                $upsert->execute([$lineId, $sid, $priceVal, $photoVal]);
             }
         }
 
@@ -295,11 +311,10 @@ function cwirmsExistingCanvassSubmissionStatus(PDO $db, int $requestId): string
 {
     try {
         $stmt = $db->prepare(
-            'SELECT LOWER(TRIM(COALESCE(canvass_submission_status, \'draft\')))
-             FROM requisition_canvass_detail
+            "SELECT LOWER(TRIM(COALESCE(canvas_submission_status, 'draft')))
+             FROM canvass_verification_approval
              WHERE request_id = ?
-             ORDER BY sort_order ASC, canvass_detail_id ASC
-             LIMIT 1'
+             LIMIT 1"
         );
         $stmt->execute([$requestId]);
         $status = strtolower(trim((string) ($stmt->fetchColumn() ?: 'draft')));
@@ -478,16 +493,13 @@ function loadCanvassGetRequest(PDO $db, int $requestId, int $userId): array
     ) {
         // For verifiers, canvass is visible only after requester submits it.
         $statusCheckStmt = $db->prepare(
-            'SELECT EXISTS(
-                SELECT 1
-                FROM requisition_canvass_detail
-                WHERE request_id = ?
-                  AND LOWER(TRIM(COALESCE(canvass_submission_status, \'draft\'))) = \'submitted\'
-                LIMIT 1
-            )'
+            "SELECT LOWER(TRIM(COALESCE(canvas_submission_status, 'draft')))
+             FROM canvass_verification_approval
+             WHERE request_id = ?
+             LIMIT 1"
         );
         $statusCheckStmt->execute([$requestId]);
-        $canvasVisible = ((int) $statusCheckStmt->fetchColumn()) === 1;
+        $canvasVisible = strtolower(trim((string) ($statusCheckStmt->fetchColumn() ?: 'draft'))) === 'submitted';
         
         // Only allow verifiers to see submitted canvass forms
         if (!$canvasVisible) {
@@ -524,16 +536,13 @@ function loadCanvassGetRequest(PDO $db, int $requestId, int $userId): array
         if ($ra && userMayActAsCanvasAssigneeForCanvassApi($db, $ra, $userId)) {
             // Check if canvas is submitted before allowing assignee to see it
             $statusCheckStmt = $db->prepare(
-                'SELECT EXISTS(
-                    SELECT 1
-                    FROM requisition_canvass_detail
-                    WHERE request_id = ?
-                      AND LOWER(TRIM(COALESCE(canvass_submission_status, \'draft\'))) = \'submitted\'
-                    LIMIT 1
-                )'
+                "SELECT LOWER(TRIM(COALESCE(canvas_submission_status, 'draft')))
+                 FROM canvass_verification_approval
+                 WHERE request_id = ?
+                 LIMIT 1"
             );
             $statusCheckStmt->execute([$requestId]);
-            $canvasVisible = ((int) $statusCheckStmt->fetchColumn()) === 1;
+            $canvasVisible = strtolower(trim((string) ($statusCheckStmt->fetchColumn() ?: 'draft'))) === 'submitted';
             
             // Canvass assignees can only see submitted forms
             if (!$canvasVisible) {
@@ -571,24 +580,17 @@ function cwirmsNormalizedCanvassItemsFromDb(PDO $db, int $requestId, array $allo
     $detailRows = [];
     try {
         $detStmt = $db->prepare(
-            'SELECT requisition_line_id, component_label, brand, model, specification, sort_order
-             FROM requisition_canvass_detail WHERE request_id = ?
-             ORDER BY sort_order ASC, canvass_detail_id ASC'
+            "SELECT requisition_line_id, item_name AS component_label,
+                    item_brand AS brand, model, specification, sort_order
+             FROM requisition_line
+             WHERE request_id = ?
+               AND (deleted_at IS NULL OR deleted_at = '')
+             ORDER BY sort_order ASC, requisition_line_id ASC"
         );
         $detStmt->execute([$requestId]);
         $detailRows = $detStmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
-        $detStmt = $db->prepare(
-            'SELECT requisition_line_id, component_label, specification, sort_order
-             FROM requisition_canvass_detail WHERE request_id = ?
-             ORDER BY sort_order ASC, canvass_detail_id ASC'
-        );
-        $detStmt->execute([$requestId]);
-        foreach ($detStmt->fetchAll(PDO::FETCH_ASSOC) as $legacyRow) {
-            $legacyRow['brand'] = null;
-            $legacyRow['model'] = null;
-            $detailRows[] = $legacyRow;
-        }
+        // ignore
     }
 
     $normalizedItems = [];
@@ -806,27 +808,16 @@ try {
         }
 
         $detailRows = [];
-        try {
-            $detStmt = $db->prepare(
-                'SELECT canvass_detail_id, requisition_line_id, component_label, brand, model, specification, sort_order
-                 FROM requisition_canvass_detail WHERE request_id = ?
-                 ORDER BY sort_order ASC, canvass_detail_id ASC'
-            );
-            $detStmt->execute([$requestId]);
-            $detailRows = $detStmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Throwable $e) {
-            $detStmt = $db->prepare(
-                'SELECT canvass_detail_id, requisition_line_id, component_label, specification, sort_order
-                 FROM requisition_canvass_detail WHERE request_id = ?
-                 ORDER BY sort_order ASC, canvass_detail_id ASC'
-            );
-            $detStmt->execute([$requestId]);
-            foreach ($detStmt->fetchAll(PDO::FETCH_ASSOC) as $legacyRow) {
-                $legacyRow['brand'] = null;
-                $legacyRow['model'] = null;
-                $detailRows[] = $legacyRow;
-            }
-        }
+        $detStmt = $db->prepare(
+            "SELECT requisition_line_id AS canvass_detail_id, requisition_line_id,
+                    item_name AS component_label, item_brand AS brand, model, specification, sort_order
+             FROM requisition_line
+             WHERE request_id = ?
+               AND (deleted_at IS NULL OR deleted_at = '')
+             ORDER BY sort_order ASC, requisition_line_id ASC"
+        );
+        $detStmt->execute([$requestId]);
+        $detailRows = $detStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $items = [];
         $idxByDetailId = [];
@@ -851,11 +842,11 @@ try {
         }
 
         if ($idxByDetailId !== []) {
-            ensureSuggestedSupplierSelectionSourceColumn($db);
             $selStmt = $db->prepare(
-                'SELECT canvass_detail_id, supplier_id, selection_source
-                 FROM request_approval_suggested_supplier_item
-                 WHERE request_id = ?'
+                'SELECT rla.requisition_line_id AS canvass_detail_id, rla.supplier_id, rla.selection_source
+                 FROM requisition_line_awards rla
+                 INNER JOIN requisition_line rl ON rl.requisition_line_id = rla.requisition_line_id
+                 WHERE rl.request_id = ?'
             );
             $selStmt->execute([$requestId]);
             while ($sel = $selStmt->fetch(PDO::FETCH_ASSOC)) {
@@ -882,11 +873,11 @@ try {
         if ($idxByDetailId !== []) {
             $ids = array_keys($idxByDetailId);
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            ensureCanvassSupplierNotesColumns($db);
             $cj = $db->prepare(
-                "SELECT canvass_detail_id, supplier_id, price, quote_source, benefits
-                 FROM requisition_canvass_detail_supplier
-                 WHERE canvass_detail_id IN ($placeholders)"
+                "SELECT rlq.requisition_line_id AS canvass_detail_id, rlq.supplier_id,
+                        rlq.quoted_unit_price AS price, rlq.quote_type AS quote_source, rlq.benefits
+                 FROM requisition_line_quotes rlq
+                 WHERE rlq.requisition_line_id IN ($placeholders) AND rlq.quote_type = 'canvassed'"
             );
             $cj->execute($ids);
             while ($row = $cj->fetch(PDO::FETCH_ASSOC)) {
@@ -1012,13 +1003,16 @@ try {
             }
             loadCanvassGetRequest($db, $requestId, $uid);
 
-            // Get all distinct preferred suppliers for this request from requisition_preferred_supplier_item
+            // Get all distinct preferred suppliers for this request from requisition_line_quotes
             $stmt = $db->prepare(
-                'SELECT DISTINCT rpsi.supplier_id, s.supplier_name, s.contact_person, s.phone_number, s.email, s.address, s.city, s.country, s.postal_code, s.tin, s.supplier_image, s.is_preferred, s.preferred_request_id, s.shop_url
-                 FROM requisition_preferred_supplier_item rpsi
-                 LEFT JOIN suppliers s ON s.supplier_id = rpsi.supplier_id
-                 WHERE rpsi.request_id = ?
-                 ORDER BY rpsi.supplier_id ASC'
+                "SELECT DISTINCT rlq.supplier_id, s.supplier_name, s.contact_person, s.phone_number, s.email,
+                        s.address, s.city, s.country, s.postal_code, s.tin, s.supplier_image,
+                        s.is_preferred, s.preferred_request_id, s.shop_url
+                 FROM requisition_line_quotes rlq
+                 INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+                 LEFT JOIN suppliers s ON s.supplier_id = rlq.supplier_id
+                 WHERE rl.request_id = ? AND rlq.quote_type = 'preferred'
+                 ORDER BY rlq.supplier_id ASC"
             );
             $stmt->execute([$requestId]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1127,23 +1121,21 @@ try {
             }
             $newSid = (int) $db->lastInsertId();
 
-            // Insert a placeholder row into requisition_preferred_supplier_item to mark supplier as preferred
-            // This allows the supplier to appear in the preferred list even before any quotes are added
-            ensurePreferredSupplierItemQuotesTable($db);
-            $placeholder = $db->prepare(
-                'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, price, quote_photo)
-                 VALUES (?, ?, ?, NULL, NULL)
-                 ON DUPLICATE KEY UPDATE created_at = created_at'
+            // Insert a placeholder preferred quote for the first line to establish the supplier's presence
+            $firstLineStmt = $db->prepare(
+                "SELECT requisition_line_id FROM requisition_line
+                 WHERE request_id = ? AND (deleted_at IS NULL OR deleted_at = '')
+                 ORDER BY sort_order ASC, requisition_line_id ASC LIMIT 1"
             );
-            $placeholder->execute([$requestId, $newSid, -1]);
-
-            $verifyLink = $db->prepare(
-                'SELECT preferred_supplier_item_id FROM requisition_preferred_supplier_item
-                 WHERE request_id = ? AND supplier_id = ? LIMIT 1'
-            );
-            $verifyLink->execute([$requestId, $newSid]);
-            if (!(int) ($verifyLink->fetchColumn() ?: 0)) {
-                sendJson(['success' => false, 'message' => 'Preferred supplier could not be linked. Please try again.']);
+            $firstLineStmt->execute([$requestId]);
+            $firstLineId = (int) ($firstLineStmt->fetchColumn() ?: 0);
+            if ($firstLineId > 0) {
+                $placeholder = $db->prepare(
+                    "INSERT INTO requisition_line_quotes (requisition_line_id, supplier_id, quote_type, quoted_unit_price)
+                     VALUES (?, ?, 'preferred', 0)
+                     ON DUPLICATE KEY UPDATE quote_type = quote_type"
+                );
+                $placeholder->execute([$firstLineId, $newSid]);
             }
 
             // If suppliers table includes shop_url, persist it there
@@ -1235,9 +1227,10 @@ try {
             if (requisitionVerifierChainLockedForRequest($db, $requestId)) {
                 sendJson(['success' => false, 'message' => 'This request can no longer be edited.']);
             }
-            ensurePreferredSupplierItemQuotesTable($db);
             $delItems = $db->prepare(
-                'DELETE FROM requisition_preferred_supplier_item WHERE request_id = ? AND supplier_id = ?'
+                "DELETE rlq FROM requisition_line_quotes rlq
+                 INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+                 WHERE rl.request_id = ? AND rlq.supplier_id = ? AND rlq.quote_type = 'preferred'"
             );
             $delItems->execute([$requestId, $supplierId]);
             sendJson(['success' => true, 'message' => 'Preferred supplier removed.']);
@@ -1259,32 +1252,35 @@ try {
                 sendJson(['success' => false, 'message' => 'Supplier not found.']);
             }
             
-            ensurePreferredSupplierItemQuotesTable($db);
-            
-            // Check if supplier is already linked (has ANY row in requisition_preferred_supplier_item)
+            // Check if supplier already has preferred quotes for this request
             $dupChk = $db->prepare(
-                'SELECT 1 FROM requisition_preferred_supplier_item WHERE request_id = ? AND supplier_id = ? LIMIT 1'
+                "SELECT 1
+                 FROM requisition_line_quotes rlq
+                 INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+                 WHERE rl.request_id = ? AND rlq.supplier_id = ? AND rlq.quote_type = 'preferred'
+                 LIMIT 1"
             );
             $dupChk->execute([$requestId, $supplierId]);
             if ($dupChk->fetchColumn()) {
                 sendJson(['success' => false, 'message' => 'This supplier is already added.', 'already_added' => true]);
             }
-            
-            // Insert a placeholder row to mark supplier as preferred
-            $ins = $db->prepare(
-                'INSERT INTO requisition_preferred_supplier_item (request_id, supplier_id, sort_order, price, quote_photo)
-                 VALUES (?, ?, ?, NULL, NULL)'
-            );
-            $ins->execute([$requestId, $supplierId, -1]);
 
-            $verifyLink = $db->prepare(
-                'SELECT preferred_supplier_item_id FROM requisition_preferred_supplier_item
-                 WHERE request_id = ? AND supplier_id = ? LIMIT 1'
+            // Insert a placeholder preferred quote for the first line
+            $firstLineStmt2 = $db->prepare(
+                "SELECT requisition_line_id FROM requisition_line
+                 WHERE request_id = ? AND (deleted_at IS NULL OR deleted_at = '')
+                 ORDER BY sort_order ASC, requisition_line_id ASC LIMIT 1"
             );
-            $verifyLink->execute([$requestId, $supplierId]);
-            if (!(int) ($verifyLink->fetchColumn() ?: 0)) {
+            $firstLineStmt2->execute([$requestId]);
+            $firstLineId2 = (int) ($firstLineStmt2->fetchColumn() ?: 0);
+            if ($firstLineId2 <= 0) {
                 sendJson(['success' => false, 'message' => 'Preferred supplier could not be linked. Please try again.']);
             }
+            $ins = $db->prepare(
+                "INSERT INTO requisition_line_quotes (requisition_line_id, supplier_id, quote_type, quoted_unit_price)
+                 VALUES (?, ?, 'preferred', 0)"
+            );
+            $ins->execute([$firstLineId2, $supplierId]);
 
             sendJson(['success' => true, 'message' => 'Preferred supplier added.']);
         }
@@ -1514,53 +1510,69 @@ try {
 
         $db->beginTransaction();
         try {
-            $del = $db->prepare('DELETE FROM requisition_canvass_detail WHERE request_id = ?');
-            $del->execute([$requestId]);
+            // Collect line IDs for the items being saved
+            $lineIdByIdx = [];
+            foreach ($normalizedItems as $i => $row) {
+                $lid = $row['requisition_line_id'];
+                if ($lid !== null && $lid > 0) {
+                    $lineIdByIdx[$i] = $lid;
+                }
+            }
 
-            try {
-                $insDetail = $db->prepare(
-                    'INSERT INTO requisition_canvass_detail (request_id, requisition_line_id, user_id, component_label, brand, model, specification, sort_order, canvass_submission_status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            // Update requisition_line item fields from the canvass form (owner only)
+            if ($isOwner) {
+                $updLine = $db->prepare(
+                    'UPDATE requisition_line
+                     SET item_name = ?, item_brand = ?, model = ?, specification = ?
+                     WHERE requisition_line_id = ? AND request_id = ?'
                 );
-                $newIds = [];
-                foreach ($normalizedItems as $row) {
-                    $insDetail->execute([
-                        $requestId,
-                        $row['requisition_line_id'],
-                        $detailUserId,
+                foreach ($normalizedItems as $i => $row) {
+                    $lid = $lineIdByIdx[$i] ?? null;
+                    if ($lid === null) {
+                        continue;
+                    }
+                    $updLine->execute([
                         $row['component_label'],
                         $row['brand'],
                         $row['model'],
                         $row['specification'],
-                        $row['sort_order'],
-                        $submissionMode,
-                    ]);
-                    $newIds[] = (int) $db->lastInsertId();
-                }
-            } catch (Throwable $e) {
-                $insDetail = $db->prepare(
-                    'INSERT INTO requisition_canvass_detail (request_id, requisition_line_id, user_id, component_label, specification, sort_order, canvass_submission_status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)'
-                );
-                $newIds = [];
-                foreach ($normalizedItems as $row) {
-                    $insDetail->execute([
+                        $lid,
                         $requestId,
-                        $row['requisition_line_id'],
-                        $detailUserId,
-                        $row['component_label'],
-                        $row['specification'],
-                        $row['sort_order'],
-                        $submissionMode,
                     ]);
-                    $newIds[] = (int) $db->lastInsertId();
                 }
             }
 
-            $insCell = $db->prepare(
-                'INSERT INTO requisition_canvass_detail_supplier (canvass_detail_id, supplier_id, price, quote_source, benefits) VALUES (?, ?, ?, ?, ?)'
+            // Update canvas_submission_status in canvass_verification_approval
+            $cvaChk = $db->prepare(
+                'SELECT request_id FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
             );
-            $insertedCells = [];
+            $cvaChk->execute([$requestId]);
+            if ($cvaChk->fetch(PDO::FETCH_ASSOC)) {
+                $db->prepare(
+                    'UPDATE canvass_verification_approval SET canvas_submission_status = ? WHERE request_id = ?'
+                )->execute([$submissionMode, $requestId]);
+            } else {
+                $db->prepare(
+                    'INSERT INTO canvass_verification_approval (request_id, canvas_submission_status) VALUES (?, ?)'
+                )->execute([$requestId, $submissionMode]);
+            }
+
+            // Delete old canvassed quotes for these lines then re-insert
+            if ($lineIdByIdx !== []) {
+                $lineIds = array_values($lineIdByIdx);
+                $delPh = implode(',', array_fill(0, count($lineIds), '?'));
+                $delParams = $lineIds;
+                $delParams[] = 'canvassed';
+                $db->prepare(
+                    "DELETE FROM requisition_line_quotes WHERE requisition_line_id IN ($delPh) AND quote_type = ?"
+                )->execute($delParams);
+            }
+
+            $insCell = $db->prepare(
+                "INSERT INTO requisition_line_quotes
+                     (requisition_line_id, supplier_id, quoted_unit_price, quote_type, benefits)
+                 VALUES (?, ?, ?, 'canvassed', ?)"
+            );
 
             foreach ($suppliers as $sup) {
                 if (!is_array($sup)) {
@@ -1581,7 +1593,11 @@ try {
                     if ($idx < 0 || $idx >= $n) {
                         throw new RuntimeException('Price column does not match items.');
                     }
-                    $p = null;
+                    $lineId = $lineIdByIdx[$idx] ?? null;
+                    if ($lineId === null) {
+                        continue;
+                    }
+                    $p = 0.0;
                     if ($priceRaw !== null && $priceRaw !== '') {
                         if (!is_numeric($priceRaw)) {
                             throw new RuntimeException('Prices must be numbers.');
@@ -1591,9 +1607,7 @@ try {
                             throw new RuntimeException('Price cannot be negative.');
                         }
                     }
-                    $cid = $newIds[$idx];
-                    $insCell->execute([$cid, $sid, $p, 'canvasser', $benefitsVal]);
-                    $insertedCells[$cid . ':' . $sid] = true;
+                    $insCell->execute([$lineId, $sid, $p, $benefitsVal]);
                 }
             }
 
