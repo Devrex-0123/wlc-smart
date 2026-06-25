@@ -3314,10 +3314,16 @@
         const sectionB = document.getElementById('cvGsdSectionB');
         const sectionC = document.getElementById('cvGsdSectionC');
         const abstractSection = document.getElementById('cvGsdAbstractTotalSection');
-        [sectionB, sectionC, abstractSection].forEach((el) => {
-            if (el) {
-                el.hidden = !hasB;
-            }
+
+        // Section B is where GSD adds canvassed quotes — keep it always visible
+        // in review/edit mode so GSD can add quotes even when starting from scratch.
+        if (sectionB) {
+            sectionB.hidden = gsdReviewView ? false : !hasB;
+        }
+        // Section C (suggest supplier) and pricing abstract only make sense once
+        // there are actual quotes to compare.
+        [sectionC, abstractSection].forEach((el) => {
+            if (el) el.hidden = !hasB;
         });
         const pricingSection = document.getElementById('cvPricingOverviewSection');
         if (pricingSection) {
@@ -6273,6 +6279,9 @@
             } catch {
                 /* ignore */
             }
+        },
+        applyApproval(approval) {
+            applyCanvassApproval(approval);
         },
     };
 })();

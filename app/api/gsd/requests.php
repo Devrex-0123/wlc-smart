@@ -244,25 +244,6 @@ try {
             WHERE LOWER(TRIM(COALESCE(rfa.requisition_status, 'pending'))) = 'accept'
             AND r.submission_status = 'submitted'
             AND LOWER(TRIM(COALESCE(cva.pres_status, ''))) NOT IN ('accept')
-            AND (
-                LOWER(TRIM(COALESCE(cva.canvas_status, 'pending'))) IN ('accept', 'reject')
-                OR EXISTS (
-                    SELECT 1
-                    FROM requisition_line_quotes rlq
-                    INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
-                    WHERE rl.request_id = r.request_id
-                      AND (rl.deleted_at IS NULL OR rl.deleted_at = '')
-                    LIMIT 1
-                )
-                OR EXISTS (
-                    SELECT 1
-                    FROM requisition_line rl
-                    WHERE rl.request_id = r.request_id
-                      AND (rl.deleted_at IS NULL OR rl.deleted_at = '')
-                      AND rl.line_status IN ('canvassed', 'awarded')
-                    LIMIT 1
-                )
-            )
             ORDER BY r.created_at DESC, r.request_id DESC
         ");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

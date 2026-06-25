@@ -186,8 +186,8 @@ function requisitionInsertLinesForRequest(PDO $db, int $requestId, array $items,
     // component lines set group_label to the parent line's item_name.
     $lineStmt = $db->prepare(
         'INSERT INTO requisition_line
-             (request_id, sort_order, item_id, item_name, item_brand, model, specification, item_category, photo_url, quantity, unit_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, \'\', ?, ?)'
+             (request_id, sort_order, item_id, item_name, item_brand, model, specification, item_category, photo_url, quantity, unit_type, group_label)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, \'\', ?, ?, ?)'
     );
     $sortOrder = 0;
     foreach ($items as $item) {
@@ -202,6 +202,7 @@ function requisitionInsertLinesForRequest(PDO $db, int $requestId, array $items,
         $model         = trim((string) ($item['model'] ?? ''));
         $specification = trim((string) ($item['specification'] ?? ''));
         $itemCategory  = trim((string) ($item['category'] ?? ''));
+        $groupLabel    = trim((string) ($item['group_label'] ?? ''));
         $itemId        = isset($item['item_id']) ? (int) $item['item_id'] : null;
         $quantity      = max(1, (int) ($item['quantity'] ?? 1));
         $unitTypeRaw   = strtolower(trim((string) ($item['unit_type'] ?? 'piece')));
@@ -212,12 +213,13 @@ function requisitionInsertLinesForRequest(PDO $db, int $requestId, array $items,
             $sortOrder,
             ($itemId > 0) ? $itemId : null,
             $itemName,
-            $itemBrand     !== '' ? $itemBrand     : null,
-            $model         !== '' ? $model         : null,
+            $itemBrand  !== '' ? $itemBrand  : null,
+            $model      !== '' ? $model      : null,
             $specification !== '' ? $specification : null,
             $itemCategory  !== '' ? $itemCategory  : null,
             $quantity,
             $unitType,
+            $groupLabel !== '' ? $groupLabel : null,
         ]);
         ++$sortOrder;
     }
@@ -292,16 +294,24 @@ function buildRequisitionDetailPayload(array $anchor, array $rows, int $requestI
     $itemKeyToIndex = [];
     $itemsOut = [];
     foreach ($rows as $row) {
-        $ikey = ($row['item_name'] ?? '') . "\0" . ($row['item_brand'] ?? '') . "\0" . ($row['item_category'] ?? '') . "\0" . (string) max(1, (int) ($row['quantity'] ?? 1)) . "\0" . (string) ($row['unit_type'] ?? 'unit');
+        // Use requisition_line_id as the unique key so items with identical names
+        // but different groups/models/specs are never merged into one entry.
+        $ikey = (string) ($row['requisition_line_id'] ?? '');
+        if ($ikey === '') {
+            $ikey = ($row['item_name'] ?? '') . "\0" . ($row['item_brand'] ?? '') . "\0" . ($row['item_category'] ?? '') . "\0" . (string) max(1, (int) ($row['quantity'] ?? 1)) . "\0" . (string) ($row['unit_type'] ?? 'unit');
+        }
         if (!isset($itemKeyToIndex[$ikey])) {
             $itemKeyToIndex[$ikey] = count($itemsOut);
             $itemsOut[] = [
-                'item_id' => !empty($row['item_id']) ? (int) $row['item_id'] : null,
-                'name' => (string) ($row['item_name'] ?? ''),
-                'brand' => (string) ($row['item_brand'] ?? ''),
-                'category' => (string) ($row['item_category'] ?? ''),
-                'quantity' => max(1, (int) ($row['quantity'] ?? 1)),
-                'unit_type' => (string) ($row['unit_type'] ?? 'unit'),
+                'item_id'       => !empty($row['item_id']) ? (int) $row['item_id'] : null,
+                'name'          => (string) ($row['item_name'] ?? ''),
+                'brand'         => (string) ($row['item_brand'] ?? ''),
+                'model'         => (string) ($row['model'] ?? ''),
+                'specification' => (string) ($row['specification'] ?? ''),
+                'category'      => (string) ($row['item_category'] ?? ''),
+                'group_label'   => (string) ($row['group_label'] ?? ''),
+                'quantity'      => max(1, (int) ($row['quantity'] ?? 1)),
+                'unit_type'     => (string) ($row['unit_type'] ?? 'unit'),
             ];
         }
     }
@@ -329,7 +339,10 @@ function buildRequisitionDetailPayload(array $anchor, array $rows, int $requestI
     }
 
     foreach ($rows as $row) {
-        $ikey = ($row['item_name'] ?? '') . "\0" . ($row['item_brand'] ?? '') . "\0" . ($row['item_category'] ?? '') . "\0" . (string) max(1, (int) ($row['quantity'] ?? 1)) . "\0" . (string) ($row['unit_type'] ?? 'unit');
+        $ikey = (string) ($row['requisition_line_id'] ?? '');
+        if ($ikey === '') {
+            $ikey = ($row['item_name'] ?? '') . "\0" . ($row['item_brand'] ?? '') . "\0" . ($row['item_category'] ?? '') . "\0" . (string) max(1, (int) ($row['quantity'] ?? 1)) . "\0" . (string) ($row['unit_type'] ?? 'unit');
+        }
         if (!isset($itemKeyToIndex[$ikey])) {
             continue;
         }

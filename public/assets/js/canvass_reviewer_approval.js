@@ -131,11 +131,16 @@
                     return;
                 }
                 showToast(data.message || 'Saved.');
-                await refreshStrip();
                 const next = await fetchApproval();
                 setButtonState(next);
+                if (next) {
+                    const sync = window.IMRMS_DEAN_CANVASS_SYNC;
+                    if (sync && typeof sync.applyApproval === 'function') {
+                        sync.applyApproval(next);
+                    }
+                }
                 const prBanner = document.getElementById('cvPrFlowContextBanner');
-                if (prBanner && next) {
+                if (prBanner && next && cfg.role !== 'president') {
                     const allAccepted =
                         String(next.gsd_status || '').trim() === 'accept' &&
                         String(next.comp_status || '').trim() === 'accept' &&

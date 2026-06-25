@@ -116,6 +116,8 @@ const state = {
     approval: null,
     /** Tracks if form has unsaved changes since last successful save */
     hasUnsavedChanges: false,
+    /** Set of item indices currently checked for grouping */
+    groupSelections: new Set(),
 };
 
 /** Supplier matrix: editable on dean create/edit, or canvasser review while canvas step is open. */
@@ -1532,6 +1534,8 @@ function renderItems() {
     const disabled = state.viewOnly;
 
     if (disabled) {
+        ensureGroupingToolbar(); // hides toolbar when state.viewOnly is true
+
         // View-only mode: group items by group_label; show brand/model/spec inline as meta.
         const chunks = [];
         const groupMap = new Map();
@@ -1589,51 +1593,97 @@ function renderItems() {
         return;
     }
 
-    // Edit mode: main row + details sub-row (brand / model / specification / group_label).
-    requestedItemsBody.innerHTML = state.requestedItems
-        .map((item, index) => {
-            const normalized = normalizeRequestedItem(item);
-            return `
-            <div class="rf-items-entry" data-item-index="${index}">
-                <div class="rf-items-row">
-                    <span class="rf-items-row__index">${index + 1}</span>
-                    <input type="text" class="rf-item-field rf-items-row__desc" data-item-field="name" data-item-index="${index}"
-                        value="${escapeHtml(normalized.name)}" list="itemNameSuggestions" placeholder="e.g. Whiteboard marker" autocomplete="off">
-                    <div class="rf-items-row__controls">
-                        ${buildUnitSelect(index, normalized.unit_type, false)}
-                        <input type="number" class="rf-item-field rf-item-field--qty" data-item-field="quantity" data-item-index="${index}"
-                            min="1" step="1" value="${escapeHtml(String(normalized.quantity))}">
-                        <button type="button" class="rf-item-remove-btn" data-item-index="${index}" title="Remove item" aria-label="Remove item">
-                            <i class="fas fa-trash-can" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="rf-items-details">
-                    <label class="rf-items-detail-field">
-                        <span class="rf-items-detail-field__label">Brand</span>
-                        <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="brand" data-item-index="${index}"
-                            value="${escapeHtml(normalized.brand)}" placeholder="e.g. Canon">
-                    </label>
-                    <label class="rf-items-detail-field">
-                        <span class="rf-items-detail-field__label">Model</span>
-                        <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="model" data-item-index="${index}"
-                            value="${escapeHtml(normalized.model)}" placeholder="e.g. PIXMA G3010">
-                    </label>
-                    <label class="rf-items-detail-field rf-items-detail-field--spec">
-                        <span class="rf-items-detail-field__label">Specification</span>
-                        <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="specification" data-item-index="${index}"
-                            value="${escapeHtml(normalized.specification)}" placeholder="e.g. Color inkjet, A4">
-                    </label>
-                    <label class="rf-items-detail-field">
-                        <span class="rf-items-detail-field__label">Group name <span class="rf-items-detail-field__hint">(optional)</span></span>
-                        <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="group_label" data-item-index="${index}"
-                            value="${escapeHtml(normalized.group_label)}" placeholder="e.g. Computer Set">
-                    </label>
+    // Edit mode: group-aware rendering with checkboxes and toolbar.
+    ensureGroupingToolbar();
+
+    // Build rendering chunks: group blocks or standalone item entries.
+    const editChunks = [];
+    const editGroupMap = new Map(); // group_label -> chunk
+
+    state.requestedItems.forEach((item, index) => {
+        const normalized = normalizeRequestedItem(item);
+        const gl = normalized.group_label.trim();
+        if (gl) {
+            if (!editGroupMap.has(gl)) {
+                const g = { type: 'group', label: gl, entries: [] };
+                editGroupMap.set(gl, g);
+                editChunks.push(g);
+            }
+            editGroupMap.get(gl).entries.push({ item, index });
+        } else {
+            editChunks.push({ type: 'item', item, index });
+        }
+    });
+
+    const renderEditEntry = (item, index, inGroup) => {
+        const normalized = normalizeRequestedItem(item);
+        const isSelected = state.groupSelections.has(index);
+        return `
+        <div class="rf-items-entry${isSelected ? ' rf-items-entry--selected' : ''}" data-item-index="${index}">
+            <div class="rf-items-row">
+                <label class="rf-items-row__check" aria-label="Select for grouping">
+                    <input type="checkbox" class="rf-item-select-cb" data-item-index="${index}"${isSelected ? ' checked' : ''}>
+                </label>
+                <span class="rf-items-row__index">${index + 1}</span>
+                <input type="text" class="rf-item-field rf-items-row__desc" data-item-field="name" data-item-index="${index}"
+                    value="${escapeHtml(normalized.name)}" list="itemNameSuggestions" placeholder="e.g. Whiteboard marker" autocomplete="off">
+                <div class="rf-items-row__controls">
+                    ${buildUnitSelect(index, normalized.unit_type, false)}
+                    <input type="number" class="rf-item-field rf-item-field--qty" data-item-field="quantity" data-item-index="${index}"
+                        min="1" step="1" value="${escapeHtml(String(normalized.quantity))}">
+                    <button type="button" class="rf-item-remove-btn" data-item-index="${index}" title="Remove item" aria-label="Remove item">
+                        <i class="fas fa-trash-can" aria-hidden="true"></i>
+                    </button>
                 </div>
             </div>
-            `;
-        })
-        .join('');
+            <div class="rf-items-details">
+                <label class="rf-items-detail-field">
+                    <span class="rf-items-detail-field__label">Brand</span>
+                    <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="brand" data-item-index="${index}"
+                        value="${escapeHtml(normalized.brand)}" placeholder="e.g. Canon">
+                </label>
+                <label class="rf-items-detail-field">
+                    <span class="rf-items-detail-field__label">Model</span>
+                    <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="model" data-item-index="${index}"
+                        value="${escapeHtml(normalized.model)}" placeholder="e.g. PIXMA G3010">
+                </label>
+                <label class="rf-items-detail-field rf-items-detail-field--spec">
+                    <span class="rf-items-detail-field__label">Specification</span>
+                    <input type="text" class="rf-item-field rf-items-detail__input" data-item-field="specification" data-item-index="${index}"
+                        value="${escapeHtml(normalized.specification)}" placeholder="e.g. Color inkjet, A4">
+                </label>
+            </div>
+        </div>
+        `;
+    };
+
+    requestedItemsBody.innerHTML = editChunks.map((chunk) => {
+        if (chunk.type === 'item') {
+            return renderEditEntry(chunk.item, chunk.index, false);
+        }
+        // Group block
+        const count = chunk.entries.length;
+        const escapedLabel = escapeHtml(chunk.label);
+        const entriesHtml = chunk.entries.map(({ item, index }) => renderEditEntry(item, index, true)).join('');
+        return `
+        <div class="rf-items-group-block" data-group-label="${escapedLabel}">
+            <div class="rf-items-group-block__header">
+                <i class="fas fa-folder" aria-hidden="true"></i>
+                <input type="text" class="rf-items-group-block__name-input"
+                       value="${escapedLabel}" placeholder="Enter group name…"
+                       data-group-label="${escapedLabel}">
+                <span class="rf-items-group-block__badge">${count} item${count !== 1 ? 's' : ''}</span>
+                <button type="button" class="rf-items-group-block__ungroup-btn"
+                        data-group-label="${escapedLabel}"
+                        title="Ungroup all items" aria-label="Ungroup all items">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="rf-items-group-block__body">${entriesHtml}</div>
+        </div>`;
+    }).join('');
+
+    updateGroupingToolbar();
 }
 
 function addRequestedItemRow() {
@@ -2030,6 +2080,13 @@ function removeItemAt(index) {
         });
         supplier.prices = newPrices;
     });
+    // Shift group selection indices
+    const newSel = new Set();
+    state.groupSelections.forEach((idx) => {
+        if (idx < index) newSel.add(idx);
+        else if (idx > index) newSel.add(idx - 1);
+    });
+    state.groupSelections = newSel;
     state.hasUnsavedChanges = true;
 }
 
@@ -2568,3 +2625,218 @@ loadBootstrapData()
     .catch((error) => {
         showToast(error.message || 'Failed to load form data.', 'error');
     });
+
+// ── Grouping feature ──────────────────────────────────────────────────────
+
+function generateGroupName() {
+    const existingLabels = new Set(
+        state.requestedItems
+            .map((it) => normalizeRequestedItem(it).group_label.trim())
+            .filter(Boolean)
+    );
+    let n = 1;
+    while (existingLabels.has('Group ' + n)) {
+        n += 1;
+    }
+    return 'Group ' + n;
+}
+
+function ensureGroupingToolbar() {
+    const existing = document.getElementById('rfItemsGroupToolbar');
+    if (state.viewOnly) {
+        if (existing) {
+            existing.hidden = true;
+            existing.classList.add('is-hidden');
+        }
+        return;
+    }
+    if (existing) {
+        existing.hidden = false;
+        existing.classList.remove('is-hidden');
+        return;
+    }
+    const table = document.getElementById('requestedItemsTable');
+    if (!table) {
+        return;
+    }
+    const toolbar = document.createElement('div');
+    toolbar.className = 'rf-items-toolbar';
+    toolbar.id = 'rfItemsGroupToolbar';
+    toolbar.innerHTML = [
+        '<span class="rf-items-toolbar__hint" id="rfItemsGroupHint">Check items to group them together</span>',
+        '<div class="rf-items-toolbar__actions">',
+        '  <button type="button" id="rfItemsRemoveGroupBtn" class="rf-items-toolbar__btn rf-items-toolbar__btn--outline" hidden>',
+        '    <i class="fas fa-folder-minus" aria-hidden="true"></i> Remove from group',
+        '  </button>',
+        '  <button type="button" id="rfItemsGroupBtn" class="rf-items-toolbar__btn rf-items-toolbar__btn--primary" disabled>',
+        '    <i class="fas fa-folder-plus" aria-hidden="true"></i> Group selected',
+        '  </button>',
+        '</div>',
+    ].join('');
+    const body = document.getElementById('requestedItemsBody');
+    if (body) {
+        table.insertBefore(toolbar, body);
+    } else {
+        table.appendChild(toolbar);
+    }
+    document.getElementById('rfItemsGroupBtn').addEventListener('click', groupSelectedItems);
+    document.getElementById('rfItemsRemoveGroupBtn').addEventListener('click', ungroupSelectedItems);
+}
+
+function updateGroupingToolbar() {
+    const hint = document.getElementById('rfItemsGroupHint');
+    const groupBtn = document.getElementById('rfItemsGroupBtn');
+    const removeGroupBtn = document.getElementById('rfItemsRemoveGroupBtn');
+    if (!hint && !groupBtn) {
+        return;
+    }
+    const count = state.groupSelections.size;
+    if (hint) {
+        hint.textContent = count === 0
+            ? 'Check items to group them together'
+            : count + ' item' + (count !== 1 ? 's' : '') + ' selected';
+    }
+    if (groupBtn) {
+        groupBtn.disabled = count === 0;
+    }
+    if (removeGroupBtn) {
+        const anyGrouped = Array.from(state.groupSelections).some((idx) => {
+            const it = state.requestedItems[idx];
+            return it && normalizeRequestedItem(it).group_label.trim() !== '';
+        });
+        removeGroupBtn.hidden = !anyGrouped;
+    }
+}
+
+function groupSelectedItems() {
+    const selectedIndices = Array.from(state.groupSelections);
+    if (selectedIndices.length === 0) {
+        return;
+    }
+    // Find existing group(s) among selected items (in item order).
+    let targetGroupName = '';
+    for (let i = 0; i < state.requestedItems.length; i++) {
+        if (!selectedIndices.includes(i)) {
+            continue;
+        }
+        const gl = normalizeRequestedItem(state.requestedItems[i]).group_label.trim();
+        if (gl) {
+            targetGroupName = gl;
+            break;
+        }
+    }
+    if (!targetGroupName) {
+        targetGroupName = generateGroupName();
+    }
+    selectedIndices.forEach((idx) => {
+        if (state.requestedItems[idx]) {
+            state.requestedItems[idx].group_label = targetGroupName;
+        }
+    });
+    state.groupSelections.clear();
+    state.hasUnsavedChanges = true;
+    renderItems();
+    updateGroupingToolbar();
+    // Auto-focus the group name input so user can type immediately.
+    if (requestedItemsBody) {
+        const blocks = requestedItemsBody.querySelectorAll('.rf-items-group-block');
+        for (const block of blocks) {
+            if (block.getAttribute('data-group-label') === targetGroupName) {
+                const nameInput = block.querySelector('.rf-items-group-block__name-input');
+                if (nameInput) {
+                    nameInput.focus();
+                    nameInput.select();
+                }
+                break;
+            }
+        }
+    }
+    showToast(selectedIndices.length + ' item' + (selectedIndices.length !== 1 ? 's' : '') + ' grouped. Enter a group name above.');
+}
+
+function ungroupSelectedItems() {
+    const selectedIndices = Array.from(state.groupSelections);
+    selectedIndices.forEach((idx) => {
+        if (state.requestedItems[idx]) {
+            state.requestedItems[idx].group_label = '';
+        }
+    });
+    state.groupSelections.clear();
+    state.hasUnsavedChanges = true;
+    renderItems();
+    updateGroupingToolbar();
+    showToast('Items removed from group.');
+}
+
+// Checkbox change — toggle selection
+if (requestedItemsBody) {
+    requestedItemsBody.addEventListener('change', (event) => {
+        const cb = event.target.closest('.rf-item-select-cb');
+        if (!cb || state.viewOnly) {
+            return;
+        }
+        const idx = Number(cb.dataset.itemIndex);
+        if (Number.isNaN(idx)) {
+            return;
+        }
+        if (cb.checked) {
+            state.groupSelections.add(idx);
+        } else {
+            state.groupSelections.delete(idx);
+        }
+        const entry = cb.closest('.rf-items-entry');
+        if (entry) {
+            entry.classList.toggle('rf-items-entry--selected', cb.checked);
+        }
+        updateGroupingToolbar();
+    });
+}
+
+// Group name input change — update group_label on all items in that group
+if (requestedItemsBody) {
+    requestedItemsBody.addEventListener('input', (event) => {
+        const nameInput = event.target.closest('.rf-items-group-block__name-input');
+        if (!nameInput || state.viewOnly) {
+            return;
+        }
+        const oldLabel = nameInput.getAttribute('data-group-label');
+        const newLabel = nameInput.value;
+        state.requestedItems.forEach((item) => {
+            if (normalizeRequestedItem(item).group_label === oldLabel) {
+                item.group_label = newLabel;
+            }
+        });
+        // Keep data attributes in sync so future updates diff correctly.
+        nameInput.setAttribute('data-group-label', newLabel);
+        const block = nameInput.closest('.rf-items-group-block');
+        if (block) {
+            block.setAttribute('data-group-label', newLabel);
+            const ungroupBtn = block.querySelector('.rf-items-group-block__ungroup-btn');
+            if (ungroupBtn) {
+                ungroupBtn.setAttribute('data-group-label', newLabel);
+            }
+        }
+        state.hasUnsavedChanges = true;
+    });
+}
+
+// Ungroup-all button (× on group header)
+if (requestedItemsBody) {
+    requestedItemsBody.addEventListener('click', (event) => {
+        const ungroupBtn = event.target.closest('.rf-items-group-block__ungroup-btn');
+        if (!ungroupBtn || state.viewOnly) {
+            return;
+        }
+        const groupLabel = ungroupBtn.getAttribute('data-group-label');
+        state.requestedItems.forEach((item) => {
+            if (normalizeRequestedItem(item).group_label.trim() === groupLabel) {
+                item.group_label = '';
+            }
+        });
+        state.groupSelections.clear();
+        state.hasUnsavedChanges = true;
+        renderItems();
+        updateGroupingToolbar();
+        showToast('Group removed. Items are now ungrouped.');
+    });
+}

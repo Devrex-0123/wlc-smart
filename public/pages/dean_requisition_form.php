@@ -267,6 +267,7 @@ if ($viewingRequest && $viewRequestId > 0) {
                 <datalist id="itemNameSuggestions"></datalist>
                 <div class="rf-items-list" id="requestedItemsTable" aria-label="Requested items">
                     <div class="rf-items-list__header">
+                        <span class="rf-items-list__head-check" aria-hidden="true"></span>
                         <span class="rf-items-list__head-index">#</span>
                         <span class="rf-items-list__head-desc">Item description</span>
                         <div class="rf-items-row__controls rf-items-list__head-controls">

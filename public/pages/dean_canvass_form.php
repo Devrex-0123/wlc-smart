@@ -567,7 +567,6 @@ $prAfterCanvassAccepted = ($requestId > 0 && $accessError === null)
 $canShowPurchaseRequisitionLink = $prAfterCanvassAccepted && (
     $isRequesterOwnedCanvass
     || $isInventoryManagerCanvassReview
-    || $isPresidentCanvassReview
     || $isPresidentCanvassHistory
 );
 

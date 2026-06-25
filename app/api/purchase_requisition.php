@@ -407,7 +407,7 @@ try {
             $up->execute([$prStatus, $note !== '' ? $note : null, $requestId]);
         }
 
-        if ($prStatus === 'accept') {
+        if ($verifier === 'president' && $prStatus === 'accept') {
             $snap = loadPurchaseRequisitionSnapshotData($db, $requestId);
             if ($snap) {
                 savePurchaseAuditSnapshot(
@@ -420,9 +420,6 @@ try {
                     $snap['items']
                 );
             }
-        }
-
-        if ($verifier === 'president' && $prStatus === 'accept') {
             require_once __DIR__ . '/../helpers/purchase_order.php';
             cwirmsEnsurePurchaseOrderFromRequisition($db, $requestId, $userId);
         }
