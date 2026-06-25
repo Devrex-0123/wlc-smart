@@ -5,14 +5,13 @@
 
 .dean-dashboard-panels {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(170px, 240px);
+    grid-template-columns: 1fr;
     gap: 1rem;
     align-items: start;
     margin-top: 0;
 }
 
-.dean-recent-panel,
-.dean-pipeline-panel {
+.dean-recent-panel {
     width: 100%;
     min-width: 0;
 }
@@ -35,12 +34,6 @@
 .dean-recent-panel__head .dean-request-btn {
     flex-shrink: 0;
     margin-left: auto;
-}
-
-@media (max-width: 900px) {
-    .dean-dashboard-panels {
-        grid-template-columns: 1fr;
-    }
 }
 
 .dean-request-btn {
