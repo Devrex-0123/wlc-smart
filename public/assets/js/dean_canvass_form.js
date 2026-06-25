@@ -17,6 +17,31 @@
     const api = card.dataset.api || '../../app/api/canvass_detail.php';
     const deanApi = card.dataset.deanApi || '../../app/api/dean_requisition.php';
 
+    // Edit window countdown — only active when the server sends a positive seconds value.
+    (function initEditWindowCountdown() {
+        const seconds = parseInt(card.dataset.editWindowSeconds || '0', 10);
+        if (seconds <= 0) return;
+        const countdownEl = document.getElementById('cvEditCountdown');
+        if (!countdownEl) return;
+        function fmt(s) {
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            return [h, m, sec].map(function (n) { return String(n).padStart(2, '0'); }).join(':');
+        }
+        let remaining = seconds;
+        countdownEl.textContent = fmt(remaining);
+        const timer = setInterval(function () {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(timer);
+                window.location.reload();
+            } else {
+                countdownEl.textContent = fmt(remaining);
+            }
+        }, 1000);
+    }());
+
     const cvItemName = document.getElementById('cvItemName');
     const cvItemBrand = document.getElementById('cvItemBrand');
     const cvItemModel = document.getElementById('cvItemModel');
@@ -3232,6 +3257,7 @@
                     quoted_unit_price: q.quoted_unit_price,
                     benefits: q.benefits || '',
                     discount_percent: q.discount_percent || null,
+                    quote_photo: q.quote_photo || null,
                 });
             });
         });
@@ -3285,6 +3311,9 @@
                 }
                 const sup = prefSupMap.get(sid);
                 sup.quoted_prices[lineIdx] = String(q.quoted_unit_price ?? '');
+                if (q.quote_photo) {
+                    sup.quote_photos[lineIdx] = String(q.quote_photo);
+                }
                 if (!sup.quoted_item_indices.includes(lineIdx)) sup.quoted_item_indices.push(lineIdx);
             });
         });
@@ -3294,6 +3323,7 @@
         state.preferredQuotePhotos = {};
         hydratePreferredSupplierItemsFromApi();
         hydratePreferredPriceDraftsFromApi();
+        hydratePreferredPhotoDraftsFromApi();
         renderPreferredTable();
     }
 
@@ -3348,8 +3378,13 @@
             sup.items.forEach((item) => {
                 const price = parseFloat(item.quoted_unit_price) || 0;
                 total += price * item.quantity;
+                const photoUrl = item.quote_photo ? resolvePublicUploadUrl(String(item.quote_photo)) : '';
+                const photoHtml = photoUrl
+                    ? `<button type="button" class="cv-pref-photo-view-btn gsd-cv-quote-photo-btn" data-photo-url="${escapeHtml(photoUrl)}" title="View quotation photo"><img src="${escapeHtml(photoUrl)}" alt="quote photo" class="cv-pref-photo-thumb"></button>`
+                    : '';
                 itemsHtml += `<div class="gsd-cv-item-row">
                     <span class="gsd-cv-item-name">${escapeHtml(item.item_name)}</span>
+                    ${photoHtml}
                     <span class="gsd-cv-item-qty">\xd7${item.quantity} ${escapeHtml(item.unit_short)}</span>
                     <span class="gsd-cv-item-price">${gsdFmtPeso(price)}</span>
                 </div>`;
@@ -5969,6 +6004,14 @@
         if (quoteLightboxClose) {
             quoteLightboxClose.addEventListener('click', () => closeCvQuotePhotoLightbox());
         }
+        // GSD preferred-quote photo thumbnails (section A) — delegated on the card so it works
+        // even after renderGsdSectionA re-renders the container.
+        card.addEventListener('click', (e) => {
+            const btn = e.target.closest('.gsd-cv-quote-photo-btn');
+            if (!btn) return;
+            const src = btn.getAttribute('data-photo-url') || '';
+            if (src) openCvQuotePhotoLightbox(src);
+        });
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') {
                 return;
@@ -6396,6 +6439,7 @@
             _qmClose();
         }
     });
+
 })();
 
 // ── Supplier Quotes section (requester view) ─────────────────────────────────
@@ -6407,6 +6451,15 @@
     var card             = document.getElementById('canvassCard');
     var _canvassApi      = (card && card.dataset.api) || '../../app/api/canvass_detail.php';
     var _requestId       = card ? parseInt(card.dataset.requestId || '0', 10) : 0;
+
+    function openPhotoLightbox(src) {
+        var lb  = document.getElementById('cvQuotePhotoLightbox');
+        var img = document.getElementById('cvQuotePhotoLightboxImg');
+        if (!lb || !img || !src) return;
+        img.src = src;
+        lb.classList.remove('hidden');
+        lb.setAttribute('aria-hidden', 'false');
+    }
 
     function showSupToast(message, type) {
         var el = document.getElementById('cvFormToast');
@@ -6437,7 +6490,7 @@
                 bySup[sid].items.push({
                     itemId: lineId,
                     price:  q.quoted_unit_price != null ? String(q.quoted_unit_price) : '',
-                    photo:  null,
+                    photo:  q.quote_photo ? resolveImgPath(String(q.quote_photo)) : null,
                     saved:  true,
                 });
             });
@@ -6510,6 +6563,38 @@
     }
 
     async function flushAllQuotes() {
+        // Validate: every item that was added must have a price > 0.
+        var missingPrices = [];
+        activeSuppliers.forEach(function (sup) {
+            sup.items.forEach(function (it) {
+                var priceNum = parseFloat(String(it.price || '').trim());
+                if (isNaN(priceNum) || priceNum <= 0) {
+                    var req = (window.CANVASS_ITEMS || []).find(function (r) { return r.id === it.itemId; });
+                    missingPrices.push({ suppId: sup.id, itemId: it.itemId, label: (req ? req.name : 'Item') + ' — ' + sup.name });
+                }
+            });
+        });
+        if (missingPrices.length) {
+            // Highlight the offending inputs
+            missingPrices.forEach(function (m) {
+                var inp = document.querySelector(
+                    '.supplier-price-input[data-supplier-id="' + m.suppId + '"][data-item-id="' + m.itemId + '"]'
+                );
+                if (inp) {
+                    inp.classList.add('is-invalid');
+                    inp.addEventListener('input', function onFix() {
+                        inp.classList.remove('is-invalid');
+                        inp.removeEventListener('input', onFix);
+                    }, { once: true });
+                }
+            });
+            return {
+                ok: false,
+                message: 'Please enter a quote price (greater than 0) for: ' +
+                    missingPrices.map(function (m) { return m.label; }).join(', ') + '.',
+            };
+        }
+
         var tasks = [];
         activeSuppliers.forEach(function (sup) {
             sup.items.forEach(function (it) {
@@ -6766,6 +6851,19 @@
         sup.items.push({ itemId: itemId, price: '', photo: null, saved: false });
         sel.value = '';
         renderSection();
+        // Immediately persist a placeholder row so the association survives a page
+        // reload even before the user enters a price.
+        saveQuoteToServer(suppId, itemId, '0').then(function (data) {
+            if (!data || !data.success) return;
+            var s = activeSuppliers.find(function (a) { return a.id === suppId; });
+            var it = s ? s.items.find(function (i) { return i.itemId === itemId; }) : null;
+            if (it) {
+                it.saved = true;
+            } else {
+                // Item was removed while the placeholder was in-flight — delete the row.
+                deleteQuoteFromServer(suppId, itemId).catch(function () {});
+            }
+        }).catch(function () {});
     }
 
     function removeItemFromSupplier(suppId, itemId) {
@@ -6821,7 +6919,8 @@
                 if (!req) return '';
                 var thumbHtml = si.photo
                     ? '<div class="item-photo-preview">' +
-                      '<img src="' + escHtml(si.photo) + '" class="item-photo-thumb" alt="quote photo">' +
+                      '<button type="button" class="btn-item-photo-view" data-photo-url="' + escHtml(si.photo) + '" title="Click to view full size">' +
+                      '<img src="' + escHtml(si.photo) + '" class="item-photo-thumb" alt="quote photo"></button>' +
                       '<button type="button" class="btn-item-photo-remove" data-sup-id="' + escHtml(sup.id) + '" data-item-id="' + si.itemId + '" title="Remove photo" aria-label="Remove photo">' +
                       '<i class="fas fa-trash" aria-hidden="true"></i></button></div>'
                     : '';
@@ -6928,9 +7027,35 @@
                 if (!sup) return;
                 var it = sup.items.find(function (i) { return i.itemId === itemId; });
                 if (!it) return;
+                // Show data-URL preview immediately while upload is in flight
                 var reader = new FileReader();
                 reader.onload = function (e) { it.photo = e.target.result; renderSection(); };
                 reader.readAsDataURL(file);
+                // Upload to server and replace preview with persistent URL
+                var fd = new FormData();
+                fd.append('request_id', String(_requestId));
+                fd.append('requisition_line_id', String(itemId));
+                fd.append('supplier_id', String(supId));
+                fd.append('quote_photo', file);
+                fetch(_canvassApi + '?action=upload_requester_quote_photo', {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: fd,
+                }).then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success && data.photo_url) {
+                        it.photo = resolveImgPath(data.photo_url);
+                        renderSection();
+                    } else {
+                        showSupToast(data.message || 'Photo upload failed.', 'error');
+                        it.photo = null;
+                        renderSection();
+                    }
+                }).catch(function () {
+                    showSupToast('Network error uploading photo.', 'error');
+                    it.photo = null;
+                    renderSection();
+                });
             });
         });
 
@@ -6946,6 +7071,25 @@
                     it.photo = null;
                     renderSection();
                 }
+                var fd = new FormData();
+                fd.append('request_id', String(_requestId));
+                fd.append('requisition_line_id', String(itemId));
+                fd.append('supplier_id', String(supId));
+                fetch(_canvassApi + '?action=remove_requester_quote_photo', {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: fd,
+                }).catch(function () {
+                    showSupToast('Could not remove photo from server.', 'error');
+                });
+            });
+        });
+
+        // Wire: photo view buttons (lightbox)
+        grid.querySelectorAll('.btn-item-photo-view').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var src = btn.dataset.photoUrl;
+                if (src) openPhotoLightbox(src);
             });
         });
 

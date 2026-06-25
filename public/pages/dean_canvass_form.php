@@ -557,10 +557,41 @@ $isCanvassStructureUiHidden = $isReviewerCanvassReadonly
     || ($verifierChainLocked && ($isRequesterOwnedCanvass || $isCanvasserCanvassView));
 $isCanvasMatrixReadonly = $isReviewerCanvassReadonly
     || ($verifierChainLocked && ($isRequesterOwnedCanvass || $isCanvasserCanvassView));
+
+// Time-based edit lock: requester may edit for 1 hour after submitting the canvass form.
+$canvasSubmittedAt = null;
+$editWindowSecondsLeft = null;
+$editWindowExpired = false;
+if ($accessError === null && $requestId > 0 && ($isRequesterOwnedCanvass || $isDeanCanvassView) && !$verifierChainLocked) {
+    try {
+        $ewStmt = $db->prepare(
+            'SELECT canvas_submitted_at FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+        );
+        $ewStmt->execute([$requestId]);
+        $rawSubmittedAt = $ewStmt->fetchColumn() ?: null;
+        if ($rawSubmittedAt !== null && $rawSubmittedAt !== '') {
+            $canvasSubmittedAt = (string) $rawSubmittedAt;
+            $submittedTs = strtotime($canvasSubmittedAt);
+            $editCloseTs = $submittedTs + 3600;
+            $nowTs = time();
+            if ($nowTs >= $editCloseTs) {
+                $editWindowExpired = true;
+                $editWindowSecondsLeft = 0;
+            } else {
+                $editWindowSecondsLeft = $editCloseTs - $nowTs;
+            }
+        }
+    } catch (Throwable $ignored) {}
+}
+if ($editWindowExpired) {
+    $isCanvassStructureUiHidden = true;
+    $isCanvasMatrixReadonly = true;
+}
+
 // New per-line preferred-quote view for the request owner (replaces old breakdown + matrix UI).
 // Covers both the direct owner path (no ?from=) and the department-user path (?from=dean).
 $isRequesterEditView = ($isRequesterOwnedCanvass || $isDeanCanvassView)
-    && !$isReviewerCanvassReadonly && !$verifierChainLocked && !$showGsdOutcomeReadonlyView;
+    && !$isReviewerCanvassReadonly && !$verifierChainLocked && !$showGsdOutcomeReadonlyView && !$editWindowExpired;
 $prAfterCanvassAccepted = ($requestId > 0 && $accessError === null)
     ? requisitionCanvassFormAcceptedForRequest($db, $requestId)
     : false;
@@ -690,7 +721,7 @@ $pageTitle = $rfRequestId > 0
 <body class="page-canvass-form">
 
 <main class="requisition-main">
-        <div class="requisition-card<?php echo $isCanvasMatrixReadonly ? ' gsd-canvass-readonly' : ''; ?>" id="canvassCard" data-request-id="<?php echo (int) $requestId; ?>" data-api="../../app/api/canvass_detail.php" data-dean-api="../../app/api/dean_requisition.php" data-gsd-readonly="<?php echo $isCanvasMatrixReadonly ? '1' : '0'; ?>" data-gsd-review="<?php echo $isGsdCanvassReview ? '1' : '0'; ?>" data-gsd-outcome-readonly="<?php echo $showGsdOutcomeReadonlyView ? '1' : '0'; ?>" data-gsd-api="../../app/api/gsd/requests.php" data-canvasser-register="<?php echo $isCanvasserCanvassView ? '1' : '0'; ?>" data-canvasser-api="../../app/api/canvasser_requests.php" data-requester-edit="<?php echo $isRequesterEditView ? '1' : '0'; ?>">
+        <div class="requisition-card<?php echo $isCanvasMatrixReadonly ? ' gsd-canvass-readonly' : ''; ?>" id="canvassCard" data-request-id="<?php echo (int) $requestId; ?>" data-api="../../app/api/canvass_detail.php" data-dean-api="../../app/api/dean_requisition.php" data-gsd-readonly="<?php echo $isCanvasMatrixReadonly ? '1' : '0'; ?>" data-gsd-review="<?php echo $isGsdCanvassReview ? '1' : '0'; ?>" data-gsd-outcome-readonly="<?php echo $showGsdOutcomeReadonlyView ? '1' : '0'; ?>" data-gsd-api="../../app/api/gsd/requests.php" data-canvasser-register="<?php echo $isCanvasserCanvassView ? '1' : '0'; ?>" data-canvasser-api="../../app/api/canvasser_requests.php" data-requester-edit="<?php echo $isRequesterEditView ? '1' : '0'; ?>" data-edit-window-seconds="<?php echo $editWindowSecondsLeft !== null ? (int) $editWindowSecondsLeft : '0'; ?>">
         <a href="<?php echo htmlspecialchars($accessError === null ? $backHref : $accessErrorReturnHref); ?>" class="requisition-close-btn" aria-label="Back" data-tooltip="Back">
             <i class="fas fa-times"></i>
         </a>
@@ -746,9 +777,24 @@ $pageTitle = $rfRequestId > 0
         <div class="req-flow-context" id="cvPrFlowContextBanner"<?php echo $canShowPurchaseRequisitionLink ? '' : ' hidden'; ?>>
             <div class="req-flow-context-top">
                 <div class="req-flow-context-main">
-                    <span class="req-flow-step">Purchase requisition is available after G.S.D., Comptroller, and President verify this canvass sheet.</span>
+                    <span class="req-flow-step">G.S.D., Comptroller, and President have all verified this canvass sheet. Purchase requisition is now available.</span>
                 </div>
                 <a class="req-flow-context-link" href="purchase_requisition_form.php?request_id=<?php echo (int) $rfRequestId; ?>&from=<?php echo htmlspecialchars($from !== '' ? $from : 'requisition'); ?>">Open purchase requisition</a>
+            </div>
+        </div>
+        <?php endif; ?>
+        <?php if ($isRequesterOwnedCanvass && $editWindowSecondsLeft !== null && $editWindowSecondsLeft > 0): ?>
+        <div class="canvass-continue-banner cv-edit-window-banner" id="cvEditWindowBanner">
+            <div class="canvass-continue-banner-inner">
+                <span class="canvass-continue-banner-icon"><i class="fas fa-clock" aria-hidden="true"></i></span>
+                <p class="canvass-continue-banner-msg">Canvass submitted. This form will become read-only in <strong id="cvEditCountdown">—</strong>. Save any changes before the window closes.</p>
+            </div>
+        </div>
+        <?php elseif ($isRequesterOwnedCanvass && $editWindowExpired): ?>
+        <div class="canvass-continue-banner cv-edit-window-banner cv-edit-window-expired" id="cvEditWindowBanner">
+            <div class="canvass-continue-banner-inner">
+                <span class="canvass-continue-banner-icon"><i class="fas fa-lock" aria-hidden="true"></i></span>
+                <p class="canvass-continue-banner-msg">The 1-hour editing window has closed. This canvass form is now read-only.</p>
             </div>
         </div>
         <?php endif; ?>

@@ -400,6 +400,7 @@ function requisitionAttachApprovalToPayload(PDO $db, int $requestId, array &$pay
         'gsd_status' => null,
         'comp_status' => null,
         'pres_status' => null,
+        'canvas_submitted_at' => null,
     ];
     require_once __DIR__ . '/approval_tables.php';
     try {
@@ -419,7 +420,7 @@ function requisitionAttachApprovalToPayload(PDO $db, int $requestId, array &$pay
         }
         if (cwirmsApprovalTableExists($db, 'canvass_verification_approval')) {
             $cva = $db->prepare(
-                'SELECT canvas_status, canvassed_by, suggested_supplier_id, suggested_supplier_name, gsd_status, comp_status, pres_status
+                'SELECT canvas_status, canvassed_by, suggested_supplier_id, suggested_supplier_name, gsd_status, comp_status, pres_status, canvas_submitted_at
                  FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
             );
             $cva->execute([$requestId]);
@@ -434,6 +435,7 @@ function requisitionAttachApprovalToPayload(PDO $db, int $requestId, array &$pay
                 $payload['approval']['gsd_status'] = $c['gsd_status'] ?? null;
                 $payload['approval']['comp_status'] = $c['comp_status'] ?? null;
                 $payload['approval']['pres_status'] = $c['pres_status'] ?? null;
+                $payload['approval']['canvas_submitted_at'] = $c['canvas_submitted_at'] ?? null;
             }
         }
     } catch (Throwable $e) {

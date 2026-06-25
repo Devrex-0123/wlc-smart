@@ -753,6 +753,57 @@ try {
         }
     }
 
+    if ($action === 'upload_requester_quote_photo') {
+        $requestId  = (int) ($_POST['request_id'] ?? 0);
+        $lineId     = (int) ($_POST['requisition_line_id'] ?? 0);
+        $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+        if ($requestId <= 0 || $lineId <= 0 || $supplierId <= 0) {
+            sendJson(['success' => false, 'message' => 'Missing required fields.']);
+        }
+        loadOwnedRequest($db, $requestId, $uid);
+        if (!isset($_FILES['quote_photo']) || !is_array($_FILES['quote_photo'])) {
+            sendJson(['success' => false, 'message' => 'Missing quote photo file.']);
+        }
+        try {
+            $lChk = $db->prepare(
+                'SELECT 1 FROM requisition_line WHERE requisition_line_id = ? AND request_id = ?
+                   AND (deleted_at IS NULL OR deleted_at = \'\') LIMIT 1'
+            );
+            $lChk->execute([$lineId, $requestId]);
+            if (!$lChk->fetchColumn()) {
+                sendJson(['success' => false, 'message' => 'Invalid line item.']);
+            }
+            $path = saveCanvassQuotePhoto($_FILES['quote_photo']);
+            $db->prepare(
+                "INSERT INTO requisition_line_quotes (requisition_line_id, supplier_id, quote_type, quoted_unit_price, quote_photo)
+                 VALUES (?, ?, 'preferred', 0, ?)
+                 ON DUPLICATE KEY UPDATE quote_photo = VALUES(quote_photo)"
+            )->execute([$lineId, $supplierId, $path]);
+            sendJson(['success' => true, 'photo_url' => $path]);
+        } catch (Throwable $e) {
+            sendJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    if ($action === 'remove_requester_quote_photo') {
+        $requestId  = (int) ($_POST['request_id'] ?? 0);
+        $lineId     = (int) ($_POST['requisition_line_id'] ?? 0);
+        $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+        if ($requestId <= 0 || $lineId <= 0 || $supplierId <= 0) {
+            sendJson(['success' => false, 'message' => 'Missing required fields.']);
+        }
+        loadOwnedRequest($db, $requestId, $uid);
+        try {
+            $db->prepare(
+                "UPDATE requisition_line_quotes SET quote_photo = NULL
+                 WHERE requisition_line_id = ? AND supplier_id = ? AND quote_type = 'preferred'"
+            )->execute([$lineId, $supplierId]);
+            sendJson(['success' => true]);
+        } catch (Throwable $e) {
+            sendJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     if ($action === 'pricing_overview') {
         $requestId = (int) ($_GET['request_id'] ?? 0);
         if ($requestId <= 0) {
@@ -936,6 +987,12 @@ try {
         $approvalWrap = ['approval' => []];
         requisitionAttachApprovalToPayload($db, $requestId, $approvalWrap);
 
+        $cvaSubmitStmt = $db->prepare(
+            'SELECT canvas_submitted_at FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+        );
+        $cvaSubmitStmt->execute([$requestId]);
+        $canvasSubmittedAtRaw = $cvaSubmitStmt->fetchColumn() ?: null;
+
         $itemCatalog = fetchItemCatalogForCanvass($db);
 
         $requisitionRequestedItems = [];
@@ -988,6 +1045,7 @@ try {
             'suppliers' => $matrixSuppliers,
             'approval' => $approvalWrap['approval'],
             'requisition_requested_items' => $requisitionRequestedItems,
+            'canvas_submitted_at' => $canvasSubmittedAtRaw,
         ]);
     }
 
@@ -1549,12 +1607,16 @@ try {
             $cvaChk->execute([$requestId]);
             if ($cvaChk->fetch(PDO::FETCH_ASSOC)) {
                 $db->prepare(
-                    'UPDATE canvass_verification_approval SET canvas_submission_status = ? WHERE request_id = ?'
-                )->execute([$submissionMode, $requestId]);
+                    'UPDATE canvass_verification_approval
+                     SET canvas_submission_status = ?,
+                         canvas_submitted_at = CASE WHEN ? = \'submitted\' AND canvas_submitted_at IS NULL THEN NOW() ELSE canvas_submitted_at END
+                     WHERE request_id = ?'
+                )->execute([$submissionMode, $submissionMode, $requestId]);
             } else {
                 $db->prepare(
-                    'INSERT INTO canvass_verification_approval (request_id, canvas_submission_status) VALUES (?, ?)'
-                )->execute([$requestId, $submissionMode]);
+                    'INSERT INTO canvass_verification_approval (request_id, canvas_submission_status, canvas_submitted_at)
+                     VALUES (?, ?, CASE WHEN ? = \'submitted\' THEN NOW() ELSE NULL END)'
+                )->execute([$requestId, $submissionMode, $submissionMode]);
             }
 
             // Delete old canvassed quotes for these lines then re-insert
@@ -1676,7 +1738,7 @@ try {
             $ph    = implode(',', array_fill(0, count($lineIds), '?'));
             $qStmt = $db->prepare(
                 "SELECT rlq.requisition_line_id, rlq.supplier_id, rlq.quoted_unit_price,
-                        rlq.benefits, s.supplier_name, s.supplier_image
+                        rlq.benefits, rlq.quote_photo, s.supplier_name, s.supplier_image
                  FROM requisition_line_quotes rlq
                  INNER JOIN suppliers s ON s.supplier_id = rlq.supplier_id
                  WHERE rlq.requisition_line_id IN ($ph) AND rlq.quote_type = 'preferred'
@@ -1691,6 +1753,7 @@ try {
                     'supplier_image'    => (string) ($q['supplier_image'] ?? ''),
                     'quoted_unit_price' => $q['quoted_unit_price'],
                     'benefits'          => $q['benefits'],
+                    'quote_photo'       => $q['quote_photo'] !== null ? (string) $q['quote_photo'] : null,
                 ];
             }
         }

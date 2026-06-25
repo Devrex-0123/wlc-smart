@@ -135,6 +135,7 @@ function cwirmsBuildGsdCanvassOutcomeView(PDO $db, int $requestId): array
         $qStmt = $db->prepare(
             "SELECT rlq.requisition_line_id, rlq.supplier_id, rlq.quoted_unit_price,
                     rlq.benefits, rlq.quote_type, rlq.canvasser_name, rlq.discount_percent,
+                    rlq.quote_photo,
                     s.supplier_name, s.supplier_image
              FROM requisition_line_quotes rlq
              INNER JOIN suppliers s ON s.supplier_id = rlq.supplier_id
@@ -154,6 +155,7 @@ function cwirmsBuildGsdCanvassOutcomeView(PDO $db, int $requestId): array
                 'quote_type'        => (string) $q['quote_type'],
                 'canvasser_name'    => $q['canvasser_name'],
                 'discount_percent'  => $q['discount_percent'],
+                'quote_photo'       => $q['quote_photo'] !== null ? (string) $q['quote_photo'] : null,
             ];
             if ($q['quote_type'] === 'canvassed') {
                 $quotesByLine[$lid][] = $entry;
