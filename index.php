@@ -29,7 +29,7 @@ if ($isLoggedIn) {
   <link rel="stylesheet" href="public/assets/css/about_preview.css?v=wlc13">
   <link rel="stylesheet" href="public/assets/css/loading.css">
 
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
   <script>
@@ -341,8 +341,6 @@ if ($isLoggedIn) {
       <button type="button" class="modal-close-x close" aria-label="Close">&times;</button>
 
       <div class="modal-left-brand">
-        <div class="modal-left-deco-ring"></div>
-
         <div class="modal-left-main">
           <div class="modal-left-logo-outer">
             <div class="modal-left-logo-inner">
@@ -351,7 +349,6 @@ if ($isLoggedIn) {
           </div>
 
           <h2 class="modal-left-brand-title">WLC-SMART</h2>
-          <p class="modal-left-subtext"></p>
         </div>
 
         <hr class="modal-left-rule">
@@ -361,7 +358,9 @@ if ($isLoggedIn) {
       </div>
 
       <div class="modal-right">
-        <p class="modal-eyebrow">Sign in</p>
+        <div class="modal-eyebrow-badge">
+          <span class="modal-eyebrow-dot"></span> Sign in
+        </div>
         <h3 class="modal-single-title">Welcome back</h3>
         <p class="modal-single-sub">Enter your credentials to access the portal.</p>
 
@@ -399,7 +398,9 @@ if ($isLoggedIn) {
             <div id="consentHint" class="consent-hint" aria-live="polite" role="status">Please read both documents above before continuing.</div>
           </div>
 
-          <button type="submit" id="modalLoginBtn" class="modal-login-btn" disabled>Sign in</button>
+          <button type="submit" id="modalLoginBtn" class="modal-login-btn" disabled>
+            Sign in <i class="fa-solid fa-arrow-right modal-btn-icon"></i>
+          </button>
         </form>
 
         <div class="modal-single-footer">
