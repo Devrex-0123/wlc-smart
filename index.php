@@ -341,44 +341,70 @@ if ($isLoggedIn) {
       <button type="button" class="modal-close-x close" aria-label="Close">&times;</button>
 
       <div class="modal-left-brand">
-        <img src="public/assets/images/wlc-smart-logo.png" alt="WLC-SMART Logo" class="m-logo">
-        <h2>WLC-SMART</h2>
-        <p>Smart inventory and requisition management for Western Leyte College</p>
+        <div class="modal-left-deco-ring"></div>
+
+        <div class="modal-left-main">
+          <div class="modal-left-logo-outer">
+            <div class="modal-left-logo-inner">
+              <img src="public/assets/images/wlc-smart-logo.png" alt="WLC-SMART Logo" class="modal-left-logo-img">
+            </div>
+          </div>
+
+          <h2 class="modal-left-brand-title">WLC-SMART</h2>
+          <p class="modal-left-subtext"></p>
+        </div>
+
+        <hr class="modal-left-rule">
+        <p class="modal-left-footer-line">
+          Western Leyte College
+        </p>
       </div>
 
       <div class="modal-right">
-        <h3>Welcome Back</h3>
+        <p class="modal-eyebrow">Sign in</p>
+        <h3 class="modal-single-title">Welcome back</h3>
+        <p class="modal-single-sub">Enter your credentials to access the portal.</p>
 
         <div id="modalAlert" class="modal-alert"></div>
 
         <form id="loginForm">
-          <div class="input-group">
-            <i class="fa-solid fa-user input-icon"></i>
-            <input type="text" id="email" name="email" placeholder="Email or Department Username" required autocomplete="username">
+          <div class="form-field">
+            <label for="email" class="field-label">Username</label>
+            <div class="input-group">
+              <i class="fa-solid fa-user input-icon"></i>
+              <input type="text" id="email" name="email" placeholder="Email or department username" required autocomplete="username">
+            </div>
           </div>
 
-          <div class="input-group">
-            <i class="fa-solid fa-lock input-icon"></i>
-            <input type="password" id="password" name="password" placeholder="Password" required>
-            <span class="toggle-password">
-              <i class="fa-solid fa-eye" id="toggleIcon"></i>
-            </span>
+          <div class="form-field">
+            <label for="password" class="field-label">Password</label>
+            <div class="input-group">
+              <i class="fa-solid fa-lock input-icon"></i>
+              <input type="password" id="password" name="password" placeholder="Enter your password" required>
+              <span class="toggle-password">
+                <i class="fa-solid fa-eye" id="toggleIcon"></i>
+              </span>
+            </div>
           </div>
-
-          <button type="submit" id="modalLoginBtn" class="modal-login-btn" disabled>Login</button>
 
           <div class="consent-box">
-            <div id="consentHint" class="consent-hint" aria-live="polite" role="status">Open both documents to continue.</div>
             <label class="privacy-agreement is-disabled" id="privacyAgreementLabel">
               <input type="checkbox" id="privacyCheckbox" name="privacy_agreement" aria-describedby="consentHint" disabled>
               <span>I agree to the
-                <a href="public/pages/terms_conditions.php" id="termsLink" class="consent-link link-attention" target="_blank" rel="noopener">Terms and Conditions</a>
-                &amp;
-                <a href="public/pages/privacy_policy.php" id="privacyLink" class="consent-link link-attention" target="_blank" rel="noopener">Privacy Policy</a>
+                <a href="public/pages/terms_conditions.php" id="termsLink" class="consent-link link-attention" target="_blank" rel="noopener">Terms &amp; Conditions</a>
+                and
+                <a href="public/pages/privacy_policy.php" id="privacyLink" class="consent-link link-attention" target="_blank" rel="noopener">Privacy Policy</a>.
               </span>
             </label>
+            <div id="consentHint" class="consent-hint" aria-live="polite" role="status">Please read both documents above before continuing.</div>
           </div>
+
+          <button type="submit" id="modalLoginBtn" class="modal-login-btn" disabled>Sign in</button>
         </form>
+
+        <div class="modal-single-footer">
+          <p><i class="fa-regular fa-circle-question modal-footer-icon"></i>Having trouble? <a href="mailto:support@wlc.edu.ph" class="modal-footer-link">Contact support</a></p>
+        </div>
       </div>
     </div>
   </div>
@@ -386,7 +412,7 @@ if ($isLoggedIn) {
 
   <script src="public/assets/js/landing_nav.js?v=wlc1"></script>
   <script src="public/assets/js/modal.js?v=wlc6"></script>
-  <script src="public/assets/js/login.js?v=wlc9"></script>
+  <script src="public/assets/js/login.js?v=wlc10"></script>
   <script src="public/assets/js/about_preview.js?v=wlc8"></script>
 
 </body>
