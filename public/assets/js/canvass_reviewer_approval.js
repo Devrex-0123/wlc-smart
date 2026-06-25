@@ -134,6 +134,14 @@
                 await refreshStrip();
                 const next = await fetchApproval();
                 setButtonState(next);
+                const prBanner = document.getElementById('cvPrFlowContextBanner');
+                if (prBanner && next) {
+                    const allAccepted =
+                        String(next.gsd_status || '').trim() === 'accept' &&
+                        String(next.comp_status || '').trim() === 'accept' &&
+                        String(next.pres_status || '').trim() === 'accept';
+                    prBanner.hidden = !allAccepted;
+                }
             } catch {
                 showToast('Network error.', 'error');
             }

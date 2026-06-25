@@ -2002,7 +2002,7 @@
             }
         });
         updateSuggestedSupplierNotice();
-        
+
         if (gsdReadonly && typeof window.__imrmsGsdAssigneeSyncApproval === 'function') {
             window.__imrmsGsdAssigneeSyncApproval(appr);
         }
@@ -2994,6 +2994,22 @@
             renderGsdSectionC(state.gsdLines, { readonly: true });
             syncGsdOutcomeSectionVisibility(state.gsdLines);
             applyCanvassApproval(data.approval);
+
+            const sectionBDisplayEl = document.getElementById('cvGsdSectionBCanvasserDisplay');
+            const sectionBNameEl = document.getElementById('cvGsdSectionBCanvasserName');
+            if (sectionBDisplayEl && sectionBNameEl) {
+                let canvasserName = '';
+                for (const line of state.gsdLines) {
+                    for (const q of (line.canvassed_quotes || [])) {
+                        if (q.canvasser_name) { canvasserName = q.canvasser_name; break; }
+                    }
+                    if (canvasserName) break;
+                }
+                if (canvasserName) {
+                    sectionBNameEl.textContent = canvasserName;
+                    sectionBDisplayEl.hidden = false;
+                }
+            }
             try {
                 emitCanvassPricingUpdate();
             } catch (pricingErr) {

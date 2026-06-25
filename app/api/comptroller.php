@@ -43,13 +43,23 @@ function comptrollerCheckedByLabel(PDO $db): string
 
 function requestHasSuggestedSuppliersPerItem(PDO $db, int $requestId): bool
 {
-    $totalStmt = $db->prepare('SELECT COUNT(*) FROM requisition_canvass_detail WHERE request_id = ?');
+    $totalStmt = $db->prepare(
+        "SELECT COUNT(DISTINCT rlq.requisition_line_id)
+         FROM requisition_line_quotes rlq
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+         WHERE rl.request_id = ? AND rlq.quote_type = 'canvassed'"
+    );
     $totalStmt->execute([$requestId]);
     $total = (int) $totalStmt->fetchColumn();
     if ($total <= 0) {
         return false;
     }
-    $selStmt = $db->prepare('SELECT COUNT(*) FROM request_approval_suggested_supplier_item WHERE request_id = ?');
+    $selStmt = $db->prepare(
+        'SELECT COUNT(*)
+         FROM requisition_line_awards rla
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rla.requisition_line_id
+         WHERE rl.request_id = ?'
+    );
     $selStmt->execute([$requestId]);
     $selected = (int) $selStmt->fetchColumn();
 

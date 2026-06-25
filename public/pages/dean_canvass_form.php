@@ -743,8 +743,8 @@ $pageTitle = $rfRequestId > 0
             <?php endif; ?>
         </nav>
         <?php endif; ?>
-        <?php if ($rfRequestId > 0 && $accessError === null && $canShowPurchaseRequisitionLink): ?>
-        <div class="req-flow-context">
+        <?php if ($rfRequestId > 0 && $accessError === null && ($isRequesterOwnedCanvass || $isInventoryManagerCanvassReview || $isPresidentCanvassReview || $isPresidentCanvassHistory)): ?>
+        <div class="req-flow-context" id="cvPrFlowContextBanner"<?php echo $canShowPurchaseRequisitionLink ? '' : ' hidden'; ?>>
             <div class="req-flow-context-top">
                 <div class="req-flow-context-main">
                     <span class="req-flow-step">Purchase requisition is available after G.S.D., Comptroller, and President verify this canvass sheet.</span>
@@ -900,6 +900,12 @@ $pageTitle = $rfRequestId > 0
             </div>
             <?php endif; ?>
             <div id="cvGsdCanvCards" class="gsd-cv-canv-stack"></div>
+            <?php if (!$isGsdCanvassReview): ?>
+            <div class="gsd-cv-canvasser-display" id="cvGsdSectionBCanvasserDisplay" hidden>
+                <span class="gsd-cv-canvasser-display-label">Canvassed by: </span>
+                <strong id="cvGsdSectionBCanvasserName"></strong>
+            </div>
+            <?php endif; ?>
             <?php if ($isGsdCanvassReview): ?>
             <div class="gsd-cv-canvasser-box" id="cvGsdCanvasserBox">
                 <div class="gsd-cv-canvasser-box-label">
@@ -1250,16 +1256,7 @@ $pageTitle = $rfRequestId > 0
 
         <div class="approval-section cv-approval-section" aria-label="Canvass verification status">
             <div class="approval-card approval-card-canvass-verifiers" id="cvApprovalStrip">
-                <?php if (!$isGsdCanvassReview): ?>
-                <div class="approval-role">
-                    <div class="circle-icon inactive"><i class="fas fa-check"></i></div>
-                    <div class="approval-role-body">
-                        <div class="approval-name">Canvasser</div>
-                        <div class="approval-sub cv-appr-kind">Canvassed by</div>
-                        <div class="cv-appr-detail" id="cvApprCanvasserDetail"></div>
-                    </div>
-                </div>
-                <?php else: ?>
+                <?php if ($isGsdCanvassReview): ?>
                 <input type="hidden" id="gsdSuggestedSupplierId" value="">
                 <?php endif; ?>
                 <div class="approval-role">
@@ -1303,10 +1300,11 @@ $pageTitle = $rfRequestId > 0
         </div>
         <p id="gsdVerifyHint" class="gsd-verify-hint" aria-live="polite"></p>
         <?php elseif ($isComptrollerCanvassReview || $isPresidentCanvassReview): ?>
+        <?php $reviewerCurrentStatus = $isComptrollerCanvassReview ? $comptrollerCompStatus : $cvWfPresStatus; ?>
         <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar rf-form-actions">
             <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> Approve</button>
             <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
-            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
+            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="<?php echo in_array($reviewerCurrentStatus, ['accept', 'reject'], true) ? 'display:inline-flex;' : 'display:none;'; ?>"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <?php endif; ?>
 

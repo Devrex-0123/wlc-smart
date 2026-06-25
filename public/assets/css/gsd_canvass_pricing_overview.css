@@ -327,6 +327,9 @@
 
 /* Canvasser name box */
 .gsd-cv-canvasser-box { border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; padding: 0.8rem 0.95rem; margin-top: 1rem; }
+.gsd-cv-canvasser-display { margin-top: 0.75rem; font-size: 0.875rem; color: #475569;border-bottom: 1px solid black; }
+.gsd-cv-canvasser-display-label { color: #64748b; }
+.gsd-cv-canvasser-display strong { color: #1e293b; }
 .gsd-cv-canvasser-box-label { display: flex; align-items: center; gap: 0.38rem; font-size: 0.84rem; font-weight: 700; color: #1f2937; margin-bottom: 0.5rem; }
 .gsd-cv-chk-icon { color: #94a3b8; font-size: 0.75rem; }
 .gsd-cv-canvasser-input {
