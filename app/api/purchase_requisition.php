@@ -49,7 +49,12 @@ function assertPresidentPr(PDO $db): void
 
 function requestHasPurchaseRequisitionLines(PDO $db, int $requestId): bool
 {
-    $stmt = $db->prepare('SELECT COUNT(*) FROM request_approval_suggested_supplier_item WHERE request_id = ?');
+    $stmt = $db->prepare(
+        'SELECT COUNT(*)
+         FROM requisition_line_awards rla
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rla.requisition_line_id
+         WHERE rl.request_id = ?'
+    );
     $stmt->execute([$requestId]);
 
     return (int) $stmt->fetchColumn() > 0;
@@ -84,20 +89,6 @@ function canViewPurchaseRequisition(PDO $db, int $userId, int $requestId): bool
     $own->execute([$requestId, $userId]);
 
     return (bool) $own->fetchColumn();
-}
-
-function tableHasColumn(PDO $db, string $table, string $column): bool
-{
-    $stmt = $db->prepare(
-        'SELECT 1 FROM information_schema.COLUMNS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = ?
-           AND COLUMN_NAME = ?
-         LIMIT 1'
-    );
-    $stmt->execute([$table, $column]);
-
-    return (bool) $stmt->fetchColumn();
 }
 
 function tableExists(PDO $db, string $table): bool
@@ -180,27 +171,17 @@ function savePurchaseAuditSnapshot(
  */
 function purchaseRequisitionDescriptionsByCanvassDetail(PDO $db, int $requestId): array
 {
-    $hasModelInCanvass = tableHasColumn($db, 'requisition_canvass_detail', 'model');
-    $hasNameInCanvass = tableHasColumn($db, 'requisition_canvass_detail', 'item_name');
-    $hasBrandInCanvass = tableHasColumn($db, 'requisition_canvass_detail', 'brand');
-
-    $nameExpr = $hasNameInCanvass ? 'NULLIF(TRIM(cd.item_name), \'\')' : 'NULL';
-    $brandExpr = $hasBrandInCanvass ? 'NULLIF(TRIM(cd.brand), \'\')' : 'NULL';
-    $modelExpr = $hasModelInCanvass ? 'NULLIF(TRIM(cd.model), \'\')' : 'NULL';
-
     $stmt = $db->prepare(
         "SELECT
-            cd.canvass_detail_id,
-            COALESCE($nameExpr, NULLIF(TRIM(rl.item_name), ''), NULLIF(TRIM(cd.component_label), ''), '—') AS item_name,
-            COALESCE($brandExpr, NULLIF(TRIM(rl.item_brand), ''), '') AS item_brand,
-            COALESCE($modelExpr, '') AS item_model,
-            COALESCE(NULLIF(TRIM(cd.specification), ''), NULLIF(TRIM(rl.item_category), ''), '') AS item_specification
-         FROM requisition_canvass_detail cd
-         LEFT JOIN requisition_line rl
-            ON rl.requisition_line_id = cd.requisition_line_id
-           AND rl.request_id = cd.request_id
-         WHERE cd.request_id = ?
-         ORDER BY cd.sort_order ASC, cd.canvass_detail_id ASC"
+            rl.requisition_line_id AS canvass_detail_id,
+            COALESCE(NULLIF(TRIM(rl.item_name), ''), '—') AS item_name,
+            COALESCE(NULLIF(TRIM(rl.item_brand), ''), '') AS item_brand,
+            COALESCE(NULLIF(TRIM(rl.model), ''), '') AS item_model,
+            COALESCE(NULLIF(TRIM(rl.specification), ''), NULLIF(TRIM(rl.item_category), ''), '') AS item_specification
+         FROM requisition_line rl
+         WHERE rl.request_id = ?
+           AND (rl.deleted_at IS NULL OR rl.deleted_at = '')
+         ORDER BY rl.sort_order ASC, rl.requisition_line_id ASC"
     );
     $stmt->execute([$requestId]);
     $map = [];
@@ -259,7 +240,15 @@ function loadPurchaseRequisitionSnapshotData(PDO $db, int $requestId): ?array
         $unitPrice = isset($line['unit_price']) && is_numeric($line['unit_price'])
             ? (float) $line['unit_price']
             : 0.0;
-        $amount = round($qty * $unitPrice, 2);
+        $discountPercent = cwirmsNormalizeCanvassSupplierDiscountPercent($line['discount_percent'] ?? null);
+        $discountFactor = $discountPercent !== null ? (1 - $discountPercent / 100) : 1.0;
+        $effectiveUnitPrice = round($unitPrice * $discountFactor, 2);
+        // Use pre-calculated approved_line_total which already applies discount and accepted_qty
+        if (isset($line['approved_line_total']) && is_numeric($line['approved_line_total'])) {
+            $amount = round((float) $line['approved_line_total'], 2);
+        } else {
+            $amount = round($qty * $effectiveUnitPrice, 2);
+        }
         $grandTotal += $amount;
 
         $supplierName = trim((string) ($line['supplier_name'] ?? ''));
@@ -274,7 +263,7 @@ function loadPurchaseRequisitionSnapshotData(PDO $db, int $requestId): ?array
             ],
             'qty' => $qty,
             'supplier_name' => $supplierName !== '' ? $supplierName : '—',
-            'unit_price' => $unitPrice,
+            'unit_price' => $effectiveUnitPrice,
             'amount' => $amount,
         ];
     }
@@ -394,7 +383,7 @@ try {
             $up->execute([$prStatus, $note !== '' ? $note : null, $requestId]);
         }
 
-        if ($prStatus === 'accept') {
+        if ($verifier === 'president' && $prStatus === 'accept') {
             $snap = loadPurchaseRequisitionSnapshotData($db, $requestId);
             if ($snap) {
                 savePurchaseAuditSnapshot(
@@ -407,9 +396,6 @@ try {
                     $snap['items']
                 );
             }
-        }
-
-        if ($verifier === 'president' && $prStatus === 'accept') {
             require_once __DIR__ . '/../helpers/purchase_order.php';
             cwirmsEnsurePurchaseOrderFromRequisition($db, $requestId, $userId);
         }

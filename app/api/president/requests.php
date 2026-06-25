@@ -47,13 +47,23 @@ function presidentApprovedByLabel(PDO $db): string
 
 function requestHasSuggestedSuppliersPerItem(PDO $db, int $requestId): bool
 {
-    $totalStmt = $db->prepare('SELECT COUNT(*) FROM requisition_canvass_detail WHERE request_id = ?');
+    $totalStmt = $db->prepare(
+        "SELECT COUNT(DISTINCT rlq.requisition_line_id)
+         FROM requisition_line_quotes rlq
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+         WHERE rl.request_id = ? AND rlq.quote_type IN ('canvassed', 'preferred')"
+    );
     $totalStmt->execute([$requestId]);
     $total = (int) $totalStmt->fetchColumn();
     if ($total <= 0) {
         return false;
     }
-    $selStmt = $db->prepare('SELECT COUNT(*) FROM request_approval_suggested_supplier_item WHERE request_id = ?');
+    $selStmt = $db->prepare(
+        'SELECT COUNT(*)
+         FROM requisition_line_awards rla
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rla.requisition_line_id
+         WHERE rl.request_id = ?'
+    );
     $selStmt->execute([$requestId]);
     $selected = (int) $selStmt->fetchColumn();
 
@@ -95,13 +105,7 @@ try {
             LEFT JOIN offices d ON d.office_id = r.office_id
             WHERE LOWER(TRIM(COALESCE(rfa.requisition_status, 'pending'))) = 'accept'
             AND r.submission_status = 'submitted'
-            AND EXISTS (
-                SELECT 1
-                FROM requisition_canvass_detail rcd
-                WHERE rcd.request_id = r.request_id
-                  AND LOWER(TRIM(COALESCE(rcd.canvass_submission_status, 'draft'))) = 'submitted'
-                LIMIT 1
-            )
+            AND LOWER(TRIM(COALESCE(cva.comp_status, 'pending'))) = 'accept'
             ORDER BY r.created_at DESC, r.request_id DESC
         ");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -213,15 +217,15 @@ try {
                 $filterDate = $filterDateRaw;
             }
         }
-        $dateClause = $filterDate !== null ? ' AND DATE(h.acted_at) = ?' : '';
+        $dateClause = $filterDate !== null ? ' AND DATE(h.approved_at) = ?' : '';
 
         $histItems = requisitionSqlHistoryItemsLabel();
         $baseSql = "
-            SELECT h.id, h.request_id, h.action, h.acted_at,
+            SELECT h.request_id AS id, h.request_id, h.pres_status AS action, h.approved_at AS acted_at,
                    {$histItems},
                    d.`office_name` AS office_name,
                    u.Email AS requester_email
-            FROM president_action_history h
+            FROM canvass_verification_approval h
             INNER JOIN requisition_item r ON r.request_id = h.request_id
             LEFT JOIN offices d ON d.office_id = r.office_id
             LEFT JOIN user u ON u.user_id = r.user_id
@@ -234,8 +238,9 @@ try {
                 sendJson(['success' => false, 'message' => 'Request not found.']);
             }
             $sql = $baseSql . '
-                WHERE h.request_id = ? AND h.user_id = ?' . $dateClause . '
-                ORDER BY h.acted_at DESC, h.id DESC
+                WHERE h.request_id = ?
+                AND h.approved_by = (SELECT full_name FROM user WHERE user_id = ?)' . $dateClause . '
+                ORDER BY h.approved_at DESC
                 LIMIT 100
             ';
             $stmt = $db->prepare($sql);
@@ -246,8 +251,8 @@ try {
             $stmt->execute($params);
         } else {
             $sql = $baseSql . '
-                WHERE h.user_id = ?' . $dateClause . '
-                ORDER BY h.acted_at DESC, h.id DESC
+                WHERE h.approved_by = (SELECT full_name FROM user WHERE user_id = ?)' . $dateClause . '
+                ORDER BY h.approved_at DESC
                 LIMIT 500
             ';
             $stmt = $db->prepare($sql);
@@ -358,11 +363,6 @@ try {
 
             $updReq = $db->prepare('UPDATE requisition_item SET status = ? WHERE request_id = ?');
             $updReq->execute([$requisitionStatus, $requestId]);
-
-            $logIns = $db->prepare(
-                'INSERT INTO president_action_history (request_id, user_id, action) VALUES (?, ?, ?)'
-            );
-            $logIns->execute([$requestId, (int) $_SESSION['user_id'], $presStatus]);
 
             $db->commit();
         } catch (Exception $e) {

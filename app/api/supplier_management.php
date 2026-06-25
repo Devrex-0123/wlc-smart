@@ -94,9 +94,11 @@ try {
             }
         }
 
+        $vat_registered = isset($_POST['vat_registered']) && $_POST['vat_registered'] ? 1 : 0;
+
         $stmt = $db->prepare(
-            'INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, tin, status, supplier_image)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO suppliers (supplier_name, contact_person, phone_number, email, address, city, country, postal_code, tin, vat_registered, status, supplier_image)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             $supplier_name,
@@ -108,6 +110,7 @@ try {
             $country,
             $postal_code,
             $tin,
+            $vat_registered,
             $status,
             $supplier_image,
         ]);
@@ -132,6 +135,7 @@ try {
         $status = $_POST['status'] ?? 'Active';
         $tin = cwirmsNormalizeSupplierTin($_POST['tin'] ?? null);
         $phone_number = cwirmsNormalizeSupplierPhone($phone_number);
+        $vat_registered = isset($_POST['vat_registered']) && $_POST['vat_registered'] ? 1 : 0;
 
         if (!$supplier_id) {
             echo json_encode(['success' => false, 'message' => 'Invalid supplier ID']);
@@ -193,7 +197,7 @@ try {
 
         $stmt = $db->prepare(
             'UPDATE suppliers
-             SET supplier_name = ?, contact_person = ?, phone_number = ?, email = ?, address = ?, city = ?, country = ?, postal_code = ?, tin = ?, status = ?, supplier_image = ?
+             SET supplier_name = ?, contact_person = ?, phone_number = ?, email = ?, address = ?, city = ?, country = ?, postal_code = ?, tin = ?, vat_registered = ?, status = ?, supplier_image = ?
              WHERE supplier_id = ?'
         );
         $stmt->execute([
@@ -206,6 +210,7 @@ try {
             $country,
             $postal_code,
             $tin,
+            $vat_registered,
             $status,
             $supplier_image,
             $supplier_id,

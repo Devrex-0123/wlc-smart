@@ -192,3 +192,12 @@
 .notifications-page-item.is-read {
     opacity: 0.92;
 }
+
+.notifications-page-item--clickable {
+    cursor: pointer;
+}
+
+.notifications-page-item--clickable:hover {
+    border-color: #6ee7b7;
+    box-shadow: 0 1px 4px rgba(22, 163, 74, 0.1);
+}

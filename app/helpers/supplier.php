@@ -28,6 +28,20 @@ function ensureSupplierTinColumn(PDO $db): void
              ADD COLUMN tin VARCHAR(20) NULL DEFAULT NULL AFTER postal_code'
         );
     }
+
+    $vatCheck = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'suppliers'
+           AND COLUMN_NAME = 'vat_registered'"
+    );
+    $vatCheck->execute();
+    if (((int) $vatCheck->fetchColumn()) === 0) {
+        $db->exec(
+            'ALTER TABLE suppliers
+             ADD COLUMN vat_registered TINYINT(1) NOT NULL DEFAULT 0 AFTER tin'
+        );
+    }
 }
 
 function cwirmsNormalizeSupplierTin(mixed $raw): ?string

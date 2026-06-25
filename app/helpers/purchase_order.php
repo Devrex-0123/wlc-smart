@@ -54,39 +54,17 @@ function cwirmsPurchaseOrderIdForRequest(PDO $db, int $requestId): ?int
  */
 function cwirmsPurchaseOrderDescriptionsByCanvassDetail(PDO $db, int $requestId): array
 {
-    $colCheck = static function (string $column) use ($db): bool {
-        $stmt = $db->prepare(
-            "SELECT COUNT(*) FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = 'requisition_canvass_detail'
-               AND COLUMN_NAME = ?"
-        );
-        $stmt->execute([$column]);
-
-        return ((int) $stmt->fetchColumn()) > 0;
-    };
-
-    $hasModel = $colCheck('model');
-    $hasName = $colCheck('item_name');
-    $hasBrand = $colCheck('brand');
-
-    $nameExpr = $hasName ? "NULLIF(TRIM(cd.item_name), '')" : 'NULL';
-    $brandExpr = $hasBrand ? "NULLIF(TRIM(cd.brand), '')" : 'NULL';
-    $modelExpr = $hasModel ? "NULLIF(TRIM(cd.model), '')" : 'NULL';
-
     $stmt = $db->prepare(
         "SELECT
-            cd.canvass_detail_id,
-            COALESCE($nameExpr, NULLIF(TRIM(rl.item_name), ''), NULLIF(TRIM(cd.component_label), ''), '—') AS item_name,
-            COALESCE($brandExpr, NULLIF(TRIM(rl.item_brand), ''), '') AS item_brand,
-            COALESCE($modelExpr, '') AS item_model,
-            COALESCE(NULLIF(TRIM(cd.specification), ''), NULLIF(TRIM(rl.item_category), ''), '') AS item_specification
-         FROM requisition_canvass_detail cd
-         LEFT JOIN requisition_line rl
-            ON rl.requisition_line_id = cd.requisition_line_id
-           AND rl.request_id = cd.request_id
-         WHERE cd.request_id = ?
-         ORDER BY cd.sort_order ASC, cd.canvass_detail_id ASC"
+            rl.requisition_line_id AS canvass_detail_id,
+            COALESCE(NULLIF(TRIM(rl.item_name), ''), '—') AS item_name,
+            COALESCE(NULLIF(TRIM(rl.item_brand), ''), '') AS item_brand,
+            COALESCE(NULLIF(TRIM(rl.model), ''), '') AS item_model,
+            COALESCE(NULLIF(TRIM(rl.specification), ''), NULLIF(TRIM(rl.item_category), ''), '') AS item_specification
+         FROM requisition_line rl
+         WHERE rl.request_id = ?
+           AND (rl.deleted_at IS NULL OR rl.deleted_at = '')
+         ORDER BY rl.sort_order ASC, rl.requisition_line_id ASC"
     );
     $stmt->execute([$requestId]);
     $map = [];
@@ -157,7 +135,14 @@ function cwirmsBuildPurchaseOrderDraftFromRequisition(PDO $db, int $requestId): 
         $unitPrice = isset($line['unit_price']) && is_numeric($line['unit_price'])
             ? round((float) $line['unit_price'], 2)
             : 0.0;
-        $amount = round($qty * $unitPrice, 2);
+        $discountPercent = cwirmsNormalizeCanvassSupplierDiscountPercent($line['discount_percent'] ?? null);
+        $discountFactor = $discountPercent !== null ? (1 - $discountPercent / 100) : 1.0;
+        $effectiveUnitPrice = round($unitPrice * $discountFactor, 2);
+        if (isset($line['approved_line_total']) && is_numeric($line['approved_line_total'])) {
+            $amount = round((float) $line['approved_line_total'], 2);
+        } else {
+            $amount = round($qty * $effectiveUnitPrice, 2);
+        }
         $totalAmount += $amount;
 
         $itemName = trim((string) ($desc['item_name'] ?? $line['item_name'] ?? ''));
@@ -176,7 +161,7 @@ function cwirmsBuildPurchaseOrderDraftFromRequisition(PDO $db, int $requestId): 
             'description' => $itemName !== '' ? $itemName : '—',
             'sub_description' => $subDescription,
             'quantity' => $qty,
-            'unit_price' => $unitPrice,
+            'unit_price' => $effectiveUnitPrice,
             'amount' => $amount,
         ];
     }

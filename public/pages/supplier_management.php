@@ -153,6 +153,13 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
               <input type="text" name="tin" id="supplier_tin" maxlength="20" placeholder="e.g. 123-456-789-000" autocomplete="off">
               <p class="field-hint">Leave blank for online shops without a BIR TIN.</p>
             </div>
+            <div class="form-group">
+              <label for="supplier_vat_registered" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+                <input type="checkbox" name="vat_registered" id="supplier_vat_registered" value="1" style="width:1rem;height:1rem;accent-color:#1D6B3A;">
+                VAT-Registered Supplier
+              </label>
+              <p class="field-hint">Check if this supplier is BIR-registered for VAT. A 5% final VAT withholding will be auto-added to their purchase orders.</p>
+            </div>
           </div>
 
           <hr class="form-divider">

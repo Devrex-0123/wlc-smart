@@ -98,58 +98,35 @@ function loadValidatedCanvasAssignee(PDO $db, int $gsdDeptId, int $assigneeUserI
 }
 
 /**
- * Validate canvassed or requester-preferred supplier quote for GSD suggested selection.
+ * Validate that a canvassed quote exists in requisition_line_quotes for the given line + supplier.
  *
  * @return array{0: array|null, 1: string|null} [supplier row or null, error message]
  */
-function cwirmsPreferredQuotedPriceForItemIndex(?string $quotedPricesRaw, int $itemIndex): ?string
-{
-    if ($quotedPricesRaw === null || trim($quotedPricesRaw) === '') {
-        return null;
-    }
-    $decoded = json_decode($quotedPricesRaw, true);
-    if (!is_array($decoded)) {
-        return null;
-    }
-    $priceRaw = $decoded[$itemIndex] ?? $decoded[(string) $itemIndex] ?? null;
-    if ($priceRaw === null || $priceRaw === '') {
-        return null;
-    }
-    if (!is_numeric($priceRaw)) {
-        return null;
-    }
-    $price = round((float) $priceRaw, 2);
-    if ($price < 0) {
-        return null;
-    }
-
-    return (string) $price;
-}
-
-function loadValidatedCanvassedSuggestedSupplierForDetail(PDO $db, int $requestId, int $canvassDetailId, int $supplierId): array
+function loadValidatedCanvassedSuggestedSupplierForDetail(PDO $db, int $requestId, int $lineId, int $supplierId): array
 {
     if ($supplierId <= 0) {
         return [null, 'Select a supplier before saving.'];
     }
-    if ($canvassDetailId <= 0) {
-        return [null, 'Invalid canvass item reference.'];
+    if ($lineId <= 0) {
+        return [null, 'Invalid line reference.'];
     }
-    $stmt = $db->prepare('
+    $stmt = $db->prepare("
         SELECT s.supplier_id, s.supplier_name
         FROM suppliers s
         WHERE s.supplier_id = ?
           AND EXISTS (
               SELECT 1
-              FROM requisition_canvass_detail cd
-              INNER JOIN requisition_canvass_detail_supplier cds ON cds.canvass_detail_id = cd.canvass_detail_id
-              WHERE cd.request_id = ?
-                AND cd.canvass_detail_id = ?
-                AND cds.supplier_id = s.supplier_id
-                AND cds.price IS NOT NULL
+              FROM requisition_line_quotes rlq
+              INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+              WHERE rl.request_id = ?
+                AND rlq.requisition_line_id = ?
+                AND rlq.supplier_id = s.supplier_id
+                AND rlq.quote_type = 'canvassed'
+                AND rlq.quoted_unit_price IS NOT NULL
           )
         LIMIT 1
-    ');
-    $stmt->execute([$supplierId, $requestId, $canvassDetailId]);
+    ");
+    $stmt->execute([$supplierId, $requestId, $lineId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) {
         return [null, 'Selected supplier must come from quoted suppliers in the canvassed matrix.'];
@@ -158,82 +135,83 @@ function loadValidatedCanvassedSuggestedSupplierForDetail(PDO $db, int $requestI
     return [$row, null];
 }
 
-function loadValidatedPreferredSuggestedSupplierForDetail(PDO $db, int $requestId, int $canvassDetailId, int $supplierId): array
+/**
+ * Validate that a preferred quote exists in requisition_line_quotes for the given line + supplier.
+ *
+ * @return array{0: array|null, 1: string|null} [supplier row or null, error message]
+ */
+function loadValidatedPreferredSuggestedSupplierForDetail(PDO $db, int $requestId, int $lineId, int $supplierId): array
 {
     if ($supplierId <= 0) {
         return [null, 'Select a supplier before saving.'];
     }
-    if ($canvassDetailId <= 0) {
-        return [null, 'Invalid canvass item reference.'];
+    if ($lineId <= 0) {
+        return [null, 'Invalid line reference.'];
+    }
+    $stmt = $db->prepare("
+        SELECT s.supplier_id, s.supplier_name
+        FROM suppliers s
+        WHERE s.supplier_id = ?
+          AND EXISTS (
+              SELECT 1
+              FROM requisition_line_quotes rlq
+              WHERE rlq.requisition_line_id = ?
+                AND rlq.supplier_id = s.supplier_id
+                AND rlq.quote_type = 'preferred'
+                AND rlq.quoted_unit_price IS NOT NULL
+          )
+        LIMIT 1
+    ");
+    $stmt->execute([$supplierId, $lineId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return [null, 'Selected preferred supplier must have a quoted price for this line item.'];
     }
 
-    $sortStmt = $db->prepare(
-        'SELECT sort_order FROM requisition_canvass_detail WHERE request_id = ? AND canvass_detail_id = ? LIMIT 1'
-    );
-    $sortStmt->execute([$requestId, $canvassDetailId]);
-    $sortOrder = (int) ($sortStmt->fetchColumn() ?: 0);
-
-    require_once __DIR__ . '/../approval_tables.php';
-    ensurePreferredSupplierItemQuotesTable($db);
-    
-    // Check that supplier exists in the preferred supplier list (requisition_preferred_supplier_item)
-    $dupChk = $db->prepare(
-        'SELECT 1 FROM requisition_preferred_supplier_item
-         WHERE request_id = ? AND supplier_id = ?
-         LIMIT 1'
-    );
-    $dupChk->execute([$requestId, $supplierId]);
-    if (!$dupChk->fetchColumn()) {
-        return [null, 'Selected supplier must come from the requester preferred supplier matrix.'];
-    }
-    
-    // Get supplier details from suppliers table
-    $prefStmt = $db->prepare(
-        'SELECT supplier_id, supplier_name FROM suppliers WHERE supplier_id = ? LIMIT 1'
-    );
-    $prefStmt->execute([$supplierId]);
-    $prefRow = $prefStmt->fetch(PDO::FETCH_ASSOC);
-    if (!$prefRow) {
-        return [null, 'Supplier not found.'];
-    }
-    $quotedPrice = cwirmsPreferredQuotedPriceForSortOrder($db, $requestId, $supplierId, $sortOrder);
-    if ($quotedPrice === null) {
-        return [null, 'Selected preferred supplier must have a quoted price for this item.'];
-    }
-
-    return [
-        [
-            'supplier_id' => (int) ($prefRow['supplier_id'] ?? 0),
-            'supplier_name' => (string) ($prefRow['supplier_name'] ?? ''),
-        ],
-        null,
-    ];
+    return [$row, null];
 }
 
 function loadValidatedSuggestedSupplierForDetail(
     PDO $db,
     int $requestId,
-    int $canvassDetailId,
+    int $lineId,
     int $supplierId,
     string $selectionSource = 'canvassed'
 ): array {
     if ($selectionSource === 'preferred') {
-        return loadValidatedPreferredSuggestedSupplierForDetail($db, $requestId, $canvassDetailId, $supplierId);
+        return loadValidatedPreferredSuggestedSupplierForDetail($db, $requestId, $lineId, $supplierId);
     }
 
-    return loadValidatedCanvassedSuggestedSupplierForDetail($db, $requestId, $canvassDetailId, $supplierId);
+    return loadValidatedCanvassedSuggestedSupplierForDetail($db, $requestId, $lineId, $supplierId);
 }
 
+/**
+ * True when every line that has at least one supplier quote also has a GSD award.
+ */
 function requestAllCanvassItemsHaveSuggestedSupplier(PDO $db, int $requestId): bool
 {
-    $totalStmt = $db->prepare('SELECT COUNT(*) FROM requisition_canvass_detail WHERE request_id = ?');
+    $totalStmt = $db->prepare(
+        "SELECT COUNT(DISTINCT rl.requisition_line_id)
+         FROM requisition_line rl
+         WHERE rl.request_id = ?
+           AND (rl.deleted_at IS NULL OR rl.deleted_at = '')
+           AND EXISTS (
+               SELECT 1
+               FROM requisition_line_quotes rlq
+               WHERE rlq.requisition_line_id = rl.requisition_line_id
+           )"
+    );
     $totalStmt->execute([$requestId]);
     $total = (int) $totalStmt->fetchColumn();
     if ($total <= 0) {
         return false;
     }
+
     $selectedStmt = $db->prepare(
-        'SELECT COUNT(*) FROM request_approval_suggested_supplier_item WHERE request_id = ?'
+        'SELECT COUNT(*)
+         FROM requisition_line_awards rla
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rla.requisition_line_id
+         WHERE rl.request_id = ?'
     );
     $selectedStmt->execute([$requestId]);
     $selected = (int) $selectedStmt->fetchColumn();
@@ -245,6 +223,9 @@ try {
     $db = Database::connect();
     ensureRequisitionCanvassSubmissionColumn($db);
     ensureSuggestedSupplierSelectionSourceColumn($db);
+    ensureRequisitionLineQuotesTable($db);
+    ensureRequisitionLineAwardsTable($db);
+    ensureRequisitionLineQuotesGsdColumns($db);
     $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
     if ($action === 'list_requests') {
@@ -262,13 +243,7 @@ try {
             LEFT JOIN offices d ON d.office_id = r.office_id
             WHERE LOWER(TRIM(COALESCE(rfa.requisition_status, 'pending'))) = 'accept'
             AND r.submission_status = 'submitted'
-            AND EXISTS (
-                SELECT 1
-                FROM requisition_canvass_detail rcd
-                WHERE rcd.request_id = r.request_id
-                  AND LOWER(TRIM(COALESCE(rcd.canvass_submission_status, 'draft'))) = 'submitted'
-                LIMIT 1
-            )
+            AND LOWER(TRIM(COALESCE(cva.pres_status, ''))) NOT IN ('accept')
             ORDER BY r.created_at DESC, r.request_id DESC
         ");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -286,6 +261,7 @@ try {
                 'id' => 'REQ-' . str_pad((string) $row['request_id'], 6, '0', STR_PAD_LEFT),
                 'request_id' => (int) $row['request_id'],
                 'date' => $row['created_at'],
+                'updated_at' => $row['created_at'],
                 'items' => requisitionExplodePipeOrDefault($row['items_concat'] ?? null, '—'),
                 'suppliers' => requisitionExplodePipeOrDefault($row['suppliers_concat'] ?? null, 'N/A'),
                 'status' => $row['status'] ?? 'Pending',
@@ -297,6 +273,33 @@ try {
         }, $rows);
 
         sendJson(['success' => true, 'requests' => $requests]);
+    }
+
+    if ($action === 'get_gsd_review_view') {
+        assertGsdOfficer($db);
+        $requestId = (int) ($_GET['request_id'] ?? 0);
+        if ($requestId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request id.']);
+        }
+
+        $chk = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ?');
+        $chk->execute([$requestId]);
+        if (!$chk->fetch(PDO::FETCH_ASSOC)) {
+            sendJson(['success' => false, 'message' => 'Request not found.']);
+        }
+
+        $rsStmt = $db->prepare(
+            "SELECT LOWER(TRIM(COALESCE(requisition_status,''))) FROM requisition_form_approval WHERE request_id = ? LIMIT 1"
+        );
+        $rsStmt->execute([$requestId]);
+        $rs = strtolower(trim((string) ($rsStmt->fetchColumn() ?: '')));
+        if ($rs !== 'accept') {
+            sendJson(['success' => false, 'message' => 'Open after the inventory manager accepts the requisition.']);
+        }
+
+        require_once __DIR__ . '/../../helpers/gsd_canvass_outcome.php';
+        $payload = cwirmsBuildGsdCanvassOutcomeView($db, $requestId);
+        sendJson(array_merge(['success' => true], $payload));
     }
 
     if ($action === 'get_approval_status') {
@@ -457,13 +460,15 @@ try {
     if ($action === 'save_suggested_supplier_item') {
         assertGsdOfficer($db);
         $requestId = (int) ($_POST['request_id'] ?? 0);
-        $canvassDetailId = (int) ($_POST['canvass_detail_id'] ?? 0);
         $supplierId = (int) ($_POST['suggested_supplier_id'] ?? 0);
         $selectionSource = strtolower(trim((string) ($_POST['selection_source'] ?? 'canvassed')));
         if ($selectionSource !== 'preferred') {
             $selectionSource = 'canvassed';
         }
-        if ($requestId <= 0 || $canvassDetailId <= 0 || $supplierId <= 0) {
+
+        $lineId = (int) ($_POST['requisition_line_id'] ?? 0);
+
+        if ($requestId <= 0 || $lineId <= 0 || $supplierId <= 0) {
             sendJson(['success' => false, 'message' => 'Invalid request, item, or supplier.']);
         }
 
@@ -476,7 +481,7 @@ try {
         [$supplierRow, $supplierErr] = loadValidatedSuggestedSupplierForDetail(
             $db,
             $requestId,
-            $canvassDetailId,
+            $lineId,
             $supplierId,
             $selectionSource
         );
@@ -504,21 +509,42 @@ try {
             $ins->execute([$requestId]);
         }
 
-        $upsert = $db->prepare('
-            INSERT INTO request_approval_suggested_supplier_item (request_id, canvass_detail_id, supplier_id, selection_source, selected_by_user_id, selected_at)
-            VALUES (?, ?, ?, ?, ?, NOW())
+        // Resolve the matching quote_id for the FK on requisition_line_awards.
+        $quoteStmt = $db->prepare(
+            "SELECT quote_id FROM requisition_line_quotes
+             WHERE requisition_line_id = ? AND supplier_id = ? AND quote_type = ?
+             LIMIT 1"
+        );
+        $quoteStmt->execute([$lineId, $supplierId, $selectionSource]);
+        $quoteId = $quoteStmt->fetchColumn() ?: null;
+
+        // Use the line's requested quantity as the initial awarded_qty (comptroller will adjust later).
+        $lineQtyStmt = $db->prepare(
+            'SELECT COALESCE(quantity, 1) FROM requisition_line WHERE requisition_line_id = ? LIMIT 1'
+        );
+        $lineQtyStmt->execute([$lineId]);
+        $requestedQty = max(1, (int) ($lineQtyStmt->fetchColumn() ?: 1));
+
+        // Upsert into canonical award table (uq_line_award unique key on requisition_line_id).
+        $upsert = $db->prepare("
+            INSERT INTO requisition_line_awards
+                (requisition_line_id, quote_id, supplier_id, selection_source, awarded_qty, awarded_by_user_id, awarded_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE
-                supplier_id = VALUES(supplier_id),
-                selection_source = VALUES(selection_source),
-                selected_by_user_id = VALUES(selected_by_user_id),
-                selected_at = NOW()
-        ');
-        $upsert->execute([$requestId, $canvassDetailId, $supplierId, $selectionSource, (int) $_SESSION['user_id']]);
+                quote_id           = VALUES(quote_id),
+                supplier_id        = VALUES(supplier_id),
+                selection_source   = VALUES(selection_source),
+                awarded_qty        = VALUES(awarded_qty),
+                awarded_by_user_id = VALUES(awarded_by_user_id),
+                awarded_at         = NOW()
+        ");
+        $upsert->execute([$lineId, $quoteId ?: null, $supplierId, $selectionSource, $requestedQty, (int) $_SESSION['user_id']]);
 
         sendJson([
             'success' => true,
             'message' => 'Suggested supplier saved for item.',
-            'canvass_detail_id' => $canvassDetailId,
+            'requisition_line_id' => $lineId,
+            'canvass_detail_id' => $lineId,  // backward-compat alias
             'suggested_supplier_id' => $supplierId,
             'selection_source' => $selectionSource,
             'suggested_supplier_name' => (string) ($supplierRow['supplier_name'] ?? ''),
@@ -528,8 +554,10 @@ try {
     if ($action === 'clear_suggested_supplier_item') {
         assertGsdOfficer($db);
         $requestId = (int) ($_POST['request_id'] ?? 0);
-        $canvassDetailId = (int) ($_POST['canvass_detail_id'] ?? 0);
-        if ($requestId <= 0 || $canvassDetailId <= 0) {
+
+        $lineId = (int) ($_POST['requisition_line_id'] ?? 0);
+
+        if ($requestId <= 0 || $lineId <= 0) {
             sendJson(['success' => false, 'message' => 'Invalid request or item reference.']);
         }
 
@@ -552,15 +580,15 @@ try {
         }
 
         $del = $db->prepare(
-            'DELETE FROM request_approval_suggested_supplier_item
-             WHERE request_id = ? AND canvass_detail_id = ?'
+            'DELETE FROM requisition_line_awards WHERE requisition_line_id = ?'
         );
-        $del->execute([$requestId, $canvassDetailId]);
+        $del->execute([$lineId]);
 
         sendJson([
             'success' => true,
             'message' => 'Suggested supplier cleared for item.',
-            'canvass_detail_id' => $canvassDetailId,
+            'requisition_line_id' => $lineId,
+            'canvass_detail_id' => $lineId,  // backward-compat alias
         ]);
     }
 
@@ -577,15 +605,15 @@ try {
                 $filterDate = $filterDateRaw;
             }
         }
-        $dateClause = $filterDate !== null ? ' AND DATE(h.acted_at) = ?' : '';
+        $dateClause = $filterDate !== null ? ' AND DATE(h.verified_at) = ?' : '';
 
         $histItems = requisitionSqlHistoryItemsLabel();
         $baseSql = "
-            SELECT h.id, h.request_id, h.action, h.acted_at,
+            SELECT h.request_id AS id, h.request_id, h.gsd_status AS action, h.verified_at AS acted_at,
                    {$histItems},
                    d.`office_name` AS office_name,
                    u.Email AS requester_email
-            FROM gsd_action_history h
+            FROM canvass_verification_approval h
             INNER JOIN requisition_item r ON r.request_id = h.request_id
             LEFT JOIN offices d ON d.office_id = r.office_id
             LEFT JOIN user u ON u.user_id = r.user_id
@@ -598,8 +626,9 @@ try {
                 sendJson(['success' => false, 'message' => 'Request not found.']);
             }
             $sql = $baseSql . '
-                WHERE h.request_id = ? AND h.user_id = ?' . $dateClause . '
-                ORDER BY h.acted_at DESC, h.id DESC
+                WHERE h.request_id = ?
+                AND h.verified_by = (SELECT full_name FROM user WHERE user_id = ?)' . $dateClause . '
+                ORDER BY h.verified_at DESC
                 LIMIT 100
             ';
             $stmt = $db->prepare($sql);
@@ -610,8 +639,8 @@ try {
             $stmt->execute($params);
         } else {
             $sql = $baseSql . '
-                WHERE h.user_id = ?' . $dateClause . '
-                ORDER BY h.acted_at DESC, h.id DESC
+                WHERE h.verified_by = (SELECT full_name FROM user WHERE user_id = ?)' . $dateClause . '
+                ORDER BY h.verified_at DESC
                 LIMIT 500
             ';
             $stmt = $db->prepare($sql);
@@ -640,6 +669,69 @@ try {
         }, $rows);
 
         sendJson(['success' => true, 'history' => $history]);
+    }
+
+    if ($action === 'add_canvass_quote') {
+        assertGsdOfficer($db);
+        $requestId    = (int) ($_POST['request_id'] ?? 0);
+        $lineId       = (int) ($_POST['requisition_line_id'] ?? 0);
+        $supplierId   = (int) ($_POST['supplier_id'] ?? 0);
+        $priceRaw     = trim((string) ($_POST['unit_price'] ?? ''));
+        $benefits     = trim((string) ($_POST['benefits'] ?? ''));
+        $discountRaw  = trim((string) ($_POST['discount_percent'] ?? ''));
+        $canvasserName = trim((string) ($_POST['canvasser_name'] ?? ''));
+
+        if ($requestId <= 0 || $lineId <= 0 || $supplierId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request, line, or supplier.']);
+        }
+        if ($priceRaw === '' || !is_numeric($priceRaw) || (float) $priceRaw < 0) {
+            sendJson(['success' => false, 'message' => 'Enter a valid unit price (≥ 0).']);
+        }
+        $price = round((float) $priceRaw, 2);
+        $discountPercent = ($discountRaw !== '' && is_numeric($discountRaw)) ? min(100.0, max(0.0, (float) $discountRaw)) : null;
+
+        $chk = $db->prepare('SELECT request_id FROM requisition_item WHERE request_id = ?');
+        $chk->execute([$requestId]);
+        if (!$chk->fetch(PDO::FETCH_ASSOC)) {
+            sendJson(['success' => false, 'message' => 'Request not found.']);
+        }
+        $lineChk = $db->prepare(
+            'SELECT requisition_line_id FROM requisition_line WHERE requisition_line_id = ? AND request_id = ? LIMIT 1'
+        );
+        $lineChk->execute([$lineId, $requestId]);
+        if (!$lineChk->fetch(PDO::FETCH_ASSOC)) {
+            sendJson(['success' => false, 'message' => 'Line item not found on this request.']);
+        }
+        $supChk = $db->prepare('SELECT supplier_id FROM suppliers WHERE supplier_id = ? LIMIT 1');
+        $supChk->execute([$supplierId]);
+        if (!$supChk->fetch(PDO::FETCH_ASSOC)) {
+            sendJson(['success' => false, 'message' => 'Supplier not found.']);
+        }
+
+        $upsert = $db->prepare(
+            "INSERT INTO requisition_line_quotes
+                (requisition_line_id, supplier_id, quoted_unit_price, quote_type,
+                 submitted_by_user_id, benefits, canvasser_name, discount_percent)
+             VALUES (?, ?, ?, 'canvassed', ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                quoted_unit_price = VALUES(quoted_unit_price),
+                benefits          = VALUES(benefits),
+                canvasser_name    = VALUES(canvasser_name),
+                discount_percent  = VALUES(discount_percent),
+                submitted_by_user_id = VALUES(submitted_by_user_id),
+                updated_at        = NOW()"
+        );
+        $upsert->execute([
+            $lineId,
+            $supplierId,
+            $price,
+            (int) $_SESSION['user_id'],
+            $benefits !== '' ? $benefits : null,
+            $canvasserName !== '' ? $canvasserName : null,
+            $discountPercent,
+        ]);
+
+        sendJson(['success' => true, 'message' => 'Canvass quote saved.']);
     }
 
     if ($action === 'set_gsd_approval') {
@@ -690,33 +782,22 @@ try {
         $canvassedByValue = null;
         $suggestedSupplierIdValue = null;
         $suggestedSupplierNameValue = null;
+        $gsdOfficerName = trim((string) ($_POST['gsd_officer_name'] ?? ''));
         if ($gsdStatus === 'accept') {
-            if (!$canvasDone) {
-                sendJson(['success' => false, 'message' => 'Canvasser must complete canvassing before GSD can verify.']);
+            if (!requestAllCanvassItemsHaveSuggestedSupplier($db, $requestId)) {
+                sendJson([
+                    'success' => false,
+                    'message' => 'Select a supplier quote for every line item before verifying. Each selection is saved to requisition_line_awards when you pick a supplier in Section C.',
+                ]);
             }
-            if ($existing && $canvasDone) {
-                $canvassedByValue = trim((string) ($existing['canvassed_by'] ?? ''));
-            } elseif ($assigneePostId > 0) {
-                [$rowA, $errA] = loadValidatedCanvasAssignee($db, $gsdDeptId, $assigneePostId);
-                if ($errA !== null) {
-                    sendJson(['success' => false, 'message' => $errA]);
-                }
-                $canvassedByValue = userCanvasAssigneeLabel($rowA);
+            // Prefer the typed GSD officer name; fall back to existing canvassed_by, then session label.
+            if ($gsdOfficerName !== '') {
+                $canvassedByValue = $gsdOfficerName;
             } elseif ($existing) {
                 $canvassedByValue = trim((string) ($existing['canvassed_by'] ?? ''));
-            } else {
-                $canvassedByValue = '';
             }
-            if ($canvassedByValue === '') {
-                sendJson(['success' => false, 'message' => 'Assign a office staff member for canvassing before verifying.']);
-            }
-            if (!requestAllCanvassItemsHaveSuggestedSupplier($db, $requestId)) {
-                sendJson(['success' => false, 'message' => 'Select a suggested supplier for each canvass item before verifying.']);
-            }
-        } elseif ($gsdStatus === 'reject' && !$canvasDone && $assigneePostId > 0) {
-            [$rowA, $errA] = loadValidatedCanvasAssignee($db, $gsdDeptId, $assigneePostId);
-            if ($errA === null) {
-                $canvassedByValue = userCanvasAssigneeLabel($rowA);
+            if (!$canvassedByValue) {
+                $canvassedByValue = $verifiedBy;
             }
         }
 
@@ -731,97 +812,37 @@ try {
             ]);
         }
 
-        $canvasAssigneeUserIdForDb = null;
-        if (!$canvasDone) {
-            if ($assigneePostId > 0) {
-                $canvasAssigneeUserIdForDb = $assigneePostId;
-            } elseif ($existing) {
-                $canvasAssigneeUserIdForDb = (int) ($existing['canvas_assignee_user_id'] ?? 0) ?: null;
-            }
-        }
-
         $db->beginTransaction();
         try {
-            if ($existing) {
-                if ($gsdStatus === 'pending') {
-                    $up = $db->prepare('
-                        UPDATE canvass_verification_approval
-                        SET verified_by = NULL,
-                            verified_at = NULL,
-                            gsd_status = ?
-                        WHERE request_id = ?
-                    ');
-                    $up->execute([$gsdStatus, $requestId]);
-                } else {
-                    if ($canvassedByValue !== null && !$canvasDone) {
-                        $up = $db->prepare('
-                            UPDATE canvass_verification_approval
-                            SET verified_by = ?,
-                                verified_at = NOW(),
-                                gsd_status = ?,
-                                canvassed_by = ?,
-                                canvassed_at = NOW(),
-                                canvas_assignee_user_id = ?,
-                                suggested_supplier_id = ?,
-                                suggested_supplier_name = ?
-                            WHERE request_id = ?
-                        ');
-                        $up->execute([
-                            $verifiedBy,
-                            $gsdStatus,
-                            $canvassedByValue,
-                            $canvasAssigneeUserIdForDb,
-                            $suggestedSupplierIdValue,
-                            $suggestedSupplierNameValue,
-                            $requestId,
-                        ]);
-                    } else {
-                        $up = $db->prepare('
-                            UPDATE canvass_verification_approval
-                            SET verified_by = ?,
-                                verified_at = NOW(),
-                                gsd_status = ?,
-                                suggested_supplier_id = ?,
-                            suggested_supplier_name = ?
-                            WHERE request_id = ?
-                        ');
-                        $up->execute([$verifiedBy, $gsdStatus, $suggestedSupplierIdValue, $suggestedSupplierNameValue, $requestId]);
-                    }
-                }
-            } elseif ($gsdStatus !== 'pending') {
-                $cbIns = ($canvassedByValue !== null && $canvassedByValue !== '') ? $canvassedByValue : null;
-                if ($gsdStatus === 'accept' && ($cbIns === null || $cbIns === '')) {
-                    $db->rollBack();
-                    sendJson(['success' => false, 'message' => 'Assign a office staff member for canvassing before verifying.']);
-                }
-                ensureCanvassVerificationApprovalRow($db, $requestId);
-                if ($cbIns !== null) {
-                    $ins = $db->prepare('
-                        UPDATE canvass_verification_approval
-                        SET verified_by = ?, verified_at = NOW(), gsd_status = ?, comp_status = \'pending\', pres_status = NULL,
-                            canvassed_by = ?, canvassed_at = NOW(), canvas_status = \'pending\', canvas_assignee_user_id = ?,
-                            suggested_supplier_id = ?, suggested_supplier_name = ?
-                        WHERE request_id = ?
-                    ');
-                    $ins->execute([$verifiedBy, $gsdStatus, $cbIns, $canvasAssigneeUserIdForDb, $suggestedSupplierIdValue, $suggestedSupplierNameValue, $requestId]);
-                } else {
-                    $ins = $db->prepare('
-                        UPDATE canvass_verification_approval
-                        SET verified_by = ?, verified_at = NOW(), gsd_status = ?, comp_status = \'pending\', pres_status = NULL,
-                            suggested_supplier_id = ?, suggested_supplier_name = ?
-                        WHERE request_id = ?
-                    ');
-                    $ins->execute([$verifiedBy, $gsdStatus, $suggestedSupplierIdValue, $suggestedSupplierNameValue, $requestId]);
-                }
+            ensureCanvassVerificationApprovalRow($db, $requestId);
+            if ($gsdStatus === 'pending') {
+                $up = $db->prepare(
+                    'UPDATE canvass_verification_approval
+                     SET verified_by = NULL, verified_at = NULL, gsd_status = ?
+                     WHERE request_id = ?'
+                );
+                $up->execute([$gsdStatus, $requestId]);
+            } else {
+                $up = $db->prepare(
+                    'UPDATE canvass_verification_approval
+                     SET verified_by = ?, verified_at = NOW(), gsd_status = ?,
+                         canvassed_by = COALESCE(canvassed_by, ?),
+                         comp_status = COALESCE(comp_status, \'pending\'),
+                         suggested_supplier_id = ?, suggested_supplier_name = ?
+                     WHERE request_id = ?'
+                );
+                $up->execute([
+                    $verifiedBy,
+                    $gsdStatus,
+                    $canvassedByValue,
+                    $suggestedSupplierIdValue,
+                    $suggestedSupplierNameValue,
+                    $requestId,
+                ]);
             }
 
             $updReq = $db->prepare('UPDATE requisition_item SET status = ? WHERE request_id = ?');
             $updReq->execute([$requisitionStatus, $requestId]);
-
-            $logIns = $db->prepare(
-                'INSERT INTO gsd_action_history (request_id, user_id, action) VALUES (?, ?, ?)'
-            );
-            $logIns->execute([$requestId, (int) $_SESSION['user_id'], $gsdStatus]);
 
             $db->commit();
         } catch (Exception $e) {
@@ -831,7 +852,7 @@ try {
 
         $msg = 'GSD decision saved.';
         if ($gsdStatus === 'accept') {
-            $msg = 'Request verified. Status set to Ongoing.';
+            $msg = 'Canvass approved. Forwarding to Comptroller.';
         } elseif ($gsdStatus === 'reject') {
             $msg = 'Request rejected at GSD. Status set to Ongoing.';
         } elseif ($gsdStatus === 'pending') {
@@ -848,6 +869,104 @@ try {
             'suggested_supplier_id' => $gsdStatus === 'pending' ? null : $suggestedSupplierIdValue,
             'suggested_supplier_name' => $gsdStatus === 'pending' ? null : $suggestedSupplierNameValue,
         ]);
+    }
+
+    if ($action === 'remove_canvass_supplier') {
+        assertGsdOfficer($db);
+        $requestId  = (int) ($_POST['request_id'] ?? 0);
+        $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+        if ($requestId <= 0 || $supplierId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request or supplier.']);
+        }
+        $lineStmt = $db->prepare(
+            "SELECT requisition_line_id FROM requisition_line WHERE request_id = ? AND (deleted_at IS NULL OR deleted_at = '')"
+        );
+        $lineStmt->execute([$requestId]);
+        $lineIds = array_column($lineStmt->fetchAll(PDO::FETCH_ASSOC), 'requisition_line_id');
+        if (!empty($lineIds)) {
+            $ph = implode(',', array_fill(0, count($lineIds), '?'));
+            $db->prepare("DELETE FROM requisition_line_quotes WHERE requisition_line_id IN ($ph) AND supplier_id = ? AND quote_type = 'canvassed'")->execute([...$lineIds, $supplierId]);
+            $db->prepare("DELETE FROM requisition_line_awards WHERE requisition_line_id IN ($ph) AND supplier_id = ?")->execute([...$lineIds, $supplierId]);
+        }
+        sendJson(['success' => true, 'message' => 'Supplier removed.']);
+    }
+
+    if ($action === 'register_supplier') {
+        assertGsdOfficer($db);
+        require_once __DIR__ . '/../../helpers/supplier.php';
+        ensureSupplierTinColumn($db);
+        $supplierName  = trim((string) ($_POST['supplier_name'] ?? ''));
+        $contactPerson = trim((string) ($_POST['contact_person'] ?? ''));
+        $phoneNumber   = trim((string) ($_POST['phone_number'] ?? ''));
+        $tin           = trim((string) ($_POST['tin'] ?? ''));
+        $address       = trim((string) ($_POST['address'] ?? ''));
+        if ($supplierName === '') {
+            sendJson(['success' => false, 'message' => 'Supplier name is required.']);
+        }
+        $chk = $db->prepare('SELECT supplier_id FROM suppliers WHERE LOWER(supplier_name) = LOWER(?) LIMIT 1');
+        $chk->execute([$supplierName]);
+        if ($chk->fetch(PDO::FETCH_ASSOC)) {
+            sendJson(['success' => false, 'message' => 'A supplier with this name already exists. Select it from the list.']);
+        }
+        $ins = $db->prepare(
+            'INSERT INTO suppliers (supplier_name, contact_person, phone_number, tin, address, status)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        $ins->execute([
+            $supplierName,
+            $contactPerson !== '' ? $contactPerson : null,
+            $phoneNumber   !== '' ? $phoneNumber   : null,
+            $tin           !== '' ? $tin           : null,
+            $address       !== '' ? $address       : null,
+            'Active',
+        ]);
+        $newId = (int) $db->lastInsertId();
+        sendJson([
+            'success'      => true,
+            'supplier_id'  => $newId,
+            'supplier_name'=> $supplierName,
+            'contact_person' => $contactPerson,
+            'phone_number' => $phoneNumber,
+            'tin'          => $tin,
+            'address'      => $address,
+            'supplier_image' => null,
+        ]);
+    }
+
+    if ($action === 'save_draft') {
+        assertGsdOfficer($db);
+        $requestId     = (int) ($_POST['request_id']     ?? 0);
+        $canvasserName = trim((string) ($_POST['canvasser_name'] ?? ''));
+        if ($requestId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request.']);
+        }
+        if ($canvasserName === '') {
+            sendJson(['success' => false, 'message' => 'Canvasser name is required.']);
+        }
+        $db->prepare(
+            "UPDATE requisition_line_quotes rlq
+             INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+             SET rlq.canvasser_name = ?
+             WHERE rl.request_id = ? AND rlq.quote_type = 'canvassed'"
+        )->execute([$canvasserName, $requestId]);
+        sendJson(['success' => true, 'message' => 'Draft saved.']);
+    }
+
+    if ($action === 'remove_canvass_line') {
+        assertGsdOfficer($db);
+        $requestId  = (int) ($_POST['request_id'] ?? 0);
+        $supplierId = (int) ($_POST['supplier_id'] ?? 0);
+        $lineId     = (int) ($_POST['requisition_line_id'] ?? 0);
+        if ($requestId <= 0 || $supplierId <= 0 || $lineId <= 0) {
+            sendJson(['success' => false, 'message' => 'Invalid request, supplier, or line.']);
+        }
+        $db->prepare(
+            "DELETE FROM requisition_line_quotes WHERE requisition_line_id = ? AND supplier_id = ? AND quote_type = 'canvassed'"
+        )->execute([$lineId, $supplierId]);
+        $db->prepare(
+            'DELETE FROM requisition_line_awards WHERE requisition_line_id = ? AND supplier_id = ?'
+        )->execute([$lineId, $supplierId]);
+        sendJson(['success' => true, 'message' => 'Line removed.']);
     }
 
     sendJson(['success' => false, 'message' => 'Invalid action.']);

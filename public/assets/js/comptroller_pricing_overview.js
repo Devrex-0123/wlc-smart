@@ -56,6 +56,9 @@
     function normalizeLine(line) {
         const requestedQty = Math.max(0, Number(line.requested_qty ?? line.quantity ?? 0));
         const acceptedQty = resolveInitialAcceptedQty(line, requestedQty);
+        const discountPercent = line.discount_percent != null && line.discount_percent !== ''
+            ? Number(line.discount_percent)
+            : null;
         return {
             ...line,
             requested_qty: requestedQty,
@@ -64,6 +67,7 @@
             qty_per_set: Math.max(1, Number(line.qty_per_set ?? 1)),
             requisition_qty: Math.max(1, Number(line.requisition_qty ?? line.requested_qty ?? requestedQty)),
             unit_price: line.unit_price != null ? Number(line.unit_price) : null,
+            discount_percent: Number.isFinite(discountPercent) ? discountPercent : null,
             deferred_message: String(line.deferred_message || '').trim(),
         };
     }
@@ -220,7 +224,18 @@
         if (Boolean(cfg.show_discount_column)) {
             return true;
         }
-        return lines.some((line) => String(line.discount_label || '').trim() !== '');
+        return lines.some((line) => {
+            const pct = Number(line.discount_percent);
+            return (Number.isFinite(pct) && pct > 0) || String(line.discount_label || '').trim() !== '';
+        });
+    }
+
+    function discountFactorForLine(line) {
+        const pct = Number(line.discount_percent);
+        if (Number.isFinite(pct) && pct > 0 && pct <= 100) {
+            return 1 - pct / 100;
+        }
+        return 1;
     }
 
     function syncDiscountColumn(showDiscount) {
@@ -285,8 +300,9 @@
         const unitPrice = line.unit_price != null && Number.isFinite(Number(line.unit_price))
             ? Number(line.unit_price)
             : null;
-        const approvedLineTotal = unitPrice != null ? Math.round(unitPrice * acceptedQty * 100) / 100 : null;
-        const deferredAmount = unitPrice != null ? Math.round(unitPrice * deferredQty * 100) / 100 : null;
+        const factor = discountFactorForLine(line);
+        const approvedLineTotal = unitPrice != null ? Math.round(unitPrice * acceptedQty * factor * 100) / 100 : null;
+        const deferredAmount = unitPrice != null ? Math.round(unitPrice * deferredQty * factor * 100) / 100 : null;
         return {
             requestedQty,
             acceptedQty,
@@ -1090,7 +1106,67 @@
             return true;
         },
         refresh: renderTable,
+        syncFromGsdCanvassSnapshot,
     };
+
+    function syncFromGsdCanvassSnapshot() {
+        const syncRoles = new Set(['gsd_officer', 'comptroller', 'president', 'inventory_manager']);
+        if (!syncRoles.has(viewerRole)) {
+            return false;
+        }
+        const api = window.CWIRMSCanvassForm;
+        if (!api || typeof api.buildPricingSnapshot !== 'function') {
+            return false;
+        }
+        const snapshot = api.buildPricingSnapshot();
+        if (!snapshot || !Array.isArray(snapshot.lines)) {
+            return false;
+        }
+
+        const byLineId = new Map();
+        snapshot.lines.forEach((snapLine) => {
+            const lineId = Number(snapLine.canvass_detail_id || snapLine.requisition_line_id || 0);
+            if (lineId > 0) {
+                byLineId.set(lineId, snapLine);
+            }
+        });
+
+        let changed = false;
+        lines.forEach((line) => {
+            const lineId = Number(line.canvass_detail_id || 0);
+            const snap = byLineId.get(lineId);
+            if (!snap) {
+                return;
+            }
+            line.supplier_id = snap.supplier_id ?? null;
+            line.supplier_name = snap.supplier_name ?? null;
+            line.selection_source = snap.selection_source ?? null;
+            line.unit_price = snap.unit_price != null ? Number(snap.unit_price) : null;
+            line.discount_label = snap.discount_label || null;
+            line.discount_percent = snap.discount_percent != null && snap.discount_percent !== ''
+                ? Number(snap.discount_percent)
+                : null;
+            changed = true;
+        });
+
+        if (Boolean(cfg.show_discount_column) !== Boolean(snapshot.show_discount_column)) {
+            cfg.show_discount_column = Boolean(snapshot.show_discount_column);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    function onGsdCanvassPricingUpdate() {
+        if (syncFromGsdCanvassSnapshot()) {
+            renderTable();
+        }
+        const abstractSection = document.getElementById('cvGsdAbstractTotalSection');
+        const api = window.CWIRMSCanvassForm;
+        if (abstractSection && api && typeof api.gsdHasSectionBData === 'function' && Array.isArray(api.getGsdLines?.())) {
+            abstractSection.hidden = !api.gsdHasSectionBData(api.getGsdLines());
+        }
+    }
 
     function syncAcceptedQtyInputsFromLines() {
         lines.forEach((line, index) => {
@@ -1111,4 +1187,13 @@
     syncAcceptedQtyInputsFromLines();
     bindEditReasonTriggers();
     bindDeferredBannerControls();
+
+    if (new Set(['gsd_officer', 'comptroller', 'president', 'inventory_manager']).has(viewerRole)) {
+        window.addEventListener('cwirms-canvass-pricing-update', onGsdCanvassPricingUpdate);
+        window.setTimeout(() => {
+            if (syncFromGsdCanvassSnapshot()) {
+                renderTable();
+            }
+        }, 0);
+    }
 })();

@@ -209,14 +209,15 @@
         detail.setAttribute('title', label);
     }
 
-    async function postSaveSuggestedSupplierItem(canvassDetailId, supplierId, selectionSource) {
-        if (!requestId || !canvassDetailId || !supplierId) {
+    async function postSaveSuggestedSupplierItem(lineOrDetailId, supplierId, selectionSource) {
+        if (!requestId || !lineOrDetailId || !supplierId) {
             return;
         }
         const body = new URLSearchParams();
         body.set('action', 'save_suggested_supplier_item');
         body.set('request_id', String(requestId));
-        body.set('canvass_detail_id', String(canvassDetailId));
+        body.set('requisition_line_id', String(lineOrDetailId));
+        body.set('canvass_detail_id', String(lineOrDetailId));
         body.set('suggested_supplier_id', String(supplierId));
         body.set('selection_source', selectionSource === 'preferred' ? 'preferred' : 'canvassed');
         try {
@@ -229,20 +230,25 @@
             const data = await res.json();
             if (!data.success) {
                 showToast(data.message || 'Could not save suggested supplier for item.', 'error');
+                return;
+            }
+            if (typeof window.__cwirmsRefreshGsdReviewView === 'function') {
+                window.__cwirmsRefreshGsdReviewView();
             }
         } catch {
             showToast('Network error saving suggested supplier for item.', 'error');
         }
     }
 
-    async function postClearSuggestedSupplierItem(canvassDetailId) {
-        if (!requestId || !canvassDetailId) {
+    async function postClearSuggestedSupplierItem(lineOrDetailId) {
+        if (!requestId || !lineOrDetailId) {
             return;
         }
         const body = new URLSearchParams();
         body.set('action', 'clear_suggested_supplier_item');
         body.set('request_id', String(requestId));
-        body.set('canvass_detail_id', String(canvassDetailId));
+        body.set('requisition_line_id', String(lineOrDetailId));
+        body.set('canvass_detail_id', String(lineOrDetailId));
         try {
             const res = await fetch(gsdApi, {
                 method: 'POST',
@@ -272,9 +278,12 @@
                 return;
             }
             const sid = parseInt(radio.value || '0', 10);
-            const canvassDetailId = parseInt(radio.dataset.canvassDetailId || '0', 10);
+            const lineId = parseInt(
+                radio.dataset.requisitionLineId || radio.dataset.canvassDetailId || '0',
+                10
+            );
             if (sid > 0) {
-                postSaveSuggestedSupplierItem(canvassDetailId, sid, radio.dataset.selectionSource || 'canvassed');
+                postSaveSuggestedSupplierItem(lineId, sid, radio.dataset.selectionSource || 'canvassed');
             }
         });
     }
@@ -509,26 +518,22 @@
             return;
         }
         const st = String((approval && approval.gsd_status) || 'pending').trim();
-        const canvasSt = String((approval && approval.canvas_status) || 'pending').trim().toLowerCase();
-        const canvasDone = canvasSt === 'accept' || canvasSt === 'reject';
         const gsdDone = st === 'accept' || st === 'reject';
-        approveBtn.disabled = false;
+        const awardsReady = typeof window.__cwirmsGsdAllAwardsReady === 'function'
+            ? window.__cwirmsGsdAllAwardsReady()
+            : false;
+        approveBtn.disabled = gsdDone ? false : !awardsReady;
         rejectBtn.disabled = false;
-        approveBtn.textContent = st === 'accept'
-            ? 'Verified'
-            : 'Verify';
+        approveBtn.textContent = st === 'accept' ? 'Verified' : 'Verify';
         rejectBtn.textContent = st === 'reject' ? 'Rejected' : 'Reject';
         approveBtn.title = '';
         if (hintEl) {
-            if (!canvasDone && !gsdDone) {
-                hintEl.textContent = 'Next step: assign canvasser and wait for canvassing to be completed before you verify.';
-                hintEl.className = 'gsd-verify-hint gsd-verify-hint-pending';
-            } else if (st === 'accept') {
+            if (st === 'accept') {
                 hintEl.textContent = 'Already verified at GSD. Use Undo decision if you need to reopen.';
                 hintEl.className = 'gsd-verify-hint gsd-verify-hint-done';
-            } else {
-                hintEl.textContent = 'Canvass is complete. Review suggested suppliers per item, then verify.';
-                hintEl.className = 'gsd-verify-hint gsd-verify-hint-ready';
+            } else if (!gsdDone) {
+                hintEl.textContent = 'Select a quote for every line item, then click Verify.';
+                hintEl.className = 'gsd-verify-hint gsd-verify-hint-pending';
             }
         }
         if (undoBtn) {
@@ -541,6 +546,7 @@
         gsdApprovalState = approval;
         assigneePickForced = false;
         setGsdApprovalButtonsState(approval);
+        window.__cwirmsUpdateGsdVerifyButtonState?.();
 
         const assignees = await fetchGsdCanvasAssigneesList();
         initGsdCanvasAssigneePicker(approval, assignees);
@@ -553,16 +559,6 @@
         bindSuggestedSupplierMatrix(document.getElementById('cvPreferredCards'));
 
         const postApproval = async (gsdStatus) => {
-            if (gsdStatus === 'accept') {
-                const fresh = await fetchGsdApproval();
-                const canvasSt = String((fresh && fresh.canvas_status) || 'pending').trim().toLowerCase();
-                const canvasDone = canvasSt === 'accept' || canvasSt === 'reject';
-                if (!canvasDone) {
-                    showToast('Canvasser must complete canvassing before GSD can verify.', 'error');
-                    return;
-                }
-            }
-
             const body = new URLSearchParams();
             body.set('action', 'set_gsd_approval');
             body.set('request_id', String(requestId));
@@ -584,7 +580,10 @@
                     showToast(data.message || 'Could not save.', 'error');
                     return;
                 }
-                showToast(data.message || 'Saved.');
+                const successMsg = gsdStatus === 'accept'
+                    ? 'Canvass approved. Forwarding to Comptroller.'
+                    : (data.message || 'Saved.');
+                showToast(successMsg);
                 window.location.reload();
             } catch {
                 showToast('Network error.', 'error');
@@ -594,6 +593,14 @@
         if (approveBtn && !approveBtn.dataset.imrmsGsdCvBound) {
             approveBtn.dataset.imrmsGsdCvBound = '1';
             approveBtn.addEventListener('click', async () => {
+                if (typeof window.__cwirmsPrepareGsdVerify === 'function') {
+                    const prepared = await window.__cwirmsPrepareGsdVerify();
+                    if (!prepared.ok) {
+                        showToast(prepared.message || 'Complete supplier selection before verifying.', 'error');
+                        window.__cwirmsUpdateGsdVerifyButtonState?.();
+                        return;
+                    }
+                }
                 const ok = await showConfirmModal(
                     'Verify this request at GSD? The line status will be set to Ongoing.'
                 );

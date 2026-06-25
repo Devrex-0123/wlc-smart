@@ -401,6 +401,9 @@ $isOwner = false;
         $checkOwner->execute([$requestId, $_SESSION['user_id']]);
         $isOwner = (bool) $checkOwner->fetchColumn();
     }
+    if ($isOwner) {
+        $isRequesterOwnedCanvass = true;
+    }
 
 $gsdVerificationStatus = 'pending';
 $showCanvassPricingOverview = $isGsdCanvassReview;
@@ -421,12 +424,70 @@ $comptrollerCompStatus = 'pending';
 $comptrollerPricingOverview = null;
 $comptrollerPricingReadonly = $isComptrollerCanvassHistory;
 $comptrollerApprovalFlash = null;
+
+$cvWfCanvasStatus = 'pending';
+$cvWfGsdStatus = 'pending';
+$cvWfCompStatus = 'pending';
+$cvWfPresStatus = 'pending';
+$hasGsdCanvassedQuoteData = false;
+$gsdVerified = false;
+if ($accessError === null && $requestId > 0) {
+    require_once __DIR__ . '/../../app/api/approval_tables.php';
+    require_once __DIR__ . '/../../app/helpers/gsd_canvass_outcome.php';
+    ensureRequisitionLineQuotesGsdColumns($db);
+    ensureRequisitionLineAwardsTable($db);
+
+    $cvApprEarlyStmt = $db->prepare(
+        'SELECT LOWER(TRIM(COALESCE(canvas_status, \'pending\'))) AS canvas_status,
+                LOWER(TRIM(COALESCE(gsd_status, \'pending\'))) AS gsd_status,
+                LOWER(TRIM(COALESCE(comp_status, \'pending\'))) AS comp_status,
+                LOWER(TRIM(COALESCE(pres_status, \'pending\'))) AS pres_status
+         FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+    );
+    $cvApprEarlyStmt->execute([$requestId]);
+    $cvApprEarlyRow = $cvApprEarlyStmt->fetch(PDO::FETCH_ASSOC);
+    if ($cvApprEarlyRow) {
+        $cvWfCanvasStatus = strtolower(trim((string) ($cvApprEarlyRow['canvas_status'] ?? 'pending'))) ?: 'pending';
+        $cvWfGsdStatus = strtolower(trim((string) ($cvApprEarlyRow['gsd_status'] ?? 'pending'))) ?: 'pending';
+        $cvWfCompStatus = strtolower(trim((string) ($cvApprEarlyRow['comp_status'] ?? 'pending'))) ?: 'pending';
+        $cvWfPresStatus = strtolower(trim((string) ($cvApprEarlyRow['pres_status'] ?? 'pending'))) ?: 'pending';
+    }
+    $hasGsdCanvassedQuoteData = cwirmsRequestHasGsdCanvassedQuoteData($db, $requestId);
+    $gsdVerified = ($cvWfGsdStatus === 'accept');
+    // Check whether the requester submitted any preferred quotes (Section A).
+    $prefChkStmt = $db->prepare(
+        "SELECT 1
+         FROM requisition_line_quotes rlq
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+         WHERE rl.request_id = ? AND rlq.quote_type = 'preferred'
+         LIMIT 1"
+    );
+    $prefChkStmt->execute([$requestId]);
+    $hasRequesterPreferredQuoteData = (bool) $prefChkStmt->fetchColumn();
+}
+
+$isGsdOutcomeReadonlyRole = $isInventoryManagerCanvassReview
+    || $isComptrollerCanvassReview
+    || $isComptrollerCanvassHistory
+    || $isPresidentCanvassReview
+    || $isPresidentCanvassHistory
+    || $isRequesterOwnedCanvass;
+$showGsdOutcomeReadonlyView = $gsdVerified && $isGsdOutcomeReadonlyRole;
+$showGsdCanvassOutcomeShell = $isGsdCanvassReview || $showGsdOutcomeReadonlyView;
+// Sections start hidden only when neither preferred (A) nor canvassed (B) quotes exist yet.
+$gsdOutcomeSectionsInitiallyHidden = $showGsdCanvassOutcomeShell
+    && !$hasGsdCanvassedQuoteData
+    && !($hasRequesterPreferredQuoteData ?? false);
+
 if ($accessError === null && $requestId > 0 && ($canViewQtyPricingOverview || $isGsdCanvassReview)) {
     require_once __DIR__ . '/../../app/api/approval_tables.php';
     require_once __DIR__ . '/../../app/helpers/comptroller_qty_approval.php';
+    require_once __DIR__ . '/../../app/helpers/gsd_canvass_outcome.php';
     ensureComptrollerPartialQtyColumns($db);
     ensureRequisitionPreferredQuoteColumns($db);
     ensureSuggestedSupplierSelectionSourceColumn($db);
+    ensureRequisitionLineQuotesGsdColumns($db);
+    ensureRequisitionLineAwardsTable($db);
 
     if ($isGsdCanvassReview) {
         $gsdStatusStmt = $db->prepare(
@@ -440,36 +501,61 @@ if ($accessError === null && $requestId > 0 && ($canViewQtyPricingOverview || $i
         $showCanvassPricingOverview = !in_array($gsdVerificationStatus, ['accept', 'reject'], true);
     }
 
-    if ($canViewQtyPricingOverview && cwirmsComptrollerRequestHasSuggestedSuppliersPerItem($db, $requestId)) {
-        $showComptrollerPricingOverview = true;
-
-        if ($isComptrollerCanvassReview || $isComptrollerCanvassHistory) {
-            $pricingOverviewViewerRole = 'comptroller';
-        } elseif ($isGsdCanvassReview) {
-            $pricingOverviewViewerRole = 'gsd_officer';
-        } elseif ($isInventoryManagerCanvassReview) {
-            $pricingOverviewViewerRole = 'inventory_manager';
-        } elseif ($isPresidentCanvassReview || $isPresidentCanvassHistory) {
-            $pricingOverviewViewerRole = 'president';
-        } elseif ($isRequesterOwnedCanvass) {
-            $pricingOverviewViewerRole = 'requester';
-        }
-
-        $compStmt = $db->prepare(
-            'SELECT LOWER(TRIM(COALESCE(comp_status, \'pending\'))) FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+    $hasComptrollerAbstractData = cwirmsComptrollerRequestHasSuggestedSuppliersPerItem($db, $requestId);
+    if (!$hasComptrollerAbstractData) {
+        $gsdAbstractStmt = $db->prepare(
+            'SELECT LOWER(TRIM(COALESCE(gsd_status, \'pending\'))) FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
         );
-        $compStmt->execute([$requestId]);
-        $comptrollerCompStatus = strtolower(trim((string) ($compStmt->fetchColumn() ?: 'pending')));
-        if ($comptrollerCompStatus === '') {
-            $comptrollerCompStatus = 'pending';
+        $gsdAbstractStmt->execute([$requestId]);
+        $gsdAbstractStatus = strtolower(trim((string) ($gsdAbstractStmt->fetchColumn() ?: 'pending'))) ?: 'pending';
+        if ($gsdAbstractStatus === 'accept' && (cwirmsRequestHasGsdCanvassedQuoteData($db, $requestId) || ($hasRequesterPreferredQuoteData ?? false))) {
+            $hasComptrollerAbstractData = true;
         }
-        $comptrollerPricingReadonly = $isComptrollerCanvassHistory || in_array($comptrollerCompStatus, ['accept', 'reject'], true);
-        $pricingOverviewInteractive = $isComptrollerCanvassReview && !$comptrollerPricingReadonly;
-        $comptrollerPricingOverview = cwirmsComptrollerPricingOverviewForRequest($db, $requestId);
+    }
+    if ($canViewQtyPricingOverview && $hasComptrollerAbstractData) {
+        $allowComptrollerAbstractOverview = !$isRequesterOwnedCanvass || $gsdVerified;
+        if ($allowComptrollerAbstractOverview) {
+            $showComptrollerPricingOverview = true;
 
-        if ($isGsdCanvassReview) {
-            $showCanvassPricingOverview = false;
+            if ($isComptrollerCanvassReview || $isComptrollerCanvassHistory) {
+                $pricingOverviewViewerRole = 'comptroller';
+            } elseif ($isGsdCanvassReview) {
+                $pricingOverviewViewerRole = 'gsd_officer';
+            } elseif ($isInventoryManagerCanvassReview) {
+                $pricingOverviewViewerRole = 'inventory_manager';
+            } elseif ($isPresidentCanvassReview || $isPresidentCanvassHistory) {
+                $pricingOverviewViewerRole = 'president';
+            } elseif ($isRequesterOwnedCanvass) {
+                $pricingOverviewViewerRole = 'requester';
+            }
+
+            $compStmt = $db->prepare(
+                'SELECT LOWER(TRIM(COALESCE(comp_status, \'pending\'))) FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+            );
+            $compStmt->execute([$requestId]);
+            $comptrollerCompStatus = strtolower(trim((string) ($compStmt->fetchColumn() ?: 'pending')));
+            if ($comptrollerCompStatus === '') {
+                $comptrollerCompStatus = 'pending';
+            }
+            $comptrollerPricingReadonly = $isRequesterOwnedCanvass
+                || $isInventoryManagerCanvassReview
+                || $isPresidentCanvassReview
+                || $isPresidentCanvassHistory
+                || $isComptrollerCanvassHistory
+                || in_array($comptrollerCompStatus, ['accept', 'reject'], true);
+            $pricingOverviewInteractive = $isComptrollerCanvassReview && !$comptrollerPricingReadonly;
+            $comptrollerPricingOverview = cwirmsComptrollerPricingOverviewForRequest($db, $requestId);
+
+            if ($isGsdCanvassReview) {
+                $showCanvassPricingOverview = false;
+            }
         }
+    }
+}
+if ($showComptrollerPricingOverview && !$isGsdCanvassReview) {
+    $hasAnyQuoteData = $hasGsdCanvassedQuoteData || ($hasRequesterPreferredQuoteData ?? false);
+    if (!$gsdVerified || !$hasAnyQuoteData) {
+        $showComptrollerPricingOverview = false;
     }
 }
 $approvalMsg = trim((string) ($_GET['approval_msg'] ?? ''));
@@ -485,13 +571,47 @@ $isCanvassStructureUiHidden = $isReviewerCanvassReadonly
     || ($verifierChainLocked && ($isRequesterOwnedCanvass || $isCanvasserCanvassView));
 $isCanvasMatrixReadonly = $isReviewerCanvassReadonly
     || ($verifierChainLocked && ($isRequesterOwnedCanvass || $isCanvasserCanvassView));
+
+// Time-based edit lock: requester may edit for 1 hour after submitting the canvass form.
+$canvasSubmittedAt = null;
+$editWindowSecondsLeft = null;
+$editWindowExpired = false;
+if ($accessError === null && $requestId > 0 && ($isRequesterOwnedCanvass || $isDeanCanvassView) && !$verifierChainLocked) {
+    try {
+        $ewStmt = $db->prepare(
+            'SELECT canvas_submitted_at FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
+        );
+        $ewStmt->execute([$requestId]);
+        $rawSubmittedAt = $ewStmt->fetchColumn() ?: null;
+        if ($rawSubmittedAt !== null && $rawSubmittedAt !== '') {
+            $canvasSubmittedAt = (string) $rawSubmittedAt;
+            $submittedTs = strtotime($canvasSubmittedAt);
+            $editCloseTs = $submittedTs + 3600;
+            $nowTs = time();
+            if ($nowTs >= $editCloseTs) {
+                $editWindowExpired = true;
+                $editWindowSecondsLeft = 0;
+            } else {
+                $editWindowSecondsLeft = $editCloseTs - $nowTs;
+            }
+        }
+    } catch (Throwable $ignored) {}
+}
+if ($editWindowExpired) {
+    $isCanvassStructureUiHidden = true;
+    $isCanvasMatrixReadonly = true;
+}
+
+// New per-line preferred-quote view for the request owner (replaces old breakdown + matrix UI).
+// Covers both the direct owner path (no ?from=) and the department-user path (?from=dean).
+$isRequesterEditView = ($isRequesterOwnedCanvass || $isDeanCanvassView)
+    && !$isReviewerCanvassReadonly && !$verifierChainLocked && !$showGsdOutcomeReadonlyView && !$editWindowExpired;
 $prAfterCanvassAccepted = ($requestId > 0 && $accessError === null)
     ? requisitionCanvassFormAcceptedForRequest($db, $requestId)
     : false;
 $canShowPurchaseRequisitionLink = $prAfterCanvassAccepted && (
     $isRequesterOwnedCanvass
     || $isInventoryManagerCanvassReview
-    || $isPresidentCanvassReview
     || $isPresidentCanvassHistory
 );
 
@@ -503,7 +623,7 @@ $rfLinkText = '';
 if ($rfRequestId > 0 && $accessError === null) {
     if ($isGsdCanvassReview) {
         $rfStepLine = 'Abstract of quotation · G.S.D.';
-        $rfHint = 'Assign canvasser from the requisition form when needed. Verification: Canvasser → G.S.D. → Comptroller → President.';
+        $rfHint = 'GSD officer handles canvass data entry directly. Select a quote for every line item, then verify. Flow: G.S.D. → Comptroller → President.';
         $rfLinkUrl = '';
         $rfLinkText = '';
     } elseif ($isCanvasserCanvassView) {
@@ -533,27 +653,6 @@ if ($rfRequestId > 0 && $accessError === null) {
         $rfStepLine = 'Abstract of quotation · department (read-only)';
         $rfLinkUrl = '';
         $rfLinkText = '';
-    }
-}
-$cvWfCanvasStatus = 'pending';
-$cvWfGsdStatus = 'pending';
-$cvWfCompStatus = 'pending';
-$cvWfPresStatus = 'pending';
-if ($rfRequestId > 0 && $accessError === null) {
-    $cvApprStmt = $db->prepare(
-        'SELECT LOWER(TRIM(COALESCE(canvas_status, \'pending\'))) AS canvas_status,
-                LOWER(TRIM(COALESCE(gsd_status, \'pending\'))) AS gsd_status,
-                LOWER(TRIM(COALESCE(comp_status, \'pending\'))) AS comp_status,
-                LOWER(TRIM(COALESCE(pres_status, \'pending\'))) AS pres_status
-         FROM canvass_verification_approval WHERE request_id = ? LIMIT 1'
-    );
-    $cvApprStmt->execute([$rfRequestId]);
-    $cvApprRow = $cvApprStmt->fetch(PDO::FETCH_ASSOC);
-    if ($cvApprRow) {
-        $cvWfCanvasStatus = strtolower(trim((string) ($cvApprRow['canvas_status'] ?? 'pending'))) ?: 'pending';
-        $cvWfGsdStatus = strtolower(trim((string) ($cvApprRow['gsd_status'] ?? 'pending'))) ?: 'pending';
-        $cvWfCompStatus = strtolower(trim((string) ($cvApprRow['comp_status'] ?? 'pending'))) ?: 'pending';
-        $cvWfPresStatus = strtolower(trim((string) ($cvApprRow['pres_status'] ?? 'pending'))) ?: 'pending';
     }
 }
 $cvWfActiveStage = 'canvass';
@@ -589,6 +688,29 @@ if ($cvWfCanvasStatus === 'accept') {
     $cvCanvassStatusClass = 'cv-canvass-status-badge--rejected';
 }
 
+$gsdOutcomeInlineJson = null;
+if ($showGsdOutcomeReadonlyView && $accessError === null && $requestId > 0) {
+    try {
+        if (!function_exists('cwirmsBuildGsdCanvassOutcomeView')) {
+            require_once __DIR__ . '/../../app/helpers/gsd_canvass_outcome.php';
+        }
+        ensureRequisitionLineQuotesGsdColumns($db);
+        ensureRequisitionLineAwardsTable($db);
+        $gsdOutcomeInlineJson = json_encode(
+            array_merge(['success' => true], cwirmsBuildGsdCanvassOutcomeView($db, $requestId)),
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+        if ($gsdOutcomeInlineJson === false) {
+            $gsdOutcomeInlineJson = null;
+        }
+    } catch (Throwable $e) {
+        $gsdOutcomeInlineJson = json_encode([
+            'success' => false,
+            'message' => 'Could not load GSD canvass outcome: ' . $e->getMessage(),
+        ]);
+    }
+}
+
 $pageTitle = $rfRequestId > 0
     ? 'Abstract of quotation · Request #' . $rfRequestId . ' · WLC-SMART'
     : 'Canvass sheet · WLC-SMART';
@@ -601,7 +723,7 @@ $pageTitle = $rfRequestId > 0
     <title><?php echo htmlspecialchars($pageTitle); ?></title>
     <link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc33">
     <link rel="stylesheet" href="../assets/css/requisition_form.css">
-    <?php if ($showCanvassPricingOverview || $showComptrollerPricingOverview): ?>
+    <?php if ($showCanvassPricingOverview || $showComptrollerPricingOverview || $isGsdCanvassReview || $showGsdOutcomeReadonlyView): ?>
     <link rel="stylesheet" href="../assets/css/gsd_canvass_pricing_overview.css">
     <?php endif; ?>
     <?php if ($showComptrollerPricingOverview): ?>
@@ -613,7 +735,7 @@ $pageTitle = $rfRequestId > 0
 <body class="page-canvass-form">
 
 <main class="requisition-main">
-    <div class="requisition-card<?php echo $isCanvasMatrixReadonly ? ' gsd-canvass-readonly' : ''; ?>" id="canvassCard" data-request-id="<?php echo (int) $requestId; ?>" data-api="../../app/api/canvass_detail.php" data-dean-api="../../app/api/dean_requisition.php" data-gsd-readonly="<?php echo $isCanvasMatrixReadonly ? '1' : '0'; ?>" data-canvasser-register="<?php echo $isCanvasserCanvassView ? '1' : '0'; ?>">
+        <div class="requisition-card<?php echo $isCanvasMatrixReadonly ? ' gsd-canvass-readonly' : ''; ?>" id="canvassCard" data-request-id="<?php echo (int) $requestId; ?>" data-api="../../app/api/canvass_detail.php" data-dean-api="../../app/api/dean_requisition.php" data-gsd-readonly="<?php echo $isCanvasMatrixReadonly ? '1' : '0'; ?>" data-gsd-review="<?php echo $isGsdCanvassReview ? '1' : '0'; ?>" data-gsd-outcome-readonly="<?php echo $showGsdOutcomeReadonlyView ? '1' : '0'; ?>" data-gsd-api="../../app/api/gsd/requests.php" data-canvasser-register="<?php echo $isCanvasserCanvassView ? '1' : '0'; ?>" data-canvasser-api="../../app/api/canvasser_requests.php" data-requester-edit="<?php echo $isRequesterEditView ? '1' : '0'; ?>" data-edit-window-seconds="<?php echo $editWindowSecondsLeft !== null ? (int) $editWindowSecondsLeft : '0'; ?>">
         <a href="<?php echo htmlspecialchars($accessError === null ? $backHref : $accessErrorReturnHref); ?>" class="requisition-close-btn" aria-label="Back" data-tooltip="Back">
             <i class="fas fa-times"></i>
         </a>
@@ -665,13 +787,28 @@ $pageTitle = $rfRequestId > 0
             <?php endif; ?>
         </nav>
         <?php endif; ?>
-        <?php if ($rfRequestId > 0 && $accessError === null && $canShowPurchaseRequisitionLink): ?>
-        <div class="req-flow-context">
+        <?php if ($rfRequestId > 0 && $accessError === null && ($isRequesterOwnedCanvass || $isInventoryManagerCanvassReview || $isPresidentCanvassReview || $isPresidentCanvassHistory)): ?>
+        <div class="req-flow-context" id="cvPrFlowContextBanner"<?php echo $canShowPurchaseRequisitionLink ? '' : ' hidden'; ?>>
             <div class="req-flow-context-top">
                 <div class="req-flow-context-main">
-                    <span class="req-flow-step">Purchase requisition is available after G.S.D., Comptroller, and President verify this canvass sheet.</span>
+                    <span class="req-flow-step">G.S.D., Comptroller, and President have all verified this canvass sheet. Purchase requisition is now available.</span>
                 </div>
                 <a class="req-flow-context-link" href="purchase_requisition_form.php?request_id=<?php echo (int) $rfRequestId; ?>&from=<?php echo htmlspecialchars($from !== '' ? $from : 'requisition'); ?>">Open purchase requisition</a>
+            </div>
+        </div>
+        <?php endif; ?>
+        <?php if ($isRequesterOwnedCanvass && $editWindowSecondsLeft !== null && $editWindowSecondsLeft > 0): ?>
+        <div class="canvass-continue-banner cv-edit-window-banner" id="cvEditWindowBanner">
+            <div class="canvass-continue-banner-inner">
+                <span class="canvass-continue-banner-icon"><i class="fas fa-clock" aria-hidden="true"></i></span>
+                <p class="canvass-continue-banner-msg">Canvass submitted. This form will become read-only in <strong id="cvEditCountdown">—</strong>. Save any changes before the window closes.</p>
+            </div>
+        </div>
+        <?php elseif ($isRequesterOwnedCanvass && $editWindowExpired): ?>
+        <div class="canvass-continue-banner cv-edit-window-banner cv-edit-window-expired" id="cvEditWindowBanner">
+            <div class="canvass-continue-banner-inner">
+                <span class="canvass-continue-banner-icon"><i class="fas fa-lock" aria-hidden="true"></i></span>
+                <p class="canvass-continue-banner-msg">The 1-hour editing window has closed. This canvass form is now read-only.</p>
             </div>
         </div>
         <?php endif; ?>
@@ -731,10 +868,12 @@ $pageTitle = $rfRequestId > 0
         <section class="rf-section rf-section-requisition-items cv-requested-ref" aria-label="Items from the requisition">
             <h2 class="rf-section-heading">Items on Requisition</h2>
             <p class="cv-requested-ref-hint"><?php echo $isGsdCanvassReview
-                ? 'Line items as recorded on the original requisition (read-only).'
+                ? 'Review the items from the requisition. Add and manage supplier quotes in sections A and B below, then select the winning supplier in Section C.'
                 : ($isCanvasserCanvassView
                     ? 'Requester’s line items (read-only). Canvass quotation lines set by the requester appear below — you only add suppliers and prices.'
-                    : 'What you originally submitted. Use <strong>Canvass items</strong> below for quotation lines (you can match or refine these).'); ?></p>
+                    : ($isRequesterEditView
+                        ? 'These are the items you requested. Add your <strong>preferred supplier quotes</strong> for each item using the button in the last column.'
+                        : 'What you originally submitted. Use <strong>Canvass items</strong> below for quotation lines (you can match or refine these).')); ?></p>
             <div class="requested-items-table-wrap">
                 <table class="requested-items-table" id="cvRequestedItemsTable">
                     <thead>
@@ -743,17 +882,200 @@ $pageTitle = $rfRequestId > 0
                             <th scope="col">Item / Sub-description</th>
                             <th scope="col">Qty</th>
                             <th scope="col">Unit</th>
+                            <?php if ($isCanvasserCanvassView): ?>
+                            <th scope="col">Quotes</th>
+                            <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody id="cvRequestedItemsTableBody">
                         <tr class="requested-items-empty">
-                            <td colspan="4">Loading…</td>
+                            <td colspan="<?php echo $isCanvasserCanvassView ? 5 : 4; ?>">Loading…</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </section>
 
+        <?php if ($showGsdCanvassOutcomeShell): ?>
+        <?php if ($showGsdOutcomeReadonlyView && $gsdOutcomeSectionsInitiallyHidden): ?>
+        <section class="rf-section gsd-cv-section gsd-cv-outcome-pending-note" id="cvGsdOutcomePendingNote">
+            <p class="gsd-cv-empty-note">G.S.D. verification is recorded. Section B canvass quotes will appear here once G.S.D. enters supplier prices.</p>
+        </section>
+        <?php endif; ?>
+        <?php if ($isGsdCanvassReview): ?>
+        <!-- GSD Section A: Requester's Preferred Quotes -->
+        <section class="rf-section gsd-cv-section" id="cvGsdSectionA">
+            <div class="gsd-cv-sec-head">
+                <div class="gsd-cv-sec-title-row">
+                    <span class="gsd-cv-sec-title">SECTION A — REQUESTER'S PREFERRED QUOTES</span>
+                    <span class="gsd-cv-pill gsd-cv-pill-ro">read-only</span>
+                </div>
+            </div>
+            <div class="gsd-cv-info-bar gsd-cv-info-bar-blue">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                These quotes were submitted by the requester. You cannot modify them.
+            </div>
+            <div id="cvPreferredCards" class="cv-preferred-cards" aria-live="polite"></div>
+        </section>
+        <?php elseif ($showGsdOutcomeReadonlyView): ?>
+        <!-- Section A: Requester's Preferred Quotes (same layout as GSD review) -->
+        <section class="rf-section gsd-cv-section" id="cvGsdSectionA"<?php echo $gsdOutcomeSectionsInitiallyHidden ? ' hidden' : ''; ?>>
+            <div class="gsd-cv-sec-head">
+                <div class="gsd-cv-sec-title-row">
+                    <span class="gsd-cv-sec-title">SECTION A — REQUESTER'S PREFERRED QUOTES</span>
+                    <span class="gsd-cv-pill gsd-cv-pill-ro">read-only</span>
+                </div>
+            </div>
+            <div class="gsd-cv-info-bar gsd-cv-info-bar-blue">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                These quotes were submitted by the requester. You cannot modify them.
+            </div>
+            <div id="cvPreferredCards" class="cv-preferred-cards" aria-live="polite"></div>
+        </section>
+        <?php endif; ?>
+
+        <!-- Section B: GSD Canvassed Quotes -->
+        <section class="rf-section gsd-cv-section" id="cvGsdSectionB"<?php echo $gsdOutcomeSectionsInitiallyHidden ? ' hidden' : ''; ?>>
+            <div class="gsd-cv-sec-head">
+                <div class="gsd-cv-sec-title-row">
+                    <span class="gsd-cv-sec-title">SECTION B — GSD CANVASSED QUOTES</span>
+                    <?php if ($isGsdCanvassReview): ?>
+                    <span class="gsd-cv-pill gsd-cv-pill-ed">editable</span>
+                    <button type="button" id="cvGsdAddSupBtn" class="gsd-cv-add-sup-btn">+ Add Supplier</button>
+                    <?php else: ?>
+                    <span class="gsd-cv-pill gsd-cv-pill-ro">read-only</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php if ($isGsdCanvassReview): ?>
+            <div class="gsd-cv-info-bar gsd-cv-info-bar-green">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                Add your own canvassed suppliers and quoted prices below.
+            </div>
+            <?php else: ?>
+            <div class="gsd-cv-info-bar gsd-cv-info-bar-blue">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                G.S.D. canvassed supplier quotes recorded during verification.
+            </div>
+            <?php endif; ?>
+            <div id="cvGsdCanvCards" class="gsd-cv-canv-stack"></div>
+            <?php if (!$isGsdCanvassReview): ?>
+            <div class="gsd-cv-canvasser-display" id="cvGsdSectionBCanvasserDisplay" hidden>
+                <span class="gsd-cv-canvasser-display-label">Canvassed by: </span>
+                <strong id="cvGsdSectionBCanvasserName"></strong>
+            </div>
+            <?php endif; ?>
+            <?php if ($isGsdCanvassReview): ?>
+            <div class="gsd-cv-canvasser-box" id="cvGsdCanvasserBox">
+                <div class="gsd-cv-canvasser-box-label">
+                    <i class="fas fa-square gsd-cv-chk-icon" aria-hidden="true"></i>
+                    <span>Canvasser Name</span> <em style="color:#b91c1c">*</em>
+                </div>
+                <input type="text" id="cvGsdCanvasserInput" class="gsd-cv-canvasser-input"
+                       placeholder="e.g. Juan Dela Cruz" maxlength="100" autocomplete="off">
+                <p class="gsd-cv-canvasser-hint">This person canvassed all GSD quotes above.</p>
+                <div id="gsd-unsaved-banner" style="display:none">
+                    You have unsaved changes. Click Save draft to keep them.
+                </div>
+                <div class="gsd-save-bar">
+                    <button type="button" id="btn-save-draft">
+                        <i class="fas fa-floppy-disk" aria-hidden="true"></i>
+                        Save draft
+                    </button>
+                    <span class="gsd-save-hint" id="gsd-save-hint">
+                        Saves your supplier quotes and canvasser name without approving.
+                    </span>
+                </div>
+            </div>
+            <?php endif; ?>
+        </section>
+
+        <!-- Section C: Supplier Selection -->
+        <section class="rf-section gsd-cv-section" id="cvGsdSectionC"<?php echo $gsdOutcomeSectionsInitiallyHidden ? ' hidden' : ''; ?>>
+            <div class="gsd-cv-sec-head">
+                <div class="gsd-cv-sec-title-row">
+                    <span class="gsd-cv-sec-title">SECTION C — SUPPLIER SELECTION</span>
+                    <?php if ($isGsdCanvassReview): ?>
+                    <span class="gsd-cv-sort-note">Sorted cheapest → highest · Auto-selects cheapest</span>
+                    <?php else: ?>
+                    <span class="gsd-cv-pill gsd-cv-pill-ro">read-only</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div id="cvGsdSelGrid" class="gsd-cv-sel-grid"></div>
+        </section>
+
+        <?php if ($isGsdCanvassReview): ?>
+        <!-- Add Supplier modal for Section B -->
+        <div id="gsdAddSupModal" class="cv-canvasser-quote-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="gsdAddSupModalTitle">
+            <div class="cv-canvasser-quote-modal-backdrop" id="gsdAddSupModalBackdrop"></div>
+            <div class="gsd-sup-modal-card">
+                <div class="gsd-sup-modal-hd">
+                    <span class="gsd-sup-modal-hd-left">
+                        <i class="fas fa-store" aria-hidden="true"></i>
+                        <span id="gsdAddSupModalTitle">Select supplier</span>
+                    </span>
+                    <button type="button" id="gsdAddSupModalClose" class="gsd-sup-modal-x" aria-label="Close">&times;</button>
+                </div>
+                <div class="gsd-sup-modal-body">
+                    <div class="gsd-sup-search-wrap">
+                        <i class="fas fa-magnifying-glass gsd-sup-search-icon" aria-hidden="true"></i>
+                        <input type="text" id="gsdAddSupSearch" class="gsd-sup-search-inp"
+                               placeholder="Search supplier name..." autocomplete="off" maxlength="150">
+                    </div>
+                    <div id="gsdAddSupResultsList" class="gsd-sup-results-list"></div>
+                    <div id="gsdAddSupRegPanel" class="gsd-sup-reg-panel" style="display:none;">
+                        <div class="gsd-sup-reg-hd">
+                            <span class="gsd-sup-reg-hd-left">
+                                <i class="fas fa-user-plus" aria-hidden="true"></i>
+                                Register new supplier
+                            </span>
+                            <button type="button" id="gsdAddSupRegClose" class="gsd-sup-reg-x" aria-label="Close register form">&times;</button>
+                        </div>
+                        <div class="gsd-sup-reg-body">
+                            <div class="gsd-sup-reg-field">
+                                <label for="gsdAddSupRegName">Supplier name <em style="color:#b91c1c">*</em></label>
+                                <input type="text" id="gsdAddSupRegName" class="gsd-sup-reg-inp" placeholder="e.g. ABC Trading" maxlength="150" autocomplete="off">
+                            </div>
+                            <div class="gsd-sup-reg-2col">
+                                <div class="gsd-sup-reg-field">
+                                    <label for="gsdAddSupRegContact">Contact person</label>
+                                    <input type="text" id="gsdAddSupRegContact" class="gsd-sup-reg-inp" placeholder="Optional" maxlength="100" autocomplete="off">
+                                </div>
+                                <div class="gsd-sup-reg-field">
+                                    <label for="gsdAddSupRegPhone">Phone</label>
+                                    <input type="text" id="gsdAddSupRegPhone" class="gsd-sup-reg-inp" placeholder="Optional" maxlength="50" autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="gsd-sup-reg-2col">
+                                <div class="gsd-sup-reg-field">
+                                    <label for="gsdAddSupRegTin">TIN</label>
+                                    <input type="text" id="gsdAddSupRegTin" class="gsd-sup-reg-inp" placeholder="Optional" maxlength="50" autocomplete="off">
+                                </div>
+                                <div class="gsd-sup-reg-field">
+                                    <label for="gsdAddSupRegAddress">Address</label>
+                                    <input type="text" id="gsdAddSupRegAddress" class="gsd-sup-reg-inp" placeholder="Optional" maxlength="200" autocomplete="off">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="gsd-sup-modal-ft">
+                    <span class="gsd-sup-modal-hint">
+                        <i class="fas fa-circle-info" aria-hidden="true"></i>
+                        <span id="gsdAddSupHintText">Search to find a supplier</span>
+                    </span>
+                    <div class="gsd-sup-modal-ft-btns">
+                        <button type="button" class="btn-secondary" id="gsdAddSupModalCancel">Cancel</button>
+                        <button type="button" class="btn-submit" id="gsdAddSupModalConfirm" disabled>Add supplier</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if (!$isRequesterEditView && !$isGsdCanvassReview && !$isGsdOutcomeReadonlyRole): ?>
         <section class="rf-section rf-section-canvass-lines">
         <div class="table-section">
             <?php if (!$isCanvassStructureUiHidden && !$isCanvasserCanvassView): ?>
@@ -797,8 +1119,105 @@ $pageTitle = $rfRequestId > 0
             <div id="cvItemChips" class="item-chips"><p class="item-chips-empty">No canvass items yet.</p></div>
         </div>
         </section>
+        <?php endif; // !$isRequesterEditView — hide legacy canvass breakdown for requester ?>
 
-            <?php if ($isRequesterOwnedCanvass || $isReviewerCanvassReadonly || $isCanvasserCanvassView || ($requestId > 0 && !$isReviewerCanvassReadonly && !$isCanvasserCanvassView && !$isGsdCanvassReview && !$isComptrollerCanvassReview && !$isPresidentCanvassReview)): ?>
+            <?php if ($isRequesterEditView): ?>
+            <section class="rf-section rf-section-supplier-quotes" id="supplierQuotesSection">
+                <div class="sec-title-bar">
+                    <span class="sec-label">SUPPLIER QUOTES</span>
+                </div>
+
+                <div class="supplier-empty-state" id="supplier-empty-state">
+                    <i class="fas fa-store" aria-hidden="true"></i>
+                    <p>No suppliers added yet.<br>Add a supplier to start entering quoted prices.</p>
+                    <button class="btn-add-supplier-primary" id="btn-add-supplier-empty">+ Add supplier</button>
+                </div>
+
+                <div class="supplier-grid-section" id="supplier-grid-section" style="display:none">
+                    <div class="supplier-card-grid" id="supplier-card-grid"></div>
+                    <div class="supplier-grid-footer">
+                        <button class="btn-add-supplier-outline" id="btn-add-supplier-footer">+ Add supplier</button>
+                    </div>
+                </div>
+
+                <div class="supplier-modal-overlay" id="supplier-modal-overlay" style="display:none">
+                    <div class="supplier-modal">
+                        <div class="supplier-modal-head">
+                            <span>Add supplier</span>
+                            <button class="supplier-modal-close" id="supplier-modal-close">&times;</button>
+                        </div>
+                        <div class="supplier-modal-body">
+                            <label class="supplier-field-label">Select supplier <span class="req-star">*</span></label>
+                            <div class="supplier-combobox" id="supplier-combobox">
+                                <div class="supplier-combobox-input-wrap">
+                                    <i class="fas fa-search sup-combo-search-icon" aria-hidden="true"></i>
+                                    <input type="text" id="supplier-combobox-input" placeholder="Search supplier…" autocomplete="off">
+                                </div>
+                                <div class="supplier-combobox-list" id="supplier-combobox-list" style="display:none"></div>
+                                <div class="supplier-combobox-register" id="supplier-combobox-register" style="display:none">
+                                    <span>Supplier not found.</span>
+                                    <button type="button" id="btn-register-supplier-link" class="sup-combo-register-btn">+ Register Supplier</button>
+                                </div>
+                                <div id="supplier-combobox-selection" class="supplier-combobox-selection" hidden>
+                                    <div class="supplier-combobox-selection-label">Selected supplier</div>
+                                    <div id="supplier-combobox-selection-body" class="supplier-combobox-selection-body"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="supplier-modal-foot">
+                            <button class="btn-modal-cancel" id="supplier-modal-cancel">Cancel</button>
+                            <button class="btn-modal-save" id="supplier-modal-save">&#10003; Add supplier</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Register new supplier modal -->
+                <div class="supplier-modal-overlay" id="sup-register-overlay" style="display:none">
+                    <div class="supplier-modal" style="width:420px;max-width:95vw;">
+                        <div class="supplier-modal-head">
+                            <span>Register New Supplier</span>
+                            <button class="supplier-modal-close" id="sup-register-close">&times;</button>
+                        </div>
+                        <div class="supplier-modal-body sup-register-body">
+                            <form id="sup-register-form" onsubmit="return false">
+                                <div class="sup-register-field">
+                                    <label class="supplier-field-label">Supplier name <span class="req-star">*</span></label>
+                                    <input type="text" id="sup-register-name" placeholder="e.g. Lazada, SM Stationery" maxlength="100" autocomplete="organization">
+                                </div>
+                                <div class="sup-register-field">
+                                    <label class="supplier-field-label">Contact person</label>
+                                    <input type="text" id="sup-register-contact" maxlength="100" autocomplete="name">
+                                </div>
+                                <div class="sup-register-grid">
+                                    <div class="sup-register-field">
+                                        <label class="supplier-field-label">Phone</label>
+                                        <input type="text" id="sup-register-phone" maxlength="30" autocomplete="tel">
+                                    </div>
+                                    <div class="sup-register-field">
+                                        <label class="supplier-field-label">Email</label>
+                                        <input type="email" id="sup-register-email" maxlength="100" autocomplete="email">
+                                    </div>
+                                </div>
+                                <div class="sup-register-field">
+                                    <label class="supplier-field-label">Address</label>
+                                    <input type="text" id="sup-register-address" maxlength="255" autocomplete="street-address">
+                                </div>
+                                <div class="sup-register-field">
+                                    <label class="supplier-field-label">TIN <span style="font-weight:400;color:#999">(optional)</span></label>
+                                    <input type="text" id="sup-register-tin" maxlength="20" placeholder="e.g. 123-456-789-000" autocomplete="off">
+                                </div>
+                            </form>
+                        </div>
+                        <div class="supplier-modal-foot">
+                            <button class="btn-modal-cancel" id="sup-register-cancel">Cancel</button>
+                            <button class="btn-modal-save" id="sup-register-save">Register</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <?php endif; ?>
+
+            <?php if (!$isRequesterEditView && !$isGsdCanvassReview && !$isGsdOutcomeReadonlyRole): ?>
             <section class="rf-section rf-section-preferred cv-preferred-section" id="cvPreferredSection">
                 <h2 class="rf-section-heading">Preferred Supplier Matrix</h2>
                 <div class="cv-preferred-section-head" id="cvPreferredSectionHead">
@@ -822,7 +1241,7 @@ $pageTitle = $rfRequestId > 0
                 </div>
             </section>
             <?php endif; ?>
-
+            <?php if (!$isRequesterEditView && !$isGsdCanvassReview && !$showGsdOutcomeReadonlyView): ?>
             <section class="rf-section rf-section-canvassed supplier-section" id="cvCanvasSection" role="region" aria-label="Suppliers and pricing">
                 <h2 class="rf-section-heading">Canvassed Supplier Matrix</h2>
                     <?php if ($isCanvasserCanvassView && !$verifierChainLocked): ?>
@@ -874,14 +1293,21 @@ $pageTitle = $rfRequestId > 0
                 </div>
             </section>
 
+            <?php endif; ?>
+
         <?php if ($showCanvassPricingOverview): ?>
-        <section class="rf-section rf-section-abstract-total">
+        <section class="rf-section rf-section-abstract-total" id="cvGsdAbstractTotalSection"<?php echo ($isGsdCanvassReview && $gsdOutcomeSectionsInitiallyHidden) ? ' hidden' : ''; ?>>
             <h2 class="rf-section-heading">Abstract Total</h2>
+            <?php if ($isGsdCanvassReview): ?>
+            <p class="cv-gsd-canvassed-by-label" id="cvGsdCanvassedByLabel" hidden>
+                Canvassed by: <strong id="cvGsdCanvassedByName"></strong>
+            </p>
+            <?php endif; ?>
         <?php require __DIR__ . '/partials/canvass_pricing_overview.php'; ?>
         </section>
         <?php endif; ?>
         <?php if ($showComptrollerPricingOverview): ?>
-        <section class="rf-section rf-section-abstract-total">
+        <section class="rf-section rf-section-abstract-total" id="cvGsdAbstractTotalSection"<?php echo ($isGsdOutcomeReadonlyRole && $gsdOutcomeSectionsInitiallyHidden) ? ' hidden' : ''; ?>>
             <h2 class="rf-section-heading">Abstract Total</h2>
         <?php require __DIR__ . '/partials/comptroller_pricing_overview.php'; ?>
         </section>
@@ -889,32 +1315,9 @@ $pageTitle = $rfRequestId > 0
 
         <div class="approval-section cv-approval-section" aria-label="Canvass verification status">
             <div class="approval-card approval-card-canvass-verifiers" id="cvApprovalStrip">
-                <div class="approval-role<?php echo $isGsdCanvassReview ? ' approval-role-cv-assignee' : ''; ?>">
-                    <div class="circle-icon inactive"><i class="fas fa-check"></i></div>
-                    <div class="approval-role-body">
-                        <div class="approval-name">Canvasser</div>
-                        <div class="approval-sub cv-appr-kind"><?php echo $isGsdCanvassReview ? 'Assign &amp; status' : 'Canvassed by'; ?></div>
-                        <div class="cv-appr-detail" id="cvApprCanvasserDetail"></div>
-                        <?php if ($isGsdCanvassReview): ?>
-                        <div class="gsd-canvas-assignee-field gsd-assignee-in-approval gsd-assignee-mode-pick" id="gsdAssigneeInApprovalWrap">
-                            <input type="hidden" id="gsdCanvasAssigneeUserId" value="">
-                            <input type="hidden" id="gsdSuggestedSupplierId" value="">
-                            <div id="gsdAssigneePickWrap" class="gsd-assignee-pick-wrap">
-                                <label class="sr-only" for="gsdCanvasAssigneeInput">Assign staff to canvass</label>
-                                <input type="text" id="gsdCanvasAssigneeInput" class="gsd-canvas-assignee-input" autocomplete="off" placeholder="Search name or email to assign…">
-                                <ul id="gsdCanvasAssigneeSuggestions" class="gsd-canvas-assignee-suggestions" role="listbox" hidden></ul>
-                                <button type="button" id="gsdCanvasAssignBtn" class="gsd-canvas-assign-btn" disabled>Assign</button>
-                                <p id="gsdAssigneePickHint" class="gsd-canvas-assignee-hint gsd-assignee-pick-hint">Selecting a name does not save automatically. Click Assign to confirm.</p>
-                            </div>
-                            <div id="gsdAssigneeAssignedWrap" class="gsd-assignee-assigned-wrap" hidden>
-                                <div id="gsdAssigneeAssignedName" class="gsd-assignee-assigned-name" aria-live="polite"></div>
-                                <button type="button" id="gsdCanvasAssigneeChangeBtn" class="gsd-canvas-assignee-change-btn">Change</button>
-                            </div>
-                            <p class="gsd-canvas-assignee-hint gsd-assignee-in-approval-hint">Office staff only. Required before <strong>Verify</strong> while canvassing is open.</p>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
+                <?php if ($isGsdCanvassReview): ?>
+                <input type="hidden" id="gsdSuggestedSupplierId" value="">
+                <?php endif; ?>
                 <div class="approval-role">
                     <div class="circle-icon inactive"><i class="fas fa-check"></i></div>
                     <div class="approval-role-body">
@@ -956,10 +1359,11 @@ $pageTitle = $rfRequestId > 0
         </div>
         <p id="gsdVerifyHint" class="gsd-verify-hint" aria-live="polite"></p>
         <?php elseif ($isComptrollerCanvassReview || $isPresidentCanvassReview): ?>
+        <?php $reviewerCurrentStatus = $isComptrollerCanvassReview ? $comptrollerCompStatus : $cvWfPresStatus; ?>
         <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar rf-form-actions">
             <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> Approve</button>
             <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
-            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="display: none;"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
+            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="<?php echo in_array($reviewerCurrentStatus, ['accept', 'reject'], true) ? 'display:inline-flex;' : 'display:none;'; ?>"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <?php endif; ?>
 
@@ -984,6 +1388,156 @@ $pageTitle = $rfRequestId > 0
 </main>
 
 <div id="cvFormToast" class="toast success" style="display:none;"></div>
+
+<?php if ($isCanvasserCanvassView): ?>
+<div id="cvCanvasserQuoteModal" class="cv-canvasser-quote-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cvQuoteModalTitle">
+    <div class="cv-canvasser-quote-modal-backdrop" id="cvQuoteModalBackdrop"></div>
+    <div class="cv-canvasser-quote-modal-card">
+        <div class="cv-canvasser-quote-modal-header">
+            <h3 id="cvQuoteModalTitle">Add / Edit Quote</h3>
+            <button type="button" class="cv-canvasser-quote-modal-close" id="cvQuoteModalClose" aria-label="Close">&times;</button>
+        </div>
+        <p class="cv-quote-modal-line-name" id="cvQuoteModalLineName"></p>
+        <input type="hidden" id="cvQuoteModalLineId" value="">
+
+        <div class="cv-quote-modal-existing" id="cvQuoteModalExistingWrap">
+            <div class="cv-quote-modal-existing-label">Canvassed quotes for this item:</div>
+            <div id="cvQuoteModalExistingQuotes"></div>
+        </div>
+
+        <?php if (!$verifierChainLocked): ?>
+        <hr class="cv-quote-modal-divider">
+        <div class="cv-quote-modal-form">
+            <div class="cv-quote-modal-form-title">Add / update a quote</div>
+            <div class="field-group">
+                <label for="cvQuoteModalSupplierBtn">Supplier <em style="color:#b91c1c">*</em></label>
+                <div class="cv-quote-modal-supplier-dropdown" id="cvQuoteModalSupplierDropdown">
+                    <button type="button" id="cvQuoteModalSupplierBtn" class="supplier-dropdown-btn cv-quote-modal-supplier-btn">
+                        <span id="cvQuoteModalSupplierText">Select supplier…</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <input type="hidden" id="cvQuoteModalSupplierId" value="">
+                    <div id="cvQuoteModalSupplierList" class="supplier-dropdown-list cv-quote-modal-supplier-list"></div>
+                </div>
+            </div>
+            <div class="field-group">
+                <label for="cvQuoteModalPrice">Unit Price (PHP) <em style="color:#b91c1c">*</em></label>
+                <input type="number" id="cvQuoteModalPrice" min="0" step="0.01" placeholder="0.00" autocomplete="off">
+            </div>
+            <div class="field-group">
+                <label for="cvQuoteModalBenefits">Benefits / Notes <span style="color:#64748b;font-weight:400;">(optional)</span></label>
+                <textarea id="cvQuoteModalBenefits" rows="2" placeholder="e.g. Includes VAT, free delivery, warranty…"></textarea>
+            </div>
+        </div>
+        <div class="cv-canvasser-quote-modal-actions">
+            <button type="button" class="btn-secondary" id="cvQuoteModalCancel">Cancel</button>
+            <button type="button" class="btn-submit" id="cvQuoteModalSave"><i class="fas fa-check" aria-hidden="true"></i> Save quote</button>
+        </div>
+        <?php else: ?>
+        <p style="margin:1rem 0 0;font-size:0.9rem;color:#64748b;">This canvass is locked — no changes can be made.</p>
+        <div class="cv-canvasser-quote-modal-actions">
+            <button type="button" class="btn-secondary" id="cvQuoteModalCancel">Close</button>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($isGsdCanvassReview): ?>
+<div id="gsdCqModal" class="cv-canvasser-quote-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="gsdCqModalTitle">
+    <div class="cv-canvasser-quote-modal-backdrop" id="gsdCqModalBackdrop"></div>
+    <div class="cv-canvasser-quote-modal-card">
+        <div class="cv-canvasser-quote-modal-header">
+            <h3 id="gsdCqModalTitle">Add Canvass Quote</h3>
+            <button type="button" class="cv-canvasser-quote-modal-close" id="gsdCqModalClose" aria-label="Close">&times;</button>
+        </div>
+        <p class="cv-quote-modal-line-name" id="gsdCqLineName"></p>
+        <input type="hidden" id="gsdCqLineId" value="">
+        <div class="cv-quote-modal-form">
+            <div class="field-group">
+                <label for="gsdCqSupplierNameSearch">Supplier Name <em style="color:#b91c1c">*</em></label>
+                <div class="cv-quote-modal-supplier-dropdown gsd-cq-supplier-wrap" id="gsdCqSupplierDropdown">
+                    <input type="text" id="gsdCqSupplierNameSearch" class="gsd-cq-supplier-search"
+                           placeholder="Type to search supplier…" autocomplete="off" maxlength="150">
+                    <button type="button" id="gsdCqSupplierBtn" class="supplier-dropdown-btn cv-quote-modal-supplier-btn"
+                            style="display:none;" aria-hidden="true" tabindex="-1">
+                        <span id="gsdCqSupplierText">Select supplier…</span>
+                    </button>
+                    <input type="hidden" id="gsdCqSupplierId" value="">
+                    <div id="gsdCqSupplierList" class="supplier-dropdown-list cv-quote-modal-supplier-list gsd-cq-supplier-list"></div>
+                </div>
+            </div>
+            <div class="field-group">
+                <label for="gsdCqPrice">Unit Price (PHP) <em style="color:#b91c1c">*</em></label>
+                <input type="number" id="gsdCqPrice" min="0" step="0.01" placeholder="0.00" autocomplete="off">
+            </div>
+            <div class="field-group">
+                <label for="gsdCqBenefits">Benefits / Notes <span style="color:#64748b;font-weight:400;">(optional)</span></label>
+                <textarea id="gsdCqBenefits" rows="2" placeholder="e.g. Includes VAT, free delivery, warranty…"></textarea>
+            </div>
+            <div class="field-group">
+                <label for="gsdCqDiscount">Discount % <span style="color:#64748b;font-weight:400;">(optional)</span></label>
+                <input type="number" id="gsdCqDiscount" min="0" max="100" step="0.01" placeholder="0">
+            </div>
+            <div class="field-group">
+                <label for="gsdCqCanvasserName">Canvassed By <em style="color:#b91c1c">*</em></label>
+                <input type="text" id="gsdCqCanvasserName" placeholder="e.g. Juan Dela Cruz" maxlength="100" autocomplete="off">
+            </div>
+        </div>
+        <div class="cv-canvasser-quote-modal-actions">
+            <button type="button" class="btn-secondary" id="gsdCqModalCancel">Cancel</button>
+            <button type="button" class="btn-submit" id="gsdCqModalSave"><i class="fas fa-check" aria-hidden="true"></i> Save quote</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($isRequesterEditView): ?>
+<div id="cvRequesterPrefQuoteModal" class="cv-canvasser-quote-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cvPrefQuoteModalTitle">
+    <div class="cv-canvasser-quote-modal-backdrop" id="cvPrefQuoteModalBackdrop"></div>
+    <div class="cv-canvasser-quote-modal-card">
+        <div class="cv-canvasser-quote-modal-header">
+            <h3 id="cvPrefQuoteModalTitle">Add / Edit Preferred Quote</h3>
+            <button type="button" class="cv-canvasser-quote-modal-close" id="cvPrefQuoteModalClose" aria-label="Close">&times;</button>
+        </div>
+        <p class="cv-quote-modal-line-name" id="cvPrefQuoteModalLineName"></p>
+        <input type="hidden" id="cvPrefQuoteModalLineId" value="">
+
+        <div class="cv-quote-modal-existing" id="cvPrefQuoteModalExistingWrap">
+            <div class="cv-quote-modal-existing-label">Your preferred quotes for this item:</div>
+            <div id="cvPrefQuoteModalExistingQuotes"></div>
+        </div>
+
+        <hr class="cv-quote-modal-divider">
+        <div class="cv-quote-modal-form">
+            <div class="cv-quote-modal-form-title">Add / update a preferred quote</div>
+            <div class="field-group">
+                <label for="cvPrefQuoteModalSupplierBtn">Supplier <em style="color:#b91c1c">*</em></label>
+                <div class="cv-quote-modal-supplier-dropdown" id="cvPrefQuoteModalSupplierDropdown">
+                    <button type="button" id="cvPrefQuoteModalSupplierBtn" class="supplier-dropdown-btn cv-quote-modal-supplier-btn">
+                        <span id="cvPrefQuoteModalSupplierText">Select supplier…</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <input type="hidden" id="cvPrefQuoteModalSupplierId" value="">
+                    <div id="cvPrefQuoteModalSupplierList" class="supplier-dropdown-list cv-quote-modal-supplier-list"></div>
+                </div>
+            </div>
+            <div class="field-group">
+                <label for="cvPrefQuoteModalPrice">Unit Price (PHP) <em style="color:#b91c1c">*</em></label>
+                <input type="number" id="cvPrefQuoteModalPrice" min="0" step="0.01" placeholder="0.00" autocomplete="off">
+            </div>
+            <div class="field-group">
+                <label for="cvPrefQuoteModalBenefits">Benefits / Notes <span style="color:#64748b;font-weight:400;">(optional)</span></label>
+                <textarea id="cvPrefQuoteModalBenefits" rows="2" placeholder="e.g. Includes VAT, free delivery, warranty…"></textarea>
+            </div>
+        </div>
+        <div class="cv-canvasser-quote-modal-actions">
+            <button type="button" class="btn-secondary" id="cvPrefQuoteModalCancel">Cancel</button>
+            <button type="button" class="btn-submit" id="cvPrefQuoteModalSave"><i class="fas fa-check" aria-hidden="true"></i> Save preferred quote</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if ($isCanvasserCanvassView && !$verifierChainLocked): ?>
 <div id="canvasserNewSupplierModal" class="canvasser-supplier-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="canvasserNewSupplierTitle">
@@ -1103,6 +1657,9 @@ window.CWIRMS_PREF_SUP = <?php echo json_encode([
     'isRequester' => $isRequesterOwnedCanvass || $isOwner,  
 ]); ?>;
 </script>
+<?php if ($gsdOutcomeInlineJson): ?>
+<script>window.CWIRMS_GSD_OUTCOME = <?php echo $gsdOutcomeInlineJson; ?>;</script>
+<?php endif; ?>
 <script src="../assets/js/dean_canvass_form.js"></script>
 <?php if ($showCanvassPricingOverview): ?>
 <script src="../assets/js/gsd_canvass_pricing_overview.js"></script>
@@ -1142,5 +1699,7 @@ window.IMRMS_CANVASS_REVIEWER = <?php echo json_encode([
 <script src="../assets/js/canvass_reviewer_approval.js"></script>
 <?php endif; ?>
 <?php endif; ?>
+
+
 </body>
 </html>

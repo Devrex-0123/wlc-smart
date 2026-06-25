@@ -26,6 +26,7 @@
     let currentPoId = poId > 0 ? poId : 0;
     let currentGrossAmount = 0;
     let taxRowCounter = 0;
+    let currentSupplierVatRegistered = false;
 
     function showToast(message, type = 'error') {
         if (!toast) {
@@ -192,12 +193,19 @@
         setVerifierState(record);
         setActionButtons(record);
 
-        currentGrossAmount = totalAmount;
+        // Populate fee inputs from saved data
+        populateFeeInputs(record);
+
+        // currentGrossAmount for tax = taxable_amount when set, else total_amount
+        const taxable = record.taxable_amount != null ? Number(record.taxable_amount) : null;
+        currentGrossAmount = (taxable !== null && taxable > 0) ? taxable : totalAmount;
+
         if (isComptroller) {
             setComptrollerTaxSectionVisible(record);
             if (isPresidentApproved(record)) {
-                updateTaxGrossDisplay(totalAmount);
+                updateTaxGrossDisplay(currentGrossAmount);
                 updateTaxBadge(Boolean(record.tax_computed));
+                updateLiveCalcPanel();
                 void loadTaxRecord();
             }
         }
@@ -316,17 +324,15 @@
     const confirmOkBtn = document.getElementById('poConfirmOkBtn');
 
     const EWT_TRANSACTION_TYPES = [
-        { key: 'purchase_of_goods', label: 'Purchase of goods', rate: 0.01 },
-        { key: 'purchase_of_services', label: 'Purchase of services', rate: 0.02 },
-        { key: 'professional_fees', label: 'Professional fees', rate: 0.05 },
-        { key: 'professional_fees_high', label: 'Professional fees (high income)', rate: 0.1 },
+        { key: 'goods',              label: 'Purchase of Goods / Supplies',     rate: 0.01 },
+        { key: 'services',           label: 'Purchase of Services',             rate: 0.02 },
+        { key: 'professional_small', label: 'Professional Fees (≤ ₱3M)',        rate: 0.10 },
+        { key: 'professional_large', label: 'Professional Fees (Corp / >₱3M)', rate: 0.15 },
+        { key: 'rental',             label: 'Rental',                           rate: 0.05 },
+        { key: 'construction',       label: 'Construction / Contractor',        rate: 0.02 },
+        { key: 'media',              label: 'Media / Talent / Entertainment',   rate: 0.15 },
     ];
     const STANDARD_EWT_RATES = [0.01, 0.02, 0.05, 0.1];
-
-    let addEwtBtn = null;
-    let addVatBtn = null;
-    let addOtherBtn = null;
-    let addDeductionBtn = null;
 
     /** @type {'draft' | 'finalized'} */
     let currentTaxStatus = 'draft';
@@ -400,14 +406,6 @@
         if (taxNotesEl) {
             taxNotesEl.readOnly = readOnly;
             taxNotesEl.classList.toggle('is-readonly', readOnly);
-        }
-        [addEwtBtn, addVatBtn, addOtherBtn, addDeductionBtn].forEach((btn) => {
-            if (btn) {
-                btn.disabled = readOnly;
-            }
-        });
-        if (taxQuickAdd) {
-            taxQuickAdd.classList.toggle('is-disabled', readOnly);
         }
         if (!taxRowsBody) {
             return;
@@ -514,7 +512,7 @@
         if (lc === 'ewt') {
             return 'ewt';
         }
-        if (lc === 'vat withholding' || lc === 'vat') {
+        if (lc === 'vat withholding' || lc === 'vat' || lc === 'vat_withholding') {
             return 'vat';
         }
         return 'other';
@@ -545,8 +543,7 @@
     }
 
     function getEwtDefaultRate(row) {
-        const select = row.querySelector('.po-tax-transaction-select');
-        const key = select ? select.value : 'purchase_of_services';
+        const key = row.dataset.transactionType || 'services';
         const match = EWT_TRANSACTION_TYPES.find((item) => item.key === key);
         return match ? match.rate : 0.02;
     }
@@ -612,28 +609,26 @@
         tr.dataset.rateOverride = data.rate_override ? '1' : '0';
 
         if (type === 'ewt') {
-            const txn = resolveEwtTypeByLabel(data.transaction_type || data.transaction_type_label || 'purchase_of_services');
+            const txn = resolveEwtTypeByLabel(data.transaction_type || data.transaction_type_label || 'services');
             const rate = Number(data.rate != null ? data.rate : txn.rate);
             const pct = roundMoney(rate * 100);
             const amount = roundMoney(currentGrossAmount * rate);
+            tr.dataset.transactionType = txn.key;
             tr.innerHTML = `
                 <td>
                     <div class="po-tax-ewt-fields">
                         <span class="po-tax-type-label">Expanded Withholding Tax (EWT)</span>
-                        <label class="po-tax-mini-label">Transaction type</label>
-                        <select class="po-tax-transaction-select">${buildEwtTransactionOptions(txn.key)}</select>
+                        <span class="po-tax-mini-label po-tax-txn-label">${escapeHtml(txn.label)}</span>
                         <input type="hidden" class="po-tax-type-value" value="ewt">
                     </div>
                 </td>
                 <td>
-                    <label class="po-tax-mini-label">Rate</label>
                     <div class="po-tax-rate-input-wrap">
-                        <input type="number" class="po-tax-rate-pct-input" min="0" max="100" step="0.01" value="${pct}">
+                        <input type="number" class="po-tax-rate-pct-input" min="0" max="100" step="0.01" value="${pct}" title="Override rate">
                         <span class="po-tax-rate-suffix">%</span>
                     </div>
                 </td>
                 <td>
-                    <label class="po-tax-mini-label">Amount deducted</label>
                     <span class="po-tax-amount-readonly">${formatMoney(amount)}</span>
                 </td>
                 <td style="text-align:center;">
@@ -703,7 +698,6 @@
         if (!row) {
             return;
         }
-        const txnSelect = row.querySelector('.po-tax-transaction-select');
         const ratePctInput = row.querySelector('.po-tax-rate-pct-input');
         const amountInput = row.querySelector('.po-tax-amount-input');
         const removeBtn = row.querySelector('.po-tax-remove-btn');
@@ -711,16 +705,6 @@
             '.po-vat-supplier-yes, .po-vat-supplier-no, .po-vat-exempt-yes, .po-vat-exempt-no'
         );
 
-        if (txnSelect) {
-            txnSelect.addEventListener('change', () => {
-                const match = EWT_TRANSACTION_TYPES.find((item) => item.key === txnSelect.value);
-                if (match && ratePctInput) {
-                    ratePctInput.value = String(roundMoney(match.rate * 100));
-                    row.dataset.rateOverride = '0';
-                }
-                recalculateTaxBreakdown();
-            });
-        }
         if (ratePctInput) {
             ratePctInput.addEventListener('input', () => {
                 syncEwtRateOverrideState(row);
@@ -754,22 +738,7 @@
         recalculateTaxBreakdown();
     }
 
-    function updateTaxTypeButtons() {
-        const hasEwt = rowHasType('ewt');
-        const hasVat = rowHasType('vat');
-        if (addEwtBtn) {
-            addEwtBtn.classList.toggle('active', hasEwt);
-            addEwtBtn.innerHTML = hasEwt
-                ? '<i class="fas fa-check" aria-hidden="true"></i> EWT'
-                : '<i class="fas fa-plus" aria-hidden="true"></i> EWT';
-        }
-        if (addVatBtn) {
-            addVatBtn.classList.toggle('active', hasVat);
-            addVatBtn.innerHTML = hasVat
-                ? '<i class="fas fa-check" aria-hidden="true"></i> VAT Withholding'
-                : '<i class="fas fa-plus" aria-hidden="true"></i> VAT Withholding';
-        }
-    }
+    function updateTaxTypeButtons() { /* buttons removed — no-op */ }
 
     function toggleTaxRow(type, defaults = {}) {
         if (rowHasType(type)) {
@@ -799,8 +768,8 @@
             const taxType = typeInput ? typeInput.value : kind;
 
             if (kind === 'ewt') {
-                const txnSelect = row.querySelector('.po-tax-transaction-select');
-                const txn = EWT_TRANSACTION_TYPES.find((item) => item.key === (txnSelect ? txnSelect.value : ''));
+                const txnKey = row.dataset.transactionType || '';
+                const txn = EWT_TRANSACTION_TYPES.find((item) => item.key === txnKey);
                 const rate = getEwtRateFromRow(row);
                 const amount = roundMoney(currentGrossAmount * rate);
                 if (amount <= 0) {
@@ -808,11 +777,11 @@
                 }
                 rows.push({
                     tax_type: taxType,
-                    transaction_type: txn ? txn.label : '',
+                    transaction_type: txnKey,
                     rate,
                     rate_override: row.dataset.rateOverride === '1',
                     amount_deducted: amount,
-                    label: null,
+                    label: txn ? `EWT – ${txn.label}` : 'EWT',
                 });
                 return;
             }
@@ -859,6 +828,13 @@
             return 0;
         }
 
+        // Sync currentGrossAmount from live fee inputs before tax math.
+        const liveCalc = computeFeeTotals();
+        if (liveCalc && liveCalc.taxable > 0) {
+            currentGrossAmount = liveCalc.taxable;
+            updateTaxGrossDisplay(currentGrossAmount);
+        }
+
         taxRowsBody.querySelectorAll('tr.po-tax-row').forEach((row) => {
             const kind = row.dataset.taxKind || '';
             if (kind === 'ewt') {
@@ -880,8 +856,8 @@
                     deductionTotal += row.amount_deducted;
                     let label = 'Other';
                     if (normalizeTaxTypeKey(row.tax_type) === 'ewt') {
-                        label = `EWT (${formatRateLabel(row.rate)})`;
-                    } else if (normalizeTaxTypeKey(row.tax_type) === 'vat') {
+                        label = row.label || `EWT (${formatRateLabel(row.rate)})`;
+                    } else if (normalizeTaxTypeKey(row.tax_type) === 'vat' || normalizeTaxTypeKey(row.tax_type) === 'vat_withholding') {
                         label = 'VAT Withholding (5%)';
                     } else if (row.label) {
                         label = row.label;
@@ -927,7 +903,18 @@
                 transaction_vat_exempt: item.transaction_vat_exempt,
             });
         });
+        // Sync the PO-level transaction type dropdown from the first EWT row.
+        const ewtItem = list.find((item) => normalizeTaxTypeKey(item.tax_type) === 'ewt');
+        if (ewtItem && ewtItem.transaction_type) {
+            const txSelect = feeEl('poTransactionType');
+            if (txSelect && txSelect.value === '') {
+                txSelect.value = ewtItem.transaction_type;
+                const applyBtn = feeEl('poApplyTransactionTypeBtn');
+                if (applyBtn) applyBtn.disabled = false;
+            }
+        }
         updateTaxTypeButtons();
+        updateLiveCalcPanel();
     }
 
     async function loadTaxRecord() {
@@ -940,15 +927,28 @@
                 purchase_order_id: String(currentPoId),
             });
             const res = await fetch(`${api}?${params.toString()}`, { credentials: 'same-origin' });
-            const data = await res.json().catch(() => ({}));
+            const data = await res.json().catch((e) => { console.error('[fetch_tax] JSON parse failed:', e); return {}; });
             if (!res.ok || !data.success) {
+                console.warn('[fetch_tax] failed:', data.message || res.status);
                 return;
             }
+            console.log('[fetch_tax] success, taxes:', data.taxes?.length, 'transaction_type:', data.transaction_type);
             if (Number(data.gross_amount) > 0) {
                 currentGrossAmount = Number(data.gross_amount);
                 updateTaxGrossDisplay(currentGrossAmount);
+                updateCalcPanelTaxableDisplay(currentGrossAmount);
             }
             populateTaxRowsFromSaved(data.taxes || []);
+            if (data.transaction_type) {
+                const txSelect = feeEl('poTransactionType');
+                if (txSelect) txSelect.value = data.transaction_type;
+                const applyBtn = feeEl('poApplyTransactionTypeBtn');
+                if (applyBtn) applyBtn.disabled = false;
+            }
+            if (data.supplier_vat_registered !== undefined) {
+                currentSupplierVatRegistered = Boolean(data.supplier_vat_registered);
+                syncVatBadge();
+            }
             if (taxNotesEl) {
                 taxNotesEl.value = String(data.notes || '');
             }
@@ -1147,30 +1147,6 @@
             taxDraftRow.hidden = false;
         }
 
-        addEwtBtn = document.getElementById('poTaxAddEwtBtn');
-        addVatBtn = document.getElementById('poTaxAddVatBtn');
-        addOtherBtn = document.getElementById('poTaxAddOtherBtn');
-        addDeductionBtn = document.getElementById('poTaxAddDeductionBtn');
-
-        if (addEwtBtn) {
-            addEwtBtn.addEventListener('click', () => {
-                toggleTaxRow('ewt', { transaction_type: 'purchase_of_services', rate: 0.02 });
-            });
-        }
-        if (addVatBtn) {
-            addVatBtn.addEventListener('click', () => {
-                toggleTaxRow('vat', {
-                    supplier_vat_registered: 1,
-                    transaction_vat_exempt: 0,
-                });
-            });
-        }
-        if (addOtherBtn) {
-            addOtherBtn.addEventListener('click', () => createTaxRow('other'));
-        }
-        if (addDeductionBtn) {
-            addDeductionBtn.addEventListener('click', () => createTaxRow('other'));
-        }
         if (taxDraftBtn) {
             taxDraftBtn.addEventListener('click', () => {
                 void saveTaxDraft();
@@ -1235,5 +1211,407 @@
         }
     }
 
+    // =========================================================================
+    // FEE & DISCOUNT MODULE
+    // =========================================================================
+
+    const feeEl   = (id) => document.getElementById(id);
+    const feeNum  = (id) => Math.max(0, Number(feeEl(id) ? feeEl(id).value : 0) || 0);
+    const feeMoney = (n) => {
+        const safe = Number.isFinite(Number(n)) ? Number(n) : 0;
+        return safe.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    const feeMoneySign = (n, sign = '+') =>
+        `${sign} ₱ ${feeMoney(Math.abs(n))}`;
+
+    let _itemsSubtotalForFees = 0; // set from populateFeeInputs / renderLines
+
+    function getItemsSubtotalFromLines() {
+        let total = 0;
+        if (linesBody) {
+            linesBody.querySelectorAll('tr.po-line-row .po-line-amount').forEach((el) => {
+                const raw = el.textContent.replace(/[^0-9.]/g, '');
+                total += Number(raw) || 0;
+            });
+        }
+        return Math.round(total * 100) / 100;
+    }
+
+    function computeFeeTotals() {
+        const itemsSub  = _itemsSubtotalForFees > 0 ? _itemsSubtotalForFees : getItemsSubtotalFromLines();
+        const shipping  = feeNum('poShippingFee');
+        const handling  = feeNum('poHandlingFee');
+        const insurance = feeNum('poInsuranceFee');
+        const install   = feeNum('poInstallationFee');
+        const other     = feeNum('poOtherCharges');
+        const totalFees = Math.round((shipping + handling + insurance + install + other) * 100) / 100;
+        const gross     = Math.round((itemsSub + totalFees) * 100) / 100;
+
+        const discType = document.querySelector('input[name="poDiscountType"]:checked');
+        const usePercent = !discType || discType.value === 'percent';
+        const discPct   = Math.min(100, Math.max(0, Number(feeEl('poDiscountPercentage') ? feeEl('poDiscountPercentage').value : 0) || 0));
+        const discAmt   = Math.max(0, Number(feeEl('poDiscountAmount') ? feeEl('poDiscountAmount').value : 0) || 0);
+        const calcDiscount = usePercent
+            ? Math.round(gross * discPct / 100 * 100) / 100
+            : Math.min(discAmt, gross);
+        const taxable   = Math.round((gross - calcDiscount) * 100) / 100;
+
+        return { itemsSub, shipping, handling, insurance, install, other, totalFees, gross, discPct, discAmt, calcDiscount, usePercent, taxable };
+    }
+
+    function setCalcRow(rowId, valueId, amount, labelText) {
+        const row = feeEl(rowId);
+        const val = feeEl(valueId);
+        if (!row || !val) return;
+        if (amount > 0) {
+            if (labelText && row.querySelector('.po-calc-label')) {
+                row.querySelector('.po-calc-label').textContent = labelText;
+            }
+            val.textContent = feeMoneySign(amount);
+            row.hidden = false;
+        } else {
+            row.hidden = true;
+        }
+    }
+
+    function updateCalcPanelTaxableDisplay(taxableAmount) {
+        const el = feeEl('poCalcTaxable');
+        if (el) el.textContent = '₱ ' + feeMoney(taxableAmount);
+    }
+
+    function updateLiveCalcPanel() {
+        if (!isComptroller) return;
+        const t = computeFeeTotals();
+        if (!t) return;
+
+        const subEl = feeEl('poCalcItemsSubtotal');
+        if (subEl) subEl.textContent = '₱ ' + feeMoney(t.itemsSub);
+
+        setCalcRow('poCalcShippingRow',    'poCalcShipping',    t.shipping,  '+ Shipping Fee');
+        setCalcRow('poCalcHandlingRow',    'poCalcHandling',    t.handling,  '+ Handling Fee');
+        setCalcRow('poCalcInsuranceRow',   'poCalcInsurance',   t.insurance, '+ Insurance Fee');
+        setCalcRow('poCalcInstallationRow','poCalcInstallation',t.install,   '+ Installation Fee');
+        setCalcRow('poCalcOtherRow',       'poCalcOther',       t.other,     '+ Other Charges');
+
+        const grossEl = feeEl('poCalcGrossTotal');
+        if (grossEl) grossEl.textContent = '₱ ' + feeMoney(t.gross);
+
+        const discRow   = feeEl('poCalcDiscountRow');
+        const discDiv   = feeEl('poCalcDiscountDivider');
+        const discLabel = feeEl('poCalcDiscountLabel');
+        const discVal   = feeEl('poCalcDiscount');
+        if (t.calcDiscount > 0) {
+            const pctSuffix = t.usePercent ? ` (${t.discPct}%)` : '';
+            if (discLabel) discLabel.textContent = `− Discount${pctSuffix}`;
+            if (discVal)   discVal.textContent   = '− ₱ ' + feeMoney(t.calcDiscount);
+            if (discRow)   discRow.hidden = false;
+            if (discDiv)   discDiv.hidden = false;
+        } else {
+            if (discRow)   discRow.hidden = true;
+            if (discDiv)   discDiv.hidden = true;
+        }
+
+        updateCalcPanelTaxableDisplay(t.taxable);
+
+        // Refresh tax deduction rows in the calc panel
+        updateCalcPanelTaxRows();
+
+        // Update summary chips in accordion headers
+        const shipSum = feeEl('poShippingSummary');
+        if (shipSum) shipSum.textContent = t.shipping > 0 ? ('₱ ' + feeMoney(t.shipping)) : '';
+        const addSum = feeEl('poAdditionalSummary');
+        if (addSum) addSum.textContent = t.totalFees - t.shipping > 0 ? ('₱ ' + feeMoney(t.totalFees - t.shipping)) : '';
+        const discSum = feeEl('poDiscountSummary');
+        if (discSum) discSum.textContent = t.calcDiscount > 0 ? ('− ₱ ' + feeMoney(t.calcDiscount)) : '';
+        const paySum = feeEl('poPaymentSummary');
+        const terms = feeEl('poPaymentTerms');
+        if (paySum && terms) paySum.textContent = terms.options[terms.selectedIndex]
+            ? (terms.options[terms.selectedIndex].textContent === '— Select terms —' ? '' : terms.options[terms.selectedIndex].textContent)
+            : '';
+
+        // Tax panel summary chip
+        const taxSum = feeEl('poTaxPanelSummary');
+        if (taxSum) {
+            const txSelect = feeEl('poTransactionType');
+            const txSelected = txSelect && txSelect.selectedIndex > 0
+                ? txSelect.options[txSelect.selectedIndex].textContent.replace(/\s*\(.*\)$/, '')
+                : '';
+            const taxTotal = collectTaxRows().reduce((s, r) => s + r.amount_deducted, 0);
+            taxSum.textContent = txSelected
+                ? (taxTotal > 0 ? `${txSelected} · − ₱ ${feeMoney(taxTotal)}` : txSelected)
+                : (taxTotal > 0 ? `− ₱ ${feeMoney(taxTotal)}` : '');
+        }
+    }
+
+    function updateCalcPanelTaxRows() {
+        const container = feeEl('poCalcTaxDeductions');
+        if (!container) return;
+        const taxRows = collectTaxRows();
+        let taxTotal = 0;
+        container.innerHTML = taxRows.map((row) => {
+            taxTotal += row.amount_deducted;
+            let label = row.label || 'Other';
+            if ((row.tax_type || '').toLowerCase() === 'ewt') {
+                label = `EWT (${formatRateLabel(row.rate)})`;
+            } else if ((row.tax_type || '').toLowerCase().includes('vat')) {
+                label = 'VAT Withholding (5%)';
+            }
+            return `<div class="po-calc-row po-calc-row--deduct">
+                <span class="po-calc-label">− ${escapeHtml(label)}</span>
+                <span class="po-calc-value po-calc-value--deduct">− ₱ ${feeMoney(row.amount_deducted)}</span>
+            </div>`;
+        }).join('');
+
+        const netEl = feeEl('poCalcNetPayable');
+        if (netEl) {
+            const taxable = computeFeeTotals()?.taxable ?? currentGrossAmount;
+            netEl.textContent = '₱ ' + feeMoney(Math.max(0, Math.round((taxable - taxTotal) * 100) / 100));
+        }
+    }
+
+    function populateFeeInputs(record) {
+        const setVal = (id, val) => {
+            const el = feeEl(id);
+            if (el) el.value = val != null ? val : (el.tagName === 'SELECT' ? '' : '0');
+        };
+        setVal('poShippingFee',       record.shipping_fee        || 0);
+        setVal('poShippingMethod',    record.shipping_method     || '');
+        setVal('poShippingAddress',   record.shipping_address    || '');
+        setVal('poHandlingFee',       record.handling_fee        || 0);
+        setVal('poInsuranceFee',      record.insurance_fee       || 0);
+        setVal('poInstallationFee',   record.installation_fee    || 0);
+        setVal('poOtherCharges',      record.other_charges       || 0);
+        setVal('poOtherChargesDesc',  record.other_charges_description || '');
+        setVal('poDiscountReason',    record.discount_reason     || '');
+        setVal('poPaymentTerms',      record.payment_terms       || '');
+        setVal('poPaymentDueDate',    record.payment_due_date    || '');
+
+        const pct = Number(record.discount_percentage || 0);
+        const amt = Number(record.discount_amount || 0);
+        const usePercent = pct > 0 || amt === 0;
+        const radPct = feeEl('poDiscountTypePercent');
+        const radAmt = feeEl('poDiscountTypeFixed');
+        if (radPct) radPct.checked = usePercent;
+        if (radAmt) radAmt.checked = !usePercent;
+        setVal('poDiscountPercentage', pct);
+        setVal('poDiscountAmount', amt);
+        toggleDiscountInputs(usePercent ? 'percent' : 'fixed');
+
+        // Restore transaction type selection
+        setVal('poTransactionType', record.transaction_type || '');
+        currentSupplierVatRegistered = Boolean(record.supplier_vat_registered);
+        syncVatBadge();
+        const applyBtn = feeEl('poApplyTransactionTypeBtn');
+        if (applyBtn) applyBtn.disabled = !(record.transaction_type);
+
+        // Always derive items subtotal from the actual line amounts, not total_amount
+        // (total_amount is updated to gross_total by save_fees and would double-add fees).
+        _itemsSubtotalForFees = 0;
+        (record.lines || []).forEach((line) => {
+            _itemsSubtotalForFees += Math.round(Number(line.amount || 0) * 100) / 100;
+        });
+        _itemsSubtotalForFees = Math.round(_itemsSubtotalForFees * 100) / 100;
+        updateLiveCalcPanel();
+    }
+
+    function syncVatBadge() {
+        const wrap = feeEl('poSupplierVatBadgeWrap');
+        if (wrap) wrap.hidden = !currentSupplierVatRegistered;
+    }
+
+    function toggleDiscountInputs(type) {
+        const pctWrap = feeEl('poDiscountPctWrap');
+        const amtWrap = feeEl('poDiscountAmtWrap');
+        if (pctWrap) pctWrap.style.display = type === 'percent' ? '' : 'none';
+        if (amtWrap) amtWrap.style.display = type === 'fixed'   ? '' : 'none';
+    }
+
+    function validateFeeInputs() {
+        const pctEl  = feeEl('poDiscountPercentage');
+        const errEl  = feeEl('poDiscountPctError');
+        const pct    = Number(pctEl ? pctEl.value : 0);
+        const radPct = feeEl('poDiscountTypePercent');
+        if (radPct && radPct.checked && (pct < 0 || pct > 100)) {
+            if (errEl) errEl.hidden = false;
+            if (pctEl) pctEl.focus();
+            return false;
+        }
+        if (errEl) errEl.hidden = true;
+        return true;
+    }
+
+    function collectFeePayload() {
+        const discType = document.querySelector('input[name="poDiscountType"]:checked');
+        const usePercent = !discType || discType.value === 'percent';
+        return {
+            purchase_order_id:        String(currentPoId),
+            shipping_fee:             String(feeNum('poShippingFee')),
+            shipping_method:          (feeEl('poShippingMethod') ? feeEl('poShippingMethod').value : ''),
+            shipping_address:         (feeEl('poShippingAddress') ? feeEl('poShippingAddress').value.trim() : ''),
+            handling_fee:             String(feeNum('poHandlingFee')),
+            insurance_fee:            String(feeNum('poInsuranceFee')),
+            installation_fee:         String(feeNum('poInstallationFee')),
+            other_charges:            String(feeNum('poOtherCharges')),
+            other_charges_description:(feeEl('poOtherChargesDesc') ? feeEl('poOtherChargesDesc').value.trim() : ''),
+            discount_percentage:      usePercent ? String(feeNum('poDiscountPercentage')) : '0',
+            discount_amount:          usePercent ? '0' : String(feeNum('poDiscountAmount')),
+            discount_reason:          (feeEl('poDiscountReason') ? feeEl('poDiscountReason').value.trim() : ''),
+            payment_terms:            (feeEl('poPaymentTerms') ? feeEl('poPaymentTerms').value : ''),
+            payment_due_date:         (feeEl('poPaymentDueDate') ? feeEl('poPaymentDueDate').value : ''),
+        };
+    }
+
+    let feesSaving = false;
+    let txTypeSaving = false;
+
+    async function applyTransactionType() {
+        if (!isComptroller || currentPoId <= 0 || txTypeSaving) return;
+        const txSelect = feeEl('poTransactionType');
+        const txType   = txSelect ? txSelect.value : '';
+        if (!txType) {
+            showToast('Please select a transaction type first.');
+            return;
+        }
+        txTypeSaving = true;
+        const applyBtn = feeEl('poApplyTransactionTypeBtn');
+        if (applyBtn) { applyBtn.disabled = true; applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Applying…'; }
+
+        try {
+            const body = new FormData();
+            body.append('action', 'save_transaction_type');
+            body.append('purchase_order_id', String(currentPoId));
+            body.append('transaction_type', txType);
+            const res  = await fetch(api, { method: 'POST', credentials: 'same-origin', body });
+            const data = await res.json().catch(() => ({}));
+            if (!data.success) throw new Error(data.message || 'Failed to apply transaction type.');
+
+            populateTaxRowsFromSaved(data.taxes || []);
+            if (Number(data.taxable_amount) > 0) {
+                currentGrossAmount = Number(data.taxable_amount);
+                updateTaxGrossDisplay(currentGrossAmount);
+                updateCalcPanelTaxableDisplay(currentGrossAmount);
+            }
+            recalculateTaxBreakdown();
+            updateLiveCalcPanel();
+            const msg = txType === 'exempt'
+                ? 'No withholding applied — supplier marked as exempt.'
+                : (data.message || 'Tax rows applied.');
+            showToast(msg, 'success');
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : 'Could not apply transaction type.');
+        } finally {
+            txTypeSaving = false;
+            if (applyBtn) { applyBtn.disabled = false; applyBtn.innerHTML = '<i class="fas fa-bolt"></i> Apply'; }
+        }
+    }
+
+    async function saveFees() {
+        if (!isComptroller || currentPoId <= 0 || feesSaving) return;
+        if (!validateFeeInputs()) return;
+
+        feesSaving = true;
+        const saveBtn = feeEl('poFeesSaveBtn');
+        const hint    = feeEl('poFeesSavedHint');
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+
+        try {
+            const data = await apiPost('save_fees', collectFeePayload());
+            const taxable = Number(data.taxable_amount || 0);
+            currentGrossAmount = taxable > 0 ? taxable : currentGrossAmount;
+            _itemsSubtotalForFees = Number(data.items_subtotal || 0);
+            updateTaxGrossDisplay(currentGrossAmount);
+            updateLiveCalcPanel();
+            recalculateTaxBreakdown();
+
+            if (hint) {
+                hint.textContent = 'Saved at ' + formatSavedAtLabel(new Date());
+                hint.hidden = false;
+            }
+            showToast(data.message || 'Fees saved.', 'success');
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : 'Could not save fees.');
+        } finally {
+            feesSaving = false;
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-floppy-disk"></i> Save fees &amp; discounts'; }
+        }
+    }
+
+    function initFeesUi() {
+        if (!isComptroller) return;
+
+        // Accordion toggles
+        document.querySelectorAll('.po-fees-panel-toggle').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const bodyId = btn.getAttribute('aria-controls');
+                const body   = bodyId ? document.getElementById(bodyId) : null;
+                const open   = btn.getAttribute('aria-expanded') === 'true';
+                btn.setAttribute('aria-expanded', String(!open));
+                if (body) body.hidden = open;
+                btn.classList.toggle('is-open', !open);
+            });
+        });
+
+        // Fee / discount inputs → live update
+        const feeInputIds = [
+            'poShippingFee','poHandlingFee','poInsuranceFee','poInstallationFee','poOtherCharges',
+            'poDiscountPercentage','poDiscountAmount','poShippingMethod','poPaymentTerms','poPaymentDueDate',
+        ];
+        feeInputIds.forEach((id) => {
+            const el = feeEl(id);
+            if (el) el.addEventListener('input', updateLiveCalcPanel);
+            if (el) el.addEventListener('change', updateLiveCalcPanel);
+        });
+
+        // Discount type radio
+        document.querySelectorAll('input[name="poDiscountType"]').forEach((radio) => {
+            radio.addEventListener('change', () => {
+                toggleDiscountInputs(radio.value);
+                updateLiveCalcPanel();
+            });
+        });
+
+        // Save button
+        const saveBtn = feeEl('poFeesSaveBtn');
+        if (saveBtn) saveBtn.addEventListener('click', () => void saveFees());
+
+        // Transaction type select → enable/disable Apply button
+        const txSelect = feeEl('poTransactionType');
+        const applyBtn = feeEl('poApplyTransactionTypeBtn');
+        if (txSelect && applyBtn) {
+            txSelect.addEventListener('change', () => {
+                applyBtn.disabled = txSelect.value === '';
+                updateLiveCalcPanel();
+            });
+            applyBtn.addEventListener('click', () => void applyTransactionType());
+        }
+
+        // Open tax panel by default (add is-open class on the toggle)
+        const taxPanelToggle = document.querySelector('#poPanelTax .po-fees-panel-toggle');
+        if (taxPanelToggle) taxPanelToggle.classList.add('is-open');
+
+        // Lock fee form (shipping/fees/discounts) when tax is finalized; tax panel inputs handled separately
+        applyFeeReadOnly = (readOnly) => {
+            document.querySelectorAll(
+                '#poPanelShipping input, #poPanelShipping select, #poPanelShipping textarea,' +
+                '#poPanelAdditional input, #poPanelAdditional select, #poPanelAdditional textarea,' +
+                '#poPanelDiscount input, #poPanelDiscount select,' +
+                '#poPanelPayment input, #poPanelPayment select'
+            ).forEach((el) => { el.disabled = readOnly; });
+            if (saveBtn) saveBtn.disabled = readOnly;
+        };
+    }
+
+    let applyFeeReadOnly = (_readOnly) => {};
+
+    // Patch applyTaxWorkflowUi to also lock/unlock fee form
+    const _origApplyTaxWorkflowUi = applyTaxWorkflowUi;
+    // (applyTaxWorkflowUi is defined earlier and referenced as a plain function — we shadow-wrap it)
+    window._poApplyTaxWorkflowUi = applyTaxWorkflowUi;
+
+    // Override recalculate to also refresh the calc panel tax rows
+    const _origRecalculate = recalculateTaxBreakdown;
+    // The calc panel is already updated inside the patched recalculateTaxBreakdown above via updateCalcPanelTaxRows.
+
     init();
+    if (isComptroller) initFeesUi();
 })();

@@ -57,12 +57,7 @@ function countGsdVerification(PDO $db, int $userId): int
         "SELECT COUNT(DISTINCT cva.request_id) FROM canvass_verification_approval cva
             WHERE LOWER(TRIM(COALESCE(cva.canvas_status, 'pending'))) = 'accept'
               AND LOWER(TRIM(COALESCE(cva.gsd_status, 'pending'))) = 'pending'
-              AND EXISTS (
-                  SELECT 1 FROM requisition_canvass_detail rcd
-                  WHERE rcd.request_id = cva.request_id
-                    AND LOWER(TRIM(COALESCE(rcd.canvass_submission_status, 'draft'))) = 'submitted'
-                  LIMIT 1
-              )"
+              AND LOWER(TRIM(COALESCE(cva.canvas_submission_status, 'draft'))) = 'submitted'"
     );
     $stmt->execute();
 
@@ -76,12 +71,7 @@ function countCanvasserAssigned(PDO $db, int $userId): int
             WHERE cva.canvas_assignee_user_id = ?
               AND LOWER(TRIM(COALESCE(cva.canvas_status, 'pending'))) IN ('', 'pending')
               AND LOWER(TRIM(COALESCE(cva.canvas_status, 'pending'))) != 'reject'
-              AND EXISTS (
-                  SELECT 1 FROM requisition_canvass_detail rcd
-                  WHERE rcd.request_id = cva.request_id
-                    AND LOWER(TRIM(COALESCE(rcd.canvass_submission_status, 'draft'))) = 'submitted'
-                  LIMIT 1
-              )"
+              AND LOWER(TRIM(COALESCE(cva.canvas_submission_status, 'draft'))) = 'submitted'"
     );
     $stmt->execute([$userId]);
 
@@ -94,12 +84,7 @@ function countComptrollerPending(PDO $db, int $userId): int
         "SELECT COUNT(DISTINCT cva.request_id) FROM canvass_verification_approval cva
             WHERE LOWER(TRIM(COALESCE(cva.comp_status, 'pending'))) = 'pending'
               AND LOWER(TRIM(COALESCE(cva.gsd_status, 'pending'))) = 'accept'
-              AND EXISTS (
-                  SELECT 1 FROM requisition_canvass_detail rcd
-                  WHERE rcd.request_id = cva.request_id
-                    AND LOWER(TRIM(COALESCE(rcd.canvass_submission_status, 'draft'))) = 'submitted'
-                  LIMIT 1
-              )"
+              AND LOWER(TRIM(COALESCE(cva.canvas_submission_status, 'draft'))) = 'submitted'"
     );
     $stmt->execute();
 
@@ -112,12 +97,7 @@ function countPresidentPending(PDO $db, int $userId): int
         "SELECT COUNT(DISTINCT cva.request_id) FROM canvass_verification_approval cva
             WHERE LOWER(TRIM(COALESCE(cva.pres_status, 'pending'))) = 'pending'
               AND LOWER(TRIM(COALESCE(cva.comp_status, 'pending'))) = 'accept'
-              AND EXISTS (
-                  SELECT 1 FROM requisition_canvass_detail rcd
-                  WHERE rcd.request_id = cva.request_id
-                    AND LOWER(TRIM(COALESCE(rcd.canvass_submission_status, 'draft'))) = 'submitted'
-                  LIMIT 1
-              )"
+              AND LOWER(TRIM(COALESCE(cva.canvas_submission_status, 'draft'))) = 'submitted'"
     );
     $stmt->execute();
 

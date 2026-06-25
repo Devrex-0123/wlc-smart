@@ -76,28 +76,40 @@ function poAssertInventoryManager(PDO $db, int $userId): void
     }
 }
 
+/**
+ * BIR EWT rates keyed by normalized transaction type slug.
+ * @return array<string, array{label: string, rate: float}>
+ */
+function poEwtTransactionTypePresets(): array
+{
+    return [
+        'goods'                  => ['label' => 'Purchase of Goods / Supplies',       'rate' => 0.01],
+        'services'               => ['label' => 'Purchase of Services',               'rate' => 0.02],
+        'professional_small'     => ['label' => 'Professional Fees (≤ ₱3M income)',   'rate' => 0.10],
+        'professional_large'     => ['label' => 'Professional Fees (Corp / > ₱3M)',   'rate' => 0.15],
+        'rental'                 => ['label' => 'Rental',                             'rate' => 0.05],
+        'construction'           => ['label' => 'Construction / Contractor',          'rate' => 0.02],
+        'media'                  => ['label' => 'Media / Talent / Entertainment',     'rate' => 0.15],
+    ];
+}
+
 /** @return array<string, float> */
 function poEwtTransactionRateMap(): array
 {
-    return [
-        'purchase of goods' => 0.01,
-        'purchase of services' => 0.02,
-        'professional fees' => 0.05,
-        'professional fees (high income)' => 0.1,
-    ];
+    $out = [];
+    foreach (poEwtTransactionTypePresets() as $slug => $info) {
+        $out[$slug] = $info['rate'];
+    }
+
+    return $out;
 }
 
 function poNormalizeEwtTransactionType(string $value): string
 {
-    $map = [
-        'purchase_of_goods' => 'Purchase of goods',
-        'purchase_of_services' => 'Purchase of services',
-        'professional_fees' => 'Professional fees',
-        'professional_fees_high' => 'Professional fees (high income)',
-    ];
+    $presets = poEwtTransactionTypePresets();
     $trim = trim($value);
-    if (isset($map[$trim])) {
-        return $map[$trim];
+    if (isset($presets[$trim])) {
+        return $presets[$trim]['label'];
     }
 
     return poSanitizeString($trim, 100);
@@ -214,7 +226,8 @@ function poNormalizeTaxRows(mixed $taxesRaw, float $grossAmount): array
 function poFetchTaxRecord(PDO $db, int $poId): array
 {
     $headerStmt = $db->prepare(
-        'SELECT net_payable, tax_computed, tax_status, tax_finalized_at, status
+        'SELECT net_payable, tax_computed, tax_status, tax_finalized_at, status,
+                total_amount, taxable_amount
          FROM purchase_orders WHERE id = ? AND deleted_at IS NULL LIMIT 1'
     );
     $headerStmt->execute([$poId]);
@@ -239,6 +252,11 @@ function poFetchTaxRecord(PDO $db, int $poId): array
         $computedBy = !empty($first['computed_by']) ? (int) $first['computed_by'] : null;
         $computedAt = $first['computed_at'] ?? null;
     }
+
+    $rawTaxable = $header['taxable_amount'] ?? null;
+    $grossForTax = ($rawTaxable !== null && (float) $rawTaxable > 0)
+        ? round((float) $rawTaxable, 2)
+        : round((float) ($header['total_amount'] ?? 0), 2);
 
     return [
         'taxes' => array_map(static function (array $row): array {
@@ -267,6 +285,7 @@ function poFetchTaxRecord(PDO $db, int $poId): array
         'po_status' => (string) ($header['status'] ?? 'pending'),
         'computed_by' => $computedBy,
         'computed_at' => $computedAt,
+        'gross_amount' => $grossForTax,
     ];
 }
 
@@ -346,7 +365,11 @@ function poPrepareTaxSavePayload(PDO $db, int $poId, int $userId, mixed $taxesRa
         poSendJson(['success' => false, 'message' => 'Tax computation is finalized. Reopen for edit before making changes.']);
     }
 
-    $grossAmount = round((float) ($header['total_amount'] ?? 0), 2);
+    // Use taxable_amount (after fees + discounts) when available; fall back to raw total_amount.
+    $rawTaxable = $header['taxable_amount'] ?? null;
+    $grossAmount = ($rawTaxable !== null && (float) $rawTaxable > 0)
+        ? round((float) $rawTaxable, 2)
+        : round((float) ($header['total_amount'] ?? 0), 2);
     $taxRows = poNormalizeTaxRows($taxesRaw, $grossAmount);
     $notes = poSanitizeString($notesRaw ?? '', 65535);
     $netPayable = round((float) $netPayableRaw, 2);
@@ -526,11 +549,12 @@ function poGenerateNextNumber(PDO $db): string
 
 function poFetchById(PDO $db, int $poId, bool $includeDeleted = false): ?array
 {
-    $sql = 'SELECT * FROM purchase_orders WHERE id = ?';
-    if (!$includeDeleted) {
-        $sql .= ' AND deleted_at IS NULL';
-    }
-    $sql .= ' LIMIT 1';
+    $deletedFilter = $includeDeleted ? '' : ' AND po.deleted_at IS NULL';
+    $sql = "SELECT po.*, COALESCE(s.vat_registered, 0) AS supplier_vat_registered
+            FROM purchase_orders po
+            LEFT JOIN suppliers s ON s.supplier_id = po.supplier_id
+            WHERE po.id = ?{$deletedFilter}
+            LIMIT 1";
 
     $stmt = $db->prepare($sql);
     $stmt->execute([$poId]);
@@ -642,6 +666,24 @@ function poFormatRecord(PDO $db, array $header, array $lines): array
         'approved_at' => $header['approved_at'] ?? null,
         'date_issued' => $dateIssued,
         'created_at' => $header['created_at'] ?? null,
+        'shipping_fee'              => round((float) ($header['shipping_fee']              ?? 0), 2),
+        'shipping_method'           => (string) ($header['shipping_method']           ?? ''),
+        'shipping_address'          => (string) ($header['shipping_address']          ?? ''),
+        'handling_fee'              => round((float) ($header['handling_fee']              ?? 0), 2),
+        'insurance_fee'             => round((float) ($header['insurance_fee']             ?? 0), 2),
+        'installation_fee'          => round((float) ($header['installation_fee']          ?? 0), 2),
+        'other_charges'             => round((float) ($header['other_charges']             ?? 0), 2),
+        'other_charges_description' => (string) ($header['other_charges_description'] ?? ''),
+        'discount_amount'           => round((float) ($header['discount_amount']           ?? 0), 2),
+        'discount_percentage'       => round((float) ($header['discount_percentage']       ?? 0), 2),
+        'discount_reason'           => (string) ($header['discount_reason']           ?? ''),
+        'taxable_amount'            => isset($header['taxable_amount']) && $header['taxable_amount'] !== null
+            ? round((float) $header['taxable_amount'], 2)
+            : null,
+        'payment_terms'             => (string) ($header['payment_terms']             ?? ''),
+        'payment_due_date'          => $header['payment_due_date'] ?? null,
+        'transaction_type'          => (string) ($header['transaction_type']          ?? ''),
+        'supplier_vat_registered'   => (int) ($header['supplier_vat_registered'] ?? 0) === 1,
         'lines' => array_map(static function (array $line): array {
             return [
                 'id' => (int) ($line['id'] ?? 0),
@@ -1175,9 +1217,11 @@ if ($action === 'fetch_tax') {
         'tax_status' => $saved['tax_status'],
         'tax_finalized_at' => $saved['tax_finalized_at'],
         'po_status' => $saved['po_status'],
-        'gross_amount' => round((float) ($record['header']['total_amount'] ?? 0), 2),
+        'gross_amount' => $saved['gross_amount'],
         'computed_by' => $saved['computed_by'],
         'computed_at' => $saved['computed_at'],
+        'transaction_type' => (string) ($record['header']['transaction_type'] ?? ''),
+        'supplier_vat_registered' => (int) ($record['header']['supplier_vat_registered'] ?? 0) === 1,
     ]);
 }
 
@@ -1276,6 +1320,576 @@ if ($action === 'delete') {
     );
     $upd->execute([$poId]);
     poSendJson(['success' => true, 'message' => 'Purchase order deleted.']);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// get_tax_presets  – returns transaction type list + VAT withholding rate
+// ─────────────────────────────────────────────────────────────────────────────
+if ($action === 'get_tax_presets') {
+    poSendJson([
+        'success'             => true,
+        'transaction_types'   => poEwtTransactionTypePresets(),
+        'vat_withholding_rate' => 0.05,
+    ]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// save_transaction_type
+//
+// Saves the selected transaction type onto the PO and rebuilds the tax rows:
+//   - Deletes all existing (non-finalized) tax rows for the PO
+//   - Inserts an EWT row using the rate for the chosen transaction type
+//   - If supplier is VAT-registered, inserts a 5% VAT withholding row
+//   - Updates net_payable on purchase_orders
+//
+// POST params: purchase_order_id, transaction_type
+// ─────────────────────────────────────────────────────────────────────────────
+if ($action === 'save_transaction_type') {
+    poAssertComptroller($db, $userId);
+
+    $poId = (int) ($_POST['purchase_order_id'] ?? 0);
+    if ($poId <= 0) {
+        poSendJson(['success' => false, 'message' => 'purchase_order_id is required.']);
+    }
+
+    $record = poFetchById($db, $poId);
+    if (!$record) {
+        poSendJson(['success' => false, 'message' => 'Purchase order not found.']);
+    }
+
+    $header = $record['header'];
+    poAssertPresidentApprovedPo($header);
+
+    $taxStatus = strtolower(trim((string) ($header['tax_status'] ?? 'draft')));
+    if ($taxStatus === 'finalized') {
+        poSendJson(['success' => false, 'message' => 'Tax is finalized and cannot be changed.']);
+    }
+
+    $txTypeRaw = trim((string) ($_POST['transaction_type'] ?? ''));
+    $presets    = poEwtTransactionTypePresets();
+    $isExempt   = ($txTypeRaw === 'exempt');
+    if ($txTypeRaw === '' || (!$isExempt && !isset($presets[$txTypeRaw]))) {
+        poSendJson(['success' => false, 'message' => 'Invalid transaction type.']);
+    }
+
+    $taxableAmount = isset($header['taxable_amount']) && $header['taxable_amount'] !== null
+        ? round((float) $header['taxable_amount'], 2)
+        : round((float) ($header['total_amount'] ?? 0), 2);
+
+    $supplierVatRegistered = (int) ($header['supplier_vat_registered'] ?? 0) === 1;
+
+    $db->beginTransaction();
+    try {
+        // Save transaction_type on PO header.
+        $db->prepare(
+            'UPDATE purchase_orders SET transaction_type = ?, updated_at = NOW() WHERE id = ?'
+        )->execute([$txTypeRaw, $poId]);
+
+        // Delete existing draft tax rows.
+        $db->prepare(
+            'DELETE FROM purchase_order_taxes WHERE purchase_order_id = ?'
+        )->execute([$poId]);
+
+        $totalDeductions = 0;
+
+        if (!$isExempt) {
+            $ewtRate  = $presets[$txTypeRaw]['rate'];
+            $ewtLabel = $presets[$txTypeRaw]['label'];
+
+            // Insert EWT row.
+            $ewtAmount = round($taxableAmount * $ewtRate, 2);
+            $db->prepare(
+                'INSERT INTO purchase_order_taxes
+                 (purchase_order_id, tax_type, transaction_type, rate, amount_deducted, label, supplier_vat_registered, computed_by, computed_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+            )->execute([
+                $poId, 'ewt', $txTypeRaw, $ewtRate, $ewtAmount,
+                "EWT – {$ewtLabel}",
+                $supplierVatRegistered ? 1 : 0,
+                $userId,
+            ]);
+            $totalDeductions += $ewtAmount;
+
+            // Insert VAT withholding row if supplier is VAT-registered.
+            if ($supplierVatRegistered) {
+                $vatRate   = 0.05;
+                $vatAmount = round($taxableAmount * $vatRate, 2);
+                $db->prepare(
+                    'INSERT INTO purchase_order_taxes
+                     (purchase_order_id, tax_type, transaction_type, rate, amount_deducted, label, supplier_vat_registered, computed_by, computed_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+                )->execute([
+                    $poId, 'vat_withholding', $txTypeRaw, $vatRate, $vatAmount,
+                    'VAT Withholding (5% Final)',
+                    1,
+                    $userId,
+                ]);
+                $totalDeductions += $vatAmount;
+            }
+        }
+
+        $netPayable = round($taxableAmount - $totalDeductions, 2);
+
+        // Update net_payable on the PO header.
+        $db->prepare(
+            'UPDATE purchase_orders SET net_payable = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL'
+        )->execute([$netPayable, $poId]);
+
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        poSendJson(['success' => false, 'message' => 'Failed to save transaction type: ' . $e->getMessage()]);
+    }
+
+    // Return fresh tax rows so JS can repopulate the table.
+    $saved = poFetchTaxRecord($db, $poId);
+    poSendJson([
+        'success'          => true,
+        'message'          => 'Transaction type saved and tax rows rebuilt.',
+        'taxes'            => $saved['taxes'],
+        'net_payable'      => $netPayable,
+        'taxable_amount'   => $taxableAmount,
+        'transaction_type' => $txTypeRaw,
+    ]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// save_fees
+//
+// Persists shipping, additional charges, discount, and payment term fields.
+// Recomputes total_amount (= gross_total) and taxable_amount.
+// If existing tax rows exist, net_payable is refreshed against taxable_amount.
+//
+// POST params: purchase_order_id, shipping_fee, shipping_method, shipping_address,
+//   handling_fee, insurance_fee, installation_fee, other_charges,
+//   other_charges_description, discount_amount, discount_percentage,
+//   discount_reason, payment_terms, payment_due_date
+// ─────────────────────────────────────────────────────────────────────────────
+if ($action === 'save_fees') {
+    poAssertComptroller($db, $userId);
+
+    $poId = (int) ($_POST['purchase_order_id'] ?? 0);
+    if ($poId <= 0) {
+        poSendJson(['success' => false, 'message' => 'purchase_order_id is required.']);
+    }
+
+    $record = poFetchById($db, $poId);
+    if (!$record) {
+        poSendJson(['success' => false, 'message' => 'Purchase order not found.']);
+    }
+
+    $taxStatus = strtolower(trim((string) ($record['header']['tax_status'] ?? 'draft')));
+    if ($taxStatus === 'finalized') {
+        poSendJson(['success' => false, 'message' => 'Cannot update fees after tax computation is finalized. Reopen first.']);
+    }
+
+    // ── Sanitize inputs ──────────────────────────────────────────────────────
+    $shippingFee     = max(0.0, round((float) ($_POST['shipping_fee']     ?? 0), 2));
+    $handlingFee     = max(0.0, round((float) ($_POST['handling_fee']     ?? 0), 2));
+    $insuranceFee    = max(0.0, round((float) ($_POST['insurance_fee']    ?? 0), 2));
+    $installationFee = max(0.0, round((float) ($_POST['installation_fee'] ?? 0), 2));
+    $otherCharges    = max(0.0, round((float) ($_POST['other_charges']    ?? 0), 2));
+
+    $discountPct = min(100.0, max(0.0, round((float) ($_POST['discount_percentage'] ?? 0), 2)));
+    $discountAmt = max(0.0, round((float) ($_POST['discount_amount'] ?? 0), 2));
+
+    $shippingMethod           = poSanitizeString($_POST['shipping_method']           ?? '', 100);
+    $shippingAddress          = poSanitizeString($_POST['shipping_address']          ?? '', 65535);
+    $otherChargesDescription  = poSanitizeString($_POST['other_charges_description'] ?? '', 255);
+    $discountReason           = poSanitizeString($_POST['discount_reason']           ?? '', 255);
+    $paymentTerms             = poSanitizeString($_POST['payment_terms']             ?? '', 100);
+
+    $dueDateRaw  = trim((string) ($_POST['payment_due_date'] ?? ''));
+    $paymentDueDate = ($dueDateRaw !== '' && strtotime($dueDateRaw) !== false)
+        ? date('Y-m-d', strtotime($dueDateRaw))
+        : null;
+
+    // ── Compute totals ────────────────────────────────────────────────────────
+    $linesSumStmt = $db->prepare(
+        'SELECT COALESCE(SUM(amount), 0) FROM purchase_order_lines WHERE purchase_order_id = ?'
+    );
+    $linesSumStmt->execute([$poId]);
+    $itemsSubtotal = round((float) $linesSumStmt->fetchColumn(), 2);
+
+    $totalFees  = round($shippingFee + $handlingFee + $insuranceFee + $installationFee + $otherCharges, 2);
+    $grossTotal = round($itemsSubtotal + $totalFees, 2);
+
+    // Percentage discount takes priority over fixed amount when both are set.
+    $calculatedDiscount = $discountPct > 0
+        ? round($grossTotal * $discountPct / 100, 2)
+        : min($discountAmt, $grossTotal);
+
+    $taxableAmount = round($grossTotal - $calculatedDiscount, 2);
+
+    // ── Persist ──────────────────────────────────────────────────────────────
+    $upd = $db->prepare(
+        'UPDATE purchase_orders
+         SET shipping_fee              = ?,
+             shipping_method           = ?,
+             shipping_address          = ?,
+             handling_fee              = ?,
+             insurance_fee             = ?,
+             installation_fee          = ?,
+             other_charges             = ?,
+             other_charges_description = ?,
+             discount_amount           = ?,
+             discount_percentage       = ?,
+             discount_reason           = ?,
+             taxable_amount            = ?,
+             payment_terms             = ?,
+             payment_due_date          = ?,
+             total_amount              = ?,
+             mode_of_payment           = ?,
+             updated_at                = NOW()
+         WHERE id = ? AND deleted_at IS NULL'
+    );
+    $upd->execute([
+        $shippingFee,
+        $shippingMethod !== ''          ? $shippingMethod          : null,
+        $shippingAddress !== ''         ? $shippingAddress         : null,
+        $handlingFee,
+        $insuranceFee,
+        $installationFee,
+        $otherCharges,
+        $otherChargesDescription !== '' ? $otherChargesDescription : null,
+        $discountAmt,
+        $discountPct,
+        $discountReason !== ''          ? $discountReason          : null,
+        $taxableAmount,
+        $paymentTerms !== ''            ? $paymentTerms            : null,
+        $paymentDueDate,
+        $grossTotal,
+        poResolveModeOfPaymentFromTotal($grossTotal),
+        $poId,
+    ]);
+
+    // Refresh net_payable if tax rows already exist.
+    $taxSumStmt = $db->prepare(
+        'SELECT COALESCE(SUM(amount_deducted), 0) FROM purchase_order_taxes WHERE purchase_order_id = ?'
+    );
+    $taxSumStmt->execute([$poId]);
+    $taxTotal  = round((float) $taxSumStmt->fetchColumn(), 2);
+    $netPayable = round($taxableAmount - $taxTotal, 2);
+
+    if ($taxTotal > 0) {
+        $db->prepare(
+            'UPDATE purchase_orders SET net_payable = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL'
+        )->execute([$netPayable, $poId]);
+    }
+
+    poSendJson([
+        'success'             => true,
+        'message'             => 'Fees and discounts saved.',
+        'items_subtotal'      => $itemsSubtotal,
+        'total_fees'          => $totalFees,
+        'gross_total'         => $grossTotal,
+        'calculated_discount' => $calculatedDiscount,
+        'taxable_amount'      => $taxableAmount,
+        'tax_total'           => $taxTotal,
+        'net_payable'         => $netPayable,
+    ]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// generate_from_comptroller_approval
+//
+// Triggered after the Comptroller fully approves a requisition.
+// Reads requisition_line_awards (comptroller_status IN ('fully_approved','deferred'))
+// joined with requisition_line_quotes (the awarded supplier's price) and
+// requisition_line (item details). Groups results by supplier_id and creates
+// one Purchase Order per supplier inside a single wrapping transaction.
+//
+// POST params:
+//   request_id       – requisition_item.request_id (required)
+//   ewt_rate         – optional float, e.g. 0.01 for 1% EWT (default: 0.01)
+//   ewt_type         – optional string key (default: 'Purchase of goods')
+//   overwrite        – '1' to delete existing draft POs for this request first
+// ─────────────────────────────────────────────────────────────────────────────
+if ($action === 'generate_from_comptroller_approval') {
+
+    // ── 1. Authorisation ────────────────────────────────────────────────────
+    if (!poIsComptrollerRole($roleLc) && !poIsPresidentRole($roleLc)) {
+        poSendJson(['success' => false, 'message' => 'Only the Comptroller may generate purchase orders from an approval.']);
+    }
+
+    $requestId = (int) ($_POST['request_id'] ?? $_GET['request_id'] ?? 0);
+    if ($requestId <= 0) {
+        poSendJson(['success' => false, 'message' => 'request_id is required.']);
+    }
+
+    // ── 2. Validate requisition exists ───────────────────────────────────────
+    $reqStmt = $db->prepare(
+        'SELECT r.request_id, r.user_id, r.facility_id, r.purpose,
+                u.full_name, u.Email,
+                f.room, f.laboratory, f.building
+         FROM requisition_item r
+         LEFT JOIN user u ON u.user_id = r.user_id
+         LEFT JOIN facilities f ON f.facility_id = r.facility_id
+         WHERE r.request_id = ?
+         LIMIT 1'
+    );
+    $reqStmt->execute([$requestId]);
+    $reqHeader = $reqStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$reqHeader) {
+        poSendJson(['success' => false, 'message' => 'Requisition not found.']);
+    }
+
+    // ── 3. Fetch awarded lines (fully_approved + deferred with awarded_qty > 0) ──
+    //
+    // Join path:
+    //   requisition_line_awards  (rla)
+    //     → requisition_line     (rl)   – item name / brand / unit_type
+    //     → requisition_line_quotes (rlq) – winning price (match on line + awarded supplier)
+    //     → suppliers            (s)    – supplier name / tin
+    //
+    // We include 'deferred' rows where awarded_qty > 0 (partial approvals):
+    // those items should still appear on the PO for the approved portion.
+    $awardedStmt = $db->prepare(
+        "SELECT
+            rla.requisition_line_id,
+            rla.supplier_id,
+            rla.awarded_qty,
+            rla.deferred_qty,
+            rla.comptroller_status,
+            rl.item_name,
+            rl.item_brand,
+            rl.item_category,
+            rl.unit_type,
+            rl.quantity        AS requested_qty,
+            rlq.quoted_unit_price,
+            rlq.discount_percent,
+            s.supplier_name,
+            s.tin              AS supplier_tin
+         FROM requisition_line_awards rla
+         INNER JOIN requisition_line rl
+            ON rl.requisition_line_id = rla.requisition_line_id
+         LEFT JOIN requisition_line_quotes rlq
+            ON rlq.requisition_line_id = rla.requisition_line_id
+           AND rlq.supplier_id         = rla.supplier_id
+         LEFT JOIN suppliers s
+            ON s.supplier_id = rla.supplier_id
+         WHERE rl.request_id = ?
+           AND rla.awarded_qty > 0
+           AND rla.comptroller_status IN ('fully_approved', 'deferred')
+         ORDER BY rla.supplier_id ASC, rl.sort_order ASC, rl.requisition_line_id ASC"
+    );
+    $awardedStmt->execute([$requestId]);
+    $awardedRows = $awardedStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if ($awardedRows === []) {
+        poSendJson([
+            'success' => false,
+            'message' => 'No fully-approved or partially-approved awarded lines found for this requisition.',
+        ]);
+    }
+
+    // ── 4. Group awarded lines by supplier ───────────────────────────────────
+    /** @var array<int, array{supplier_name: string, supplier_tin: ?string, lines: list<array<string,mixed>>}> */
+    $bySupplier = [];
+    foreach ($awardedRows as $row) {
+        $supplierId = (int) ($row['supplier_id'] ?? 0);
+        if ($supplierId <= 0) {
+            continue;
+        }
+
+        if (!isset($bySupplier[$supplierId])) {
+            $bySupplier[$supplierId] = [
+                'supplier_name' => poSanitizeString($row['supplier_name'] ?? '', 100),
+                'supplier_tin'  => cwirmsNormalizeSupplierTin($row['supplier_tin'] ?? null),
+                'lines'         => [],
+            ];
+        }
+
+        $awardedQty    = max(0, (int) ($row['awarded_qty'] ?? 0));
+        $rawPrice      = $row['quoted_unit_price'];
+        $unitPrice     = ($rawPrice !== null && is_numeric($rawPrice)) ? round((float) $rawPrice, 2) : 0.0;
+        $discountPct   = isset($row['discount_percent']) && is_numeric($row['discount_percent'])
+            ? (float) $row['discount_percent']
+            : null;
+        $discountFactor = ($discountPct !== null) ? (1 - $discountPct / 100) : 1.0;
+        $effectivePrice = round($unitPrice * $discountFactor, 2);
+        $lineAmount     = round($awardedQty * $effectivePrice, 2);
+
+        $itemName  = trim((string) ($row['item_name'] ?? ''));
+        $brand     = trim((string) ($row['item_brand'] ?? ''));
+        $category  = trim((string) ($row['item_category'] ?? ''));
+        $subParts  = array_values(array_filter([$brand], static fn ($v) => $v !== ''));
+        $subDesc   = $subParts !== [] ? implode(' · ', $subParts) : ($category !== '' ? $category : null);
+
+        $bySupplier[$supplierId]['lines'][] = [
+            'description'     => $itemName !== '' ? $itemName : '—',
+            'sub_description' => $subDesc,
+            'quantity'        => $awardedQty,
+            'unit_price'      => $effectivePrice,
+            'amount'          => $lineAmount,
+        ];
+    }
+
+    if ($bySupplier === []) {
+        poSendJson(['success' => false, 'message' => 'No valid awarded lines could be mapped to a supplier.']);
+    }
+
+    // ── 5. Build shared requester / facility details ──────────────────────────
+    $requesterUserId = (int) ($reqHeader['user_id'] ?? 0);
+    $fullName        = trim((string) ($reqHeader['full_name'] ?? ''));
+    $email           = (string) ($reqHeader['Email'] ?? '');
+    $requestedByName = $fullName !== ''
+        ? $fullName
+        : ($email !== '' ? (explode('@', $email)[0] ?? $email) : 'Requester');
+
+    $room      = trim((string) ($reqHeader['room'] ?? ''));
+    $lab       = trim((string) ($reqHeader['laboratory'] ?? ''));
+    $building  = trim((string) ($reqHeader['building'] ?? ''));
+    $roomOrLab = $room !== '' ? $room : $lab;
+    $location  = $roomOrLab !== '' && $building !== ''
+        ? ($roomOrLab . ' · ' . $building)
+        : ($roomOrLab !== '' ? $roomOrLab : ($building !== '' ? $building : '—'));
+
+    $facilityId = !empty($reqHeader['facility_id']) ? (int) $reqHeader['facility_id'] : null;
+    $purpose    = poSanitizeString($reqHeader['purpose'] ?? '', 65535);
+
+    // ── 6. EWT seed parameters ───────────────────────────────────────────────
+    $allowedEwtRates  = [0.01, 0.02, 0.05, 0.1];
+    $requestedEwtRate = round((float) ($_POST['ewt_rate'] ?? 0.01), 4);
+    $ewtRate          = in_array($requestedEwtRate, $allowedEwtRates, true) ? $requestedEwtRate : 0.01;
+
+    $rawEwtType = poSanitizeString($_POST['ewt_type'] ?? 'Purchase of goods', 100);
+    $ewtType    = $rawEwtType !== '' ? $rawEwtType : 'Purchase of goods';
+
+    // ── 7. Optional overwrite: remove pending draft POs for this request ─────
+    $overwrite = trim((string) ($_POST['overwrite'] ?? '0')) === '1';
+    if ($overwrite) {
+        $existingIds = $db->prepare(
+            "SELECT id FROM purchase_orders
+             WHERE requisition_id = ? AND status = 'pending' AND deleted_at IS NULL"
+        );
+        $existingIds->execute([$requestId]);
+        $toDelete = $existingIds->fetchAll(PDO::FETCH_COLUMN, 0);
+        if ($toDelete !== []) {
+            $delPh  = implode(',', array_fill(0, count($toDelete), '?'));
+            $delStmt = $db->prepare(
+                "UPDATE purchase_orders SET deleted_at = NOW(), updated_at = NOW()
+                 WHERE id IN ($delPh) AND deleted_at IS NULL"
+            );
+            $delStmt->execute($toDelete);
+        }
+    }
+
+    // ── 8. Insert one PO per supplier inside a single transaction ─────────────
+    $db->beginTransaction();
+    $createdPos = [];
+    try {
+        $lineInsertStmt = $db->prepare(
+            'INSERT INTO purchase_order_lines
+             (purchase_order_id, description, sub_description, quantity, unit_price, amount, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+
+        $taxInsertStmt = $db->prepare(
+            'INSERT INTO purchase_order_taxes
+             (purchase_order_id, tax_type, transaction_type, rate, rate_override,
+              amount_deducted, label, supplier_vat_registered, transaction_vat_exempt,
+              notes, computed_by, computed_at)
+             VALUES (?, \'EWT\', ?, ?, 0, ?, NULL, NULL, NULL, NULL, ?, NOW())'
+        );
+
+        foreach ($bySupplier as $supplierId => $supplierGroup) {
+            $lines       = $supplierGroup['lines'];
+            $totalAmount = 0.0;
+            foreach ($lines as $line) {
+                $totalAmount += (float) $line['amount'];
+            }
+            $totalAmount = round($totalAmount, 2);
+
+            $ewtAmount  = round($totalAmount * $ewtRate, 2);
+            $netPayable = round($totalAmount - $ewtAmount, 2);
+            $mode       = poResolveModeOfPaymentFromTotal($totalAmount);
+            $poNumber   = poGenerateNextNumber($db);
+
+            // Insert PO header
+            $poInsert = $db->prepare(
+                'INSERT INTO purchase_orders
+                 (po_number, requisition_id, requested_by_user_id, requested_by_name, facility_id,
+                  location_facility, supplier_id, supplier_name, supplier_tin,
+                  mode_of_payment, purpose_of_request, total_amount, net_payable,
+                  tax_computed, tax_status, status, created_by_user_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, \'draft\', \'pending\', ?)'
+            );
+            $poInsert->execute([
+                $poNumber,
+                $requestId,
+                $requesterUserId > 0 ? $requesterUserId : null,
+                $requestedByName,
+                $facilityId,
+                $location,
+                $supplierId,
+                $supplierGroup['supplier_name'] !== '' ? $supplierGroup['supplier_name'] : '—',
+                $supplierGroup['supplier_tin'],
+                $mode,
+                $purpose !== '' ? $purpose : null,
+                $totalAmount,
+                $netPayable,
+                $userId,
+            ]);
+            $poId = (int) $db->lastInsertId();
+
+            // Insert line items
+            foreach ($lines as $sort => $line) {
+                $lineInsertStmt->execute([
+                    $poId,
+                    $line['description'],
+                    $line['sub_description'],
+                    $line['quantity'],
+                    $line['unit_price'],
+                    $line['amount'],
+                    $sort,
+                ]);
+            }
+
+            // Seed an EWT tax row so the Comptroller can review and adjust before finalising
+            $taxInsertStmt->execute([
+                $poId,
+                $ewtType,
+                $ewtRate,
+                $ewtAmount,
+                $userId,
+            ]);
+
+            $createdPos[] = [
+                'po_id'          => $poId,
+                'po_number'      => $poNumber,
+                'supplier_id'    => $supplierId,
+                'supplier_name'  => $supplierGroup['supplier_name'],
+                'total_amount'   => $totalAmount,
+                'ewt_rate'       => $ewtRate,
+                'ewt_amount'     => $ewtAmount,
+                'net_payable'    => $netPayable,
+            ];
+        }
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        poSendJson([
+            'success' => false,
+            'message' => 'Failed to generate purchase order(s): ' . $e->getMessage(),
+        ]);
+    }
+
+    $poNumbers = array_column($createdPos, 'po_number');
+    $count     = count($createdPos);
+    $message   = $count === 1
+        ? 'Purchase order ' . $poNumbers[0] . ' generated successfully.'
+        : $count . ' purchase orders generated: ' . implode(', ', $poNumbers) . '.';
+
+    poSendJson([
+        'success'          => true,
+        'message'          => $message,
+        'purchase_orders'  => $createdPos,
+        'po_count'         => $count,
+    ]);
 }
 
 poSendJson(['success' => false, 'message' => 'Unknown action.']);

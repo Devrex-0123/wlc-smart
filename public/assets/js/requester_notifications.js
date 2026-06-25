@@ -46,11 +46,12 @@
         list.innerHTML = notifications
             .map((item) => {
                 const unreadClass = item.is_read ? 'is-read' : 'is-unread';
+                const linkAttr = item.link_url ? ` data-link-url="${item.link_url}"` : '';
                 return `
                     <button
                         type="button"
                         class="requester-notification-item ${unreadClass}"
-                        data-notification-id="${item.notification_id}"
+                        data-notification-id="${item.notification_id}"${linkAttr}
                     >
                         <span class="requester-notification-icon" aria-hidden="true">
                             <i class="fas ${iconForType(item.type)}"></i>
@@ -67,8 +68,11 @@
         list.querySelectorAll('.requester-notification-item').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const id = Number(btn.getAttribute('data-notification-id') || 0);
+                const linkUrl = btn.getAttribute('data-link-url') || '';
                 if (id > 0) {
-                    void markRead(id);
+                    void markRead(id, linkUrl);
+                } else if (linkUrl) {
+                    window.location.href = linkUrl;
                 }
             });
         });
@@ -91,7 +95,7 @@
         }
     }
 
-    async function markRead(notificationId) {
+    async function markRead(notificationId, linkUrl) {
         try {
             const res = await fetch(`${API}?action=mark_read`, {
                 method: 'POST',
@@ -107,6 +111,10 @@
                 item.notification_id === notificationId ? { ...item, is_read: true } : item
             );
             setBadgeCount(data.unread_count);
+            if (linkUrl) {
+                window.location.href = linkUrl;
+                return;
+            }
             renderList();
         } catch (err) {
             console.error('Failed to mark notification read:', err);

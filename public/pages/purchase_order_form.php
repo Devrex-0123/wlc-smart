@@ -190,48 +190,259 @@ $todayLabel = date('F j, Y');
                 <span>Comptroller section — visible to comptroller only</span>
             </div>
 
-            <div class="comptroller-section po-no-print" id="comptroller-section" aria-label="Tax and deduction computation" hidden>
+            <div class="comptroller-section po-no-print" id="comptroller-section" aria-label="Purchase order charges and tax computation" hidden>
                 <div class="comptroller-section-header">
                     <div>
-                        <h2 class="comptroller-section-title">Tax &amp; deduction computation</h2>
+                        <h2 class="comptroller-section-title">Charges &amp; Tax Computation</h2>
                         <p class="comptroller-section-subtitle">Saved for audit record · Not printed on official copy</p>
                     </div>
                     <span class="comptroller-tax-badge comptroller-tax-badge--pending" id="poTaxStatusBadge">Pending computation</span>
                 </div>
 
-                <div class="comptroller-tax-table-wrap">
-                    <table class="comptroller-tax-table" id="poTaxTable" aria-label="Tax deductions">
-                        <thead>
-                            <tr>
-                                <th class="tax-table-header">Tax type</th>
-                                <th class="tax-table-header">Rate</th>
-                                <th class="tax-table-header">Amount deducted</th>
-                                <th class="tax-table-header tax-table-header--action">Remove</th>
-                            </tr>
-                        </thead>
-                        <tbody id="poTaxRowsBody"></tbody>
-                    </table>
-                </div>
+                <!-- ── Fees & Discounts ─────────────────────────────────── -->
+                <div class="po-fees-accordion" id="poFeesAccordion">
 
-                <div class="comptroller-tax-quick-add">
-                    <button type="button" class="btn-tax-ewt" id="poTaxAddEwtBtn"><i class="fas fa-plus" aria-hidden="true"></i> EWT</button>
-                    <button type="button" class="btn-tax-vat" id="poTaxAddVatBtn"><i class="fas fa-plus" aria-hidden="true"></i> VAT Withholding</button>
-                    <button type="button" class="btn-tax-other" id="poTaxAddOtherBtn"><i class="fas fa-plus" aria-hidden="true"></i> Other</button>
-                    <button type="button" class="btn-tax-add" id="poTaxAddDeductionBtn"><i class="fas fa-plus" aria-hidden="true"></i> Add deduction</button>
-                </div>
-
-                <div class="comptroller-tax-breakdown" id="poTaxBreakdown" aria-live="polite">
-                    <div class="breakdown-row">
-                        <span>Gross amount</span>
-                        <strong id="poTaxGrossAmount">PHP 0.00</strong>
+                    <!-- Shipping & Delivery -->
+                    <div class="po-fees-panel" id="poPanelShipping">
+                        <button type="button" class="po-fees-panel-toggle" aria-expanded="false" aria-controls="poPanelShippingBody">
+                            <span class="po-fees-panel-icon"><i class="fas fa-truck" aria-hidden="true"></i></span>
+                            <span class="po-fees-panel-label">Shipping &amp; Delivery</span>
+                            <span class="po-fees-panel-summary" id="poShippingSummary"></span>
+                            <i class="fas fa-chevron-down po-fees-chevron" aria-hidden="true"></i>
+                        </button>
+                        <div class="po-fees-panel-body" id="poPanelShippingBody" hidden>
+                            <div class="po-fees-grid">
+                                <div class="po-fees-field">
+                                    <label for="poShippingFee">Shipping Fee (₱)</label>
+                                    <input type="number" id="poShippingFee" class="po-fees-input" min="0" step="0.01" value="0" placeholder="0.00">
+                                </div>
+                                <div class="po-fees-field">
+                                    <label for="poShippingMethod">Shipping Method</label>
+                                    <select id="poShippingMethod" class="po-fees-input">
+                                        <option value="">— Select method —</option>
+                                        <option value="courier">Courier / Door-to-door</option>
+                                        <option value="pickup">Store pickup</option>
+                                        <option value="freight">Freight / Trucking</option>
+                                        <option value="air">Air freight</option>
+                                        <option value="sea">Sea freight</option>
+                                        <option value="government_vehicle">Government vehicle</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="po-fees-field po-fees-field--wide">
+                                    <label for="poShippingAddress">Delivery Address</label>
+                                    <textarea id="poShippingAddress" class="po-fees-input" rows="2" placeholder="Street, City, Province…"></textarea>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div id="poTaxBreakdownDeductions"></div>
-                    <div class="breakdown-total">
-                        <span>Net payable</span>
-                        <strong id="poTaxNetPayable">PHP 0.00</strong>
+
+                    <!-- Additional Fees -->
+                    <div class="po-fees-panel" id="poPanelAdditional">
+                        <button type="button" class="po-fees-panel-toggle" aria-expanded="false" aria-controls="poPanelAdditionalBody">
+                            <span class="po-fees-panel-icon"><i class="fas fa-plus-circle" aria-hidden="true"></i></span>
+                            <span class="po-fees-panel-label">Additional Fees</span>
+                            <span class="po-fees-panel-summary" id="poAdditionalSummary"></span>
+                            <i class="fas fa-chevron-down po-fees-chevron" aria-hidden="true"></i>
+                        </button>
+                        <div class="po-fees-panel-body" id="poPanelAdditionalBody" hidden>
+                            <div class="po-fees-grid po-fees-grid--4">
+                                <div class="po-fees-field">
+                                    <label for="poHandlingFee">Handling Fee (₱)</label>
+                                    <input type="number" id="poHandlingFee" class="po-fees-input" min="0" step="0.01" value="0" placeholder="0.00">
+                                </div>
+                                <div class="po-fees-field">
+                                    <label for="poInsuranceFee">Insurance Fee (₱)</label>
+                                    <input type="number" id="poInsuranceFee" class="po-fees-input" min="0" step="0.01" value="0" placeholder="0.00">
+                                </div>
+                                <div class="po-fees-field">
+                                    <label for="poInstallationFee">Installation Fee (₱)</label>
+                                    <input type="number" id="poInstallationFee" class="po-fees-input" min="0" step="0.01" value="0" placeholder="0.00">
+                                </div>
+                                <div class="po-fees-field">
+                                    <label for="poOtherCharges">Other Charges (₱)</label>
+                                    <input type="number" id="poOtherCharges" class="po-fees-input" min="0" step="0.01" value="0" placeholder="0.00">
+                                </div>
+                                <div class="po-fees-field po-fees-field--wide">
+                                    <label for="poOtherChargesDesc">Other Charges Description</label>
+                                    <input type="text" id="poOtherChargesDesc" class="po-fees-input" maxlength="255" placeholder="e.g. Customs clearance fee">
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- Discounts -->
+                    <div class="po-fees-panel" id="poPanelDiscount">
+                        <button type="button" class="po-fees-panel-toggle" aria-expanded="false" aria-controls="poPanelDiscountBody">
+                            <span class="po-fees-panel-icon"><i class="fas fa-tag" aria-hidden="true"></i></span>
+                            <span class="po-fees-panel-label">Discounts</span>
+                            <span class="po-fees-panel-summary" id="poDiscountSummary"></span>
+                            <i class="fas fa-chevron-down po-fees-chevron" aria-hidden="true"></i>
+                        </button>
+                        <div class="po-fees-panel-body" id="poPanelDiscountBody" hidden>
+                            <div class="po-fees-discount-type-toggle">
+                                <label class="po-fees-radio-label">
+                                    <input type="radio" name="poDiscountType" id="poDiscountTypePercent" value="percent" checked>
+                                    Percentage (%)
+                                </label>
+                                <label class="po-fees-radio-label">
+                                    <input type="radio" name="poDiscountType" id="poDiscountTypeFixed" value="fixed">
+                                    Fixed Amount (₱)
+                                </label>
+                            </div>
+                            <div class="po-fees-grid po-fees-grid--3">
+                                <div class="po-fees-field" id="poDiscountPctWrap">
+                                    <label for="poDiscountPercentage">Discount Percentage (%)</label>
+                                    <input type="number" id="poDiscountPercentage" class="po-fees-input" min="0" max="100" step="0.01" value="0" placeholder="0.00">
+                                    <span class="po-fees-input-error" id="poDiscountPctError" hidden>Must be between 0 and 100.</span>
+                                </div>
+                                <div class="po-fees-field" id="poDiscountAmtWrap" style="display:none;">
+                                    <label for="poDiscountAmount">Discount Amount (₱)</label>
+                                    <input type="number" id="poDiscountAmount" class="po-fees-input" min="0" step="0.01" value="0" placeholder="0.00">
+                                </div>
+                                <div class="po-fees-field po-fees-field--wide">
+                                    <label for="poDiscountReason">Reason / Justification</label>
+                                    <input type="text" id="poDiscountReason" class="po-fees-input" maxlength="255" placeholder="e.g. Negotiated price reduction, volume discount…">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Terms -->
+                    <div class="po-fees-panel" id="poPanelPayment">
+                        <button type="button" class="po-fees-panel-toggle" aria-expanded="false" aria-controls="poPanelPaymentBody">
+                            <span class="po-fees-panel-icon"><i class="fas fa-calendar-check" aria-hidden="true"></i></span>
+                            <span class="po-fees-panel-label">Payment Terms</span>
+                            <span class="po-fees-panel-summary" id="poPaymentSummary"></span>
+                            <i class="fas fa-chevron-down po-fees-chevron" aria-hidden="true"></i>
+                        </button>
+                        <div class="po-fees-panel-body" id="poPanelPaymentBody" hidden>
+                            <div class="po-fees-grid po-fees-grid--2">
+                                <div class="po-fees-field">
+                                    <label for="poPaymentTerms">Payment Terms</label>
+                                    <select id="poPaymentTerms" class="po-fees-input">
+                                        <option value="">— Select terms —</option>
+                                        <option value="cod">Cash on Delivery (COD)</option>
+                                        <option value="net_7">Net 7</option>
+                                        <option value="net_15">Net 15</option>
+                                        <option value="net_30">Net 30</option>
+                                        <option value="net_45">Net 45</option>
+                                        <option value="net_60">Net 60</option>
+                                        <option value="upon_delivery">Upon delivery</option>
+                                        <option value="advance">Full payment in advance</option>
+                                        <option value="partial_advance">50% advance, 50% on delivery</option>
+                                    </select>
+                                </div>
+                                <div class="po-fees-field">
+                                    <label for="poPaymentDueDate">Payment Due Date</label>
+                                    <input type="date" id="poPaymentDueDate" class="po-fees-input">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tax & Withholding (5th panel — open by default) -->
+                    <div class="po-fees-panel" id="poPanelTax">
+                        <button type="button" class="po-fees-panel-toggle" aria-expanded="true" aria-controls="poPanelTaxBody">
+                            <span class="po-fees-panel-icon"><i class="fas fa-receipt" aria-hidden="true"></i></span>
+                            <span class="po-fees-panel-label">Tax &amp; Withholding</span>
+                            <span class="po-fees-panel-summary" id="poTaxPanelSummary"></span>
+                            <i class="fas fa-chevron-down po-fees-chevron" aria-hidden="true"></i>
+                        </button>
+                        <div class="po-fees-panel-body po-tax-panel-body" id="poPanelTaxBody">
+
+                            <!-- Transaction type selector -->
+                            <div class="po-tax-type-row">
+                                <div class="po-fees-field">
+                                    <label for="poTransactionType">Transaction Type <span class="po-tax-required">*</span></label>
+                                    <select id="poTransactionType" class="po-fees-input">
+                                        <option value="">— Select transaction type —</option>
+                                        <option value="goods">Purchase of Goods / Supplies (1% EWT)</option>
+                                        <option value="services">Purchase of Services (2% EWT)</option>
+                                        <option value="professional_small">Professional Fees — ≤ ₱3M income (10% EWT)</option>
+                                        <option value="professional_large">Professional Fees — Corp / > ₱3M (15% EWT)</option>
+                                        <option value="rental">Rental (5% EWT)</option>
+                                        <option value="construction">Construction / Contractor (2% EWT)</option>
+                                        <option value="media">Media / Talent / Entertainment (15% EWT)</option>
+                                        <option value="exempt">Exempt / No withholding (small business, online shop, etc.)</option>
+                                    </select>
+                                </div>
+                                <div class="po-tax-vat-badge-wrap" id="poSupplierVatBadgeWrap" hidden>
+                                    <span class="po-tax-vat-badge"><i class="fas fa-circle-check" aria-hidden="true"></i> Supplier is VAT-registered — 5% VAT withholding will be added</span>
+                                </div>
+                                <button type="button" id="poApplyTransactionTypeBtn" class="btn-secondary po-tax-apply-btn" disabled>
+                                    <i class="fas fa-bolt" aria-hidden="true"></i> Apply
+                                </button>
+                            </div>
+
+                            <!-- Hidden data store — tax rows kept here for JS collection, not rendered -->
+                            <table hidden aria-hidden="true"><tbody id="poTaxRowsBody"></tbody></table>
+
+                        </div><!-- /.po-tax-panel-body -->
+                    </div><!-- /.poPanelTax -->
+
+                </div><!-- /.po-fees-accordion -->
+
+                <!-- ── Save Fees button ────────────────────────────────── -->
+                <div class="po-fees-save-row" id="poFeesSaveRow">
+                    <button type="button" id="poFeesSaveBtn" class="btn-secondary po-fees-save-btn">
+                        <i class="fas fa-floppy-disk" aria-hidden="true"></i> Save fees &amp; discounts
+                    </button>
+                    <span class="po-fees-saved-hint" id="poFeesSavedHint" hidden></span>
                 </div>
 
+                <!-- ── Live Calculation Panel ──────────────────────────── -->
+                <div class="po-calc-panel" id="poCalcPanel" aria-live="polite">
+                    <h3 class="po-calc-panel-title">Cost Breakdown</h3>
+                    <div class="po-calc-body">
+                        <div class="po-calc-row">
+                            <span class="po-calc-label">Items Subtotal</span>
+                            <span class="po-calc-value" id="poCalcItemsSubtotal">₱ 0.00</span>
+                        </div>
+                        <div class="po-calc-row po-calc-row--add" id="poCalcShippingRow" hidden>
+                            <span class="po-calc-label">+ Shipping Fee</span>
+                            <span class="po-calc-value po-calc-value--add" id="poCalcShipping">+ ₱ 0.00</span>
+                        </div>
+                        <div class="po-calc-row po-calc-row--add" id="poCalcHandlingRow" hidden>
+                            <span class="po-calc-label">+ Handling Fee</span>
+                            <span class="po-calc-value po-calc-value--add" id="poCalcHandling">+ ₱ 0.00</span>
+                        </div>
+                        <div class="po-calc-row po-calc-row--add" id="poCalcInsuranceRow" hidden>
+                            <span class="po-calc-label">+ Insurance Fee</span>
+                            <span class="po-calc-value po-calc-value--add" id="poCalcInsurance">+ ₱ 0.00</span>
+                        </div>
+                        <div class="po-calc-row po-calc-row--add" id="poCalcInstallationRow" hidden>
+                            <span class="po-calc-label">+ Installation Fee</span>
+                            <span class="po-calc-value po-calc-value--add" id="poCalcInstallation">+ ₱ 0.00</span>
+                        </div>
+                        <div class="po-calc-row po-calc-row--add" id="poCalcOtherRow" hidden>
+                            <span class="po-calc-label">+ Other Charges</span>
+                            <span class="po-calc-value po-calc-value--add" id="poCalcOther">+ ₱ 0.00</span>
+                        </div>
+                        <div class="po-calc-divider"></div>
+                        <div class="po-calc-row po-calc-row--subtotal">
+                            <span class="po-calc-label">Gross Total</span>
+                            <span class="po-calc-value po-calc-value--strong" id="poCalcGrossTotal">₱ 0.00</span>
+                        </div>
+                        <div class="po-calc-row po-calc-row--deduct" id="poCalcDiscountRow" hidden>
+                            <span class="po-calc-label" id="poCalcDiscountLabel">− Discount</span>
+                            <span class="po-calc-value po-calc-value--deduct" id="poCalcDiscount">− ₱ 0.00</span>
+                        </div>
+                        <div class="po-calc-divider" id="poCalcDiscountDivider" hidden></div>
+                        <div class="po-calc-row po-calc-row--taxable">
+                            <span class="po-calc-label">Taxable Amount</span>
+                            <span class="po-calc-value po-calc-value--taxable" id="poCalcTaxable">₱ 0.00</span>
+                        </div>
+                        <div id="poCalcTaxDeductions"></div>
+                        <div class="po-calc-divider"></div>
+                        <div class="po-calc-row po-calc-row--net">
+                            <span class="po-calc-label">NET PAYABLE</span>
+                            <strong class="po-calc-value po-calc-value--net" id="poCalcNetPayable">₱ 0.00</strong>
+                        </div>
+                    </div>
+                </div><!-- /.po-calc-panel -->
+
+                <!-- ── Comptroller notes & action ────────────────────────── -->
                 <label class="comptroller-tax-notes-label" for="poTaxNotes">Comptroller notes</label>
                 <textarea id="poTaxNotes" class="comptroller-tax-notes" rows="3" placeholder="e.g. EWT certificate (BIR Form 2307) to be issued to supplier. Reference: …"></textarea>
 
@@ -260,6 +471,7 @@ $todayLabel = date('F j, Y');
                         </button>
                     </div>
                 </div>
+
             </div>
             <?php endif; ?>
 
@@ -301,6 +513,6 @@ window.IMRMS_PURCHASE_ORDER_CONFIG = <?php echo json_encode([
     'todayLabel' => $todayLabel,
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS); ?>;
 </script>
-<script src="../assets/js/purchase_order.js?v=wlc14"></script>
+<script src="../assets/js/purchase_order.js?v=wlc23"></script>
 </body>
 </html>

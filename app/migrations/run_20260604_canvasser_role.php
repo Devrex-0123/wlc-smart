@@ -27,12 +27,9 @@ $updated = $db->exec("
     SET u.role = 'Canvasser', u.updated_at = NOW()
     WHERE u.deleted_at IS NULL
       AND u.role IN ('Employee', 'User', 'Laboratory Manager')
-      AND (
-        EXISTS (SELECT 1 FROM canvasser_action_history h WHERE h.user_id = u.user_id)
-        OR EXISTS (
-            SELECT 1 FROM canvass_verification_approval c
-            WHERE c.canvas_assignee_user_id = u.user_id
-        )
+      AND EXISTS (
+        SELECT 1 FROM canvass_verification_approval c
+        WHERE c.canvas_assignee_user_id = u.user_id
       )
 ");
 

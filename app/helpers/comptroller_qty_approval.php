@@ -58,6 +58,16 @@ function cwirmsComptrollerQtyStatus(int $acceptedQty, int $requestedQty): string
 }
 
 /**
+ * Builds the comptroller pricing overview by layering quantity-approval data from
+ * requisition_line_awards on top of the base canvass pricing overview.
+ *
+ * Column mapping from old request_approval_suggested_supplier_item → requisition_line_awards:
+ *   accepted_qty                  → awarded_qty
+ *   deferred_message              → deferred_reason
+ *   comptroller_qty_status        → comptroller_status
+ *   comptroller_approved_by_user_id → awarded_by_user_id
+ *   comptroller_approved_at       → awarded_at
+ *
  * @return array<string, mixed>
  */
 function cwirmsComptrollerPricingOverviewForRequest(PDO $db, int $requestId): array
@@ -67,22 +77,29 @@ function cwirmsComptrollerPricingOverviewForRequest(PDO $db, int $requestId): ar
         return $overview;
     }
 
-    ensureComptrollerPartialQtyColumns($db);
-
+    // Read stored comptroller qty approvals from the canonical requisition_line_awards table.
+    // canvass_detail_id is aliased to requisition_line_id in the base pricing overview,
+    // so we key this map on requisition_line_id for a direct lookup.
     $savedStmt = $db->prepare(
-        'SELECT canvass_detail_id, accepted_qty, deferred_qty, deferred_message,
-                comptroller_qty_status, comptroller_approved_by_user_id, comptroller_approved_at
-         FROM request_approval_suggested_supplier_item
-         WHERE request_id = ?'
+        'SELECT rla.requisition_line_id,
+                rla.awarded_qty,
+                rla.deferred_qty,
+                rla.deferred_reason,
+                rla.comptroller_status,
+                rla.awarded_by_user_id,
+                rla.awarded_at
+         FROM requisition_line_awards rla
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rla.requisition_line_id
+         WHERE rl.request_id = ?'
     );
     $savedStmt->execute([$requestId]);
-    $savedByDetail = [];
+    $savedByLine   = [];
     $approverUserIds = [];
     while ($row = $savedStmt->fetch(PDO::FETCH_ASSOC)) {
-        $cid = (int) ($row['canvass_detail_id'] ?? 0);
-        if ($cid > 0) {
-            $savedByDetail[$cid] = $row;
-            $approverId = (int) ($row['comptroller_approved_by_user_id'] ?? 0);
+        $lid = (int) ($row['requisition_line_id'] ?? 0);
+        if ($lid > 0) {
+            $savedByLine[$lid] = $row;
+            $approverId = (int) ($row['awarded_by_user_id'] ?? 0);
             if ($approverId > 0) {
                 $approverUserIds[$approverId] = true;
             }
@@ -108,31 +125,37 @@ function cwirmsComptrollerPricingOverviewForRequest(PDO $db, int $requestId): ar
         }
     }
 
-    $lines = [];
+    $lines              = [];
     $approvedGrandTotal = 0.0;
     $fullyApprovedCount = 0;
 
     foreach ($overview['lines'] as $line) {
         $requestedQty = max(0, (int) ($line['quantity'] ?? 0));
-        $detailId = (int) ($line['canvass_detail_id'] ?? 0);
-        $saved = $savedByDetail[$detailId] ?? null;
+        // canvass_detail_id is aliased to requisition_line_id in the pricing overview.
+        $lineId = (int) ($line['canvass_detail_id'] ?? 0);
+        $saved  = $savedByLine[$lineId] ?? null;
 
-        $acceptedQty = $requestedQty;
-        $hasSavedApproval = $saved !== null
-            && !empty($saved['comptroller_approved_at']);
-        if ($hasSavedApproval && $saved['accepted_qty'] !== null && $saved['accepted_qty'] !== '') {
-            $acceptedQty = max(0, (int) $saved['accepted_qty']);
+        $acceptedQty     = $requestedQty;
+        $hasSavedApproval = $saved !== null && !empty($saved['awarded_at']);
+        if ($hasSavedApproval && $saved['awarded_qty'] !== null && $saved['awarded_qty'] !== '') {
+            $acceptedQty = max(0, (int) $saved['awarded_qty']);
         }
         if ($acceptedQty > $requestedQty) {
             $acceptedQty = $requestedQty;
         }
 
-        $deferredQty = max(0, $requestedQty - $acceptedQty);
-        $unitPrice = isset($line['unit_price']) && is_numeric($line['unit_price'])
+        $deferredQty       = max(0, $requestedQty - $acceptedQty);
+        $unitPrice         = isset($line['unit_price']) && is_numeric($line['unit_price'])
             ? (float) $line['unit_price']
             : null;
-        $approvedLineTotal = $unitPrice !== null ? round($unitPrice * $acceptedQty, 2) : null;
-        $deferredAmount = $unitPrice !== null ? round($unitPrice * $deferredQty, 2) : null;
+        $discountPercent   = cwirmsNormalizeCanvassSupplierDiscountPercent($line['discount_percent'] ?? null);
+        $discountFactor    = $discountPercent !== null ? (1 - $discountPercent / 100) : 1.0;
+        $approvedLineTotal = $unitPrice !== null
+            ? round($unitPrice * $acceptedQty * $discountFactor, 2)
+            : null;
+        $deferredAmount    = $unitPrice !== null
+            ? round($unitPrice * $deferredQty * $discountFactor, 2)
+            : null;
 
         if ($approvedLineTotal !== null) {
             $approvedGrandTotal += $approvedLineTotal;
@@ -144,84 +167,94 @@ function cwirmsComptrollerPricingOverviewForRequest(PDO $db, int $requestId): ar
         }
 
         $deferredMessage = null;
-        if ($saved !== null && trim((string) ($saved['deferred_message'] ?? '')) !== '') {
-            $deferredMessage = (string) $saved['deferred_message'];
+        if ($saved !== null && trim((string) ($saved['deferred_reason'] ?? '')) !== '') {
+            $deferredMessage = (string) $saved['deferred_reason'];
         }
 
-        $approverUserId = (int) ($saved['comptroller_approved_by_user_id'] ?? 0);
-        $approverLabel = $approverUserId > 0
+        $approverUserId = (int) ($saved['awarded_by_user_id'] ?? 0);
+        $approverLabel  = $approverUserId > 0
             ? ($approverLabelsByUserId[$approverUserId] ?? 'Comptroller')
             : null;
-        $savedQtyStatus = trim((string) ($saved['comptroller_qty_status'] ?? ''));
-        $rowQtyStatus = $hasSavedApproval && $savedQtyStatus !== ''
+        $savedQtyStatus = trim((string) ($saved['comptroller_status'] ?? ''));
+        $rowQtyStatus   = $hasSavedApproval && $savedQtyStatus !== ''
             ? $savedQtyStatus
             : ($hasSavedApproval ? $status : null);
 
         $lines[] = array_merge($line, [
-            'requested_qty' => $requestedQty,
-            'accepted_qty' => $acceptedQty,
-            'deferred_qty' => $deferredQty,
-            'deferred_message' => $deferredMessage,
-            'deferred_amount' => $deferredAmount,
-            'approved_line_total' => $approvedLineTotal,
-            'comptroller_qty_status' => $rowQtyStatus,
-            'comptroller_approved_at' => $saved['comptroller_approved_at'] ?? null,
+            'requested_qty'               => $requestedQty,
+            'accepted_qty'                => $acceptedQty,
+            'deferred_qty'                => $deferredQty,
+            'deferred_message'            => $deferredMessage,
+            'deferred_amount'             => $deferredAmount,
+            'approved_line_total'         => $approvedLineTotal,
+            'comptroller_qty_status'      => $rowQtyStatus,
+            'comptroller_approved_at'     => $saved['awarded_at'] ?? null,
             'comptroller_approved_by_label' => $approverLabel,
-            'qty_per_set' => max(1, (int) ($line['qty_per_set'] ?? 1)),
-            'requisition_qty' => $requestedQty,
+            'qty_per_set'                 => max(1, (int) ($line['qty_per_set'] ?? 1)),
+            'requisition_qty'             => $requestedQty,
         ]);
     }
 
-    $itemCount = (int) ($overview['item_count'] ?? count($lines));
+    $itemCount    = (int) ($overview['item_count'] ?? count($lines));
     $selectedCount = (int) ($overview['selected_count'] ?? 0);
 
     return array_merge($overview, [
-        'lines' => $lines,
-        'item_count' => $itemCount,
-        'selected_count' => $selectedCount,
+        'lines'               => $lines,
+        'item_count'          => $itemCount,
+        'selected_count'      => $selectedCount,
         'fully_approved_count' => $fullyApprovedCount,
         'approved_grand_total' => round($approvedGrandTotal, 2),
     ]);
 }
 
 /**
- * @param array<int, int>    $acceptedByDetail canvass_detail_id => accepted_qty
- * @param array<int, string> $messagesByDetail canvass_detail_id => comptroller deferred reason
+ * Persist the comptroller's quantity decisions into requisition_line_awards.
+ *
+ * The $acceptedByLine map is keyed by requisition_line_id (the same value exposed
+ * as canvass_detail_id in the pricing overview, so existing form POST arrays work
+ * without any frontend changes during the transition period).
+ *
+ * Invariant enforced: deferred_qty + awarded_qty === requisition_line.quantity
+ * Status enum: 'fully_approved' | 'deferred' | 'rejected'
+ *
+ * @param array<int, int>    $acceptedByLine  requisition_line_id => accepted_qty
+ * @param array<int, string> $messagesByLine  requisition_line_id => deferred reason
  */
 function cwirmsSaveComptrollerQtyApprovals(
     PDO $db,
     int $requestId,
     int $userId,
-    array $acceptedByDetail,
-    array $messagesByDetail = []
+    array $acceptedByLine,
+    array $messagesByLine = []
 ): void {
     $overview = cwirmsComptrollerPricingOverviewForRequest($db, $requestId);
-    $lines = $overview['lines'] ?? [];
+    $lines    = $overview['lines'] ?? [];
     if ($lines === []) {
         throw new InvalidArgumentException('No suggested supplier lines found for this request.');
     }
 
     $update = $db->prepare(
-        'UPDATE request_approval_suggested_supplier_item
-         SET accepted_qty = ?,
-             deferred_qty = ?,
-             deferred_message = ?,
-             comptroller_qty_status = ?,
-             comptroller_approved_by_user_id = ?,
-             comptroller_approved_at = NOW()
-         WHERE request_id = ? AND canvass_detail_id = ?'
+        'UPDATE requisition_line_awards
+         SET awarded_qty        = ?,
+             deferred_qty       = ?,
+             deferred_reason    = ?,
+             comptroller_status = ?,
+             awarded_by_user_id = ?,
+             awarded_at         = NOW()
+         WHERE requisition_line_id = ?'
     );
 
     foreach ($lines as $line) {
-        $detailId = (int) ($line['canvass_detail_id'] ?? 0);
-        if ($detailId <= 0) {
+        // canvass_detail_id is aliased to requisition_line_id in the pricing overview.
+        $lineId = (int) ($line['canvass_detail_id'] ?? 0);
+        if ($lineId <= 0) {
             continue;
         }
         $requestedQty = max(0, (int) ($line['requested_qty'] ?? $line['quantity'] ?? 0));
-        if (!array_key_exists($detailId, $acceptedByDetail)) {
+        if (!array_key_exists($lineId, $acceptedByLine)) {
             throw new InvalidArgumentException('Accepted quantity is required for every line item.');
         }
-        $acceptedQty = max(0, (int) $acceptedByDetail[$detailId]);
+        $acceptedQty = max(0, (int) $acceptedByLine[$lineId]);
         if ($acceptedQty > $requestedQty) {
             throw new InvalidArgumentException(
                 'Accepted quantity cannot exceed requested quantity for item: '
@@ -229,11 +262,11 @@ function cwirmsSaveComptrollerQtyApprovals(
             );
         }
 
-        $deferredQty = max(0, $requestedQty - $acceptedQty);
-        $status = cwirmsComptrollerQtyStatus($acceptedQty, $requestedQty);
+        $deferredQty    = max(0, $requestedQty - $acceptedQty);
+        $status         = cwirmsComptrollerQtyStatus($acceptedQty, $requestedQty);
         $deferredMessage = null;
         if ($deferredQty > 0) {
-            $msg = trim((string) ($messagesByDetail[$detailId] ?? ''));
+            $msg = trim((string) ($messagesByLine[$lineId] ?? ''));
             if ($msg === '') {
                 throw new InvalidArgumentException(
                     'Please enter a reason for the deferred quantity on item: '
@@ -249,8 +282,7 @@ function cwirmsSaveComptrollerQtyApprovals(
             $deferredMessage,
             $status,
             $userId,
-            $requestId,
-            $detailId,
+            $lineId,
         ]);
     }
 }
@@ -259,7 +291,7 @@ function cwirmsComptrollerCheckedByLabel(PDO $db, int $userId): string
 {
     $stmt = $db->prepare('SELECT Email FROM user WHERE user_id = ?');
     $stmt->execute([$userId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $row   = $stmt->fetch(PDO::FETCH_ASSOC);
     $email = (string) ($row['Email'] ?? '');
     if ($email === '') {
         return 'Comptroller';
@@ -268,15 +300,30 @@ function cwirmsComptrollerCheckedByLabel(PDO $db, int $userId): string
     return explode('@', $email)[0] ?? $email;
 }
 
+/**
+ * True when every line that has any quote (canvassed or preferred) has a GSD award in requisition_line_awards.
+ */
 function cwirmsComptrollerRequestHasSuggestedSuppliersPerItem(PDO $db, int $requestId): bool
 {
-    $totalStmt = $db->prepare('SELECT COUNT(*) FROM requisition_canvass_detail WHERE request_id = ?');
+    // Count lines that have any quote (canvassed or preferred — GSD may select from either).
+    $totalStmt = $db->prepare(
+        "SELECT COUNT(DISTINCT rlq.requisition_line_id)
+         FROM requisition_line_quotes rlq
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+         WHERE rl.request_id = ? AND rlq.quote_type IN ('canvassed', 'preferred')"
+    );
     $totalStmt->execute([$requestId]);
     $total = (int) $totalStmt->fetchColumn();
     if ($total <= 0) {
         return false;
     }
-    $selStmt = $db->prepare('SELECT COUNT(*) FROM request_approval_suggested_supplier_item WHERE request_id = ?');
+
+    $selStmt = $db->prepare(
+        'SELECT COUNT(*)
+         FROM requisition_line_awards rla
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rla.requisition_line_id
+         WHERE rl.request_id = ?'
+    );
     $selStmt->execute([$requestId]);
     $selected = (int) $selStmt->fetchColumn();
 
@@ -289,7 +336,7 @@ function cwirmsApplyComptrollerCanvasApproval(PDO $db, int $requestId, int $user
         throw new InvalidArgumentException('Invalid comptroller approval status.');
     }
 
-    $checkedBy = cwirmsComptrollerCheckedByLabel($db, $userId);
+    $checkedBy         = cwirmsComptrollerCheckedByLabel($db, $userId);
     $requisitionStatus = ($compStatus === 'pending') ? 'Pending' : 'Ongoing';
 
     $find = $db->prepare(
@@ -327,8 +374,4 @@ function cwirmsApplyComptrollerCanvasApproval(PDO $db, int $requestId, int $user
     $updReq = $db->prepare('UPDATE requisition_item SET status = ? WHERE request_id = ?');
     $updReq->execute([$requisitionStatus, $requestId]);
 
-    $logIns = $db->prepare(
-        'INSERT INTO comptroller_action_history (request_id, user_id, action) VALUES (?, ?, ?)'
-    );
-    $logIns->execute([$requestId, $userId, $compStatus]);
 }

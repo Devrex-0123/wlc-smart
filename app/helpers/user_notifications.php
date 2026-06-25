@@ -157,6 +157,15 @@ function cwirmsFormatUserNotificationRow(array $row): array
         $secondary = cwirmsFormatRelativeTimestamp((string) ($row['created_at'] ?? ''));
     }
 
+    $requisitionId = isset($row['requisition_id']) && $row['requisition_id'] !== null
+        ? (int) $row['requisition_id']
+        : null;
+
+    $linkUrl = null;
+    if ($type === 'payment_ready' && $requisitionId !== null && $requisitionId > 0) {
+        $linkUrl = 'dean_requisition_status_progress.php?rid=' . $requisitionId;
+    }
+
     return [
         'notification_id' => (int) ($row['notification_id'] ?? 0),
         'type' => $type,
@@ -165,5 +174,7 @@ function cwirmsFormatUserNotificationRow(array $row): array
         'is_read' => (int) ($row['is_read'] ?? 0) === 1,
         'created_at' => (string) ($row['created_at'] ?? ''),
         'purchase_order_id' => isset($row['purchase_order_id']) ? (int) $row['purchase_order_id'] : null,
+        'requisition_id' => $requisitionId,
+        'link_url' => $linkUrl,
     ];
 }

@@ -176,6 +176,10 @@ if ($requestId > 0 && !requisitionCanvassFormAcceptedForRequest($db, $requestId)
                 </table>
             </div>
             </div>
+            <div class="pr-requester-footer">
+                <span class="pr-requester-footer-label">Requested by:</span>
+                <strong id="prRequesterLine">—</strong>
+            </div>
         </section>
 
         <div class="approval-section purchase-approval-section pr-verifier-summary" aria-label="Purchase requisition verifier summary">

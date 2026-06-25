@@ -220,6 +220,30 @@ body.page-purchase-requisition-form {
     white-space: nowrap;
 }
 
+/* Requester name displayed below the lines table */
+.page-purchase-requisition-form .pr-requester-footer {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.65rem;
+    font-size: 1rem;
+    color: #111827;
+    border-top: 0.5px solid var(--pr-border);
+}
+
+.page-purchase-requisition-form .pr-requester-footer-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-right: 0.45rem;
+}
+
+.page-purchase-requisition-form .pr-requester-footer strong {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+}
+
 /* Verifier summary — horizontal row */
 .page-purchase-requisition-form .pr-verifier-summary {
     margin-top: 0.5rem;
