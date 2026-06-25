@@ -157,7 +157,14 @@ function cwirmsBuildPurchaseOrderDraftFromRequisition(PDO $db, int $requestId): 
         $unitPrice = isset($line['unit_price']) && is_numeric($line['unit_price'])
             ? round((float) $line['unit_price'], 2)
             : 0.0;
-        $amount = round($qty * $unitPrice, 2);
+        $discountPercent = cwirmsNormalizeCanvassSupplierDiscountPercent($line['discount_percent'] ?? null);
+        $discountFactor = $discountPercent !== null ? (1 - $discountPercent / 100) : 1.0;
+        $effectiveUnitPrice = round($unitPrice * $discountFactor, 2);
+        if (isset($line['approved_line_total']) && is_numeric($line['approved_line_total'])) {
+            $amount = round((float) $line['approved_line_total'], 2);
+        } else {
+            $amount = round($qty * $effectiveUnitPrice, 2);
+        }
         $totalAmount += $amount;
 
         $itemName = trim((string) ($desc['item_name'] ?? $line['item_name'] ?? ''));
@@ -176,7 +183,7 @@ function cwirmsBuildPurchaseOrderDraftFromRequisition(PDO $db, int $requestId): 
             'description' => $itemName !== '' ? $itemName : '—',
             'sub_description' => $subDescription,
             'quantity' => $qty,
-            'unit_price' => $unitPrice,
+            'unit_price' => $effectiveUnitPrice,
             'amount' => $amount,
         ];
     }
