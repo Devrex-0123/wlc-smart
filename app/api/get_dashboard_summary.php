@@ -171,18 +171,27 @@ try {
           )
     ")->fetchColumn();
 
-    $deliveryInTransit = $pendingDelivery;
-
-    $deliveryPendingReceiving = (int) $db->query("
+    $receiptReleased = (int) $db->query("
         SELECT COUNT(*)
-        FROM requisition_item r
-        INNER JOIN purchase_requisition_approval pra ON pra.request_id = r.request_id
-        INNER JOIN canvass_verification_approval cva ON cva.request_id = r.request_id
-        WHERE r.submission_status = 'submitted'
-          AND r.status = 'Ongoing'
-          AND LOWER(TRIM(pra.pr_inv_status)) = 'accept'
-          AND LOWER(TRIM(pra.pr_pres_status)) = 'accept'
-          AND LOWER(TRIM(COALESCE(cva.pres_status, 'pending'))) = 'accept'
+        FROM purchase_orders po
+        WHERE po.deleted_at IS NULL
+          AND po.payment_released_at IS NOT NULL
+    ")->fetchColumn();
+
+    $receiptPending = (int) $db->query("
+        SELECT COUNT(*)
+        FROM purchase_orders po
+        WHERE po.deleted_at IS NULL
+          AND po.payment_released_at IS NOT NULL
+          AND po.items_received_at IS NULL
+    ")->fetchColumn();
+
+    $awaitingItemReceiptCount = (int) $db->query("
+        SELECT COUNT(*)
+        FROM purchase_orders po
+        WHERE po.deleted_at IS NULL
+          AND po.payment_released_at IS NOT NULL
+          AND po.items_received_at IS NULL
     ")->fetchColumn();
 
     $agg = requisitionSqlSelectListAggregates();
@@ -276,6 +285,7 @@ try {
             'awaiting_validation' => $awaitingValidation,
             'pending_delivery' => $pendingDelivery,
             'arriving_this_week' => $arrivingThisWeek,
+            'awaiting_receipt_count' => $awaitingItemReceiptCount,
             'depts_with_active_requests' => $deptsWithActiveRequests,
         ],
         'pipeline' => [
@@ -283,7 +293,7 @@ try {
             'canvass' => ['submitted' => $canvassSubmitted, 'awaiting' => $canvassAwaiting],
             'pr' => ['submitted' => $prSubmitted, 'awaiting' => $prAwaiting],
             'po' => ['submitted' => $poSubmitted, 'awaiting' => $poAwaiting],
-            'delivery' => ['in_transit' => $deliveryInTransit, 'pending_receiving' => $deliveryPendingReceiving],
+            'receipt' => ['released' => $receiptReleased, 'pending' => $receiptPending],
         ],
         'recent_requisitions' => $recentRequisitions,
         'awaiting_item_receipt' => $awaitingItemReceipt,
