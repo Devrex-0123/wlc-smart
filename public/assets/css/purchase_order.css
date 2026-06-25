@@ -1090,13 +1090,343 @@ body.page-purchase-order-form {
     transform: none;
 }
 
+/* ── Fee accordion ─────────────────────────────────────────────────────────── */
+.po-fees-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 0.85rem;
+}
+
+.po-fees-panel {
+    border-bottom: 1px solid #fde68a;
+}
+
+.po-fees-panel:last-child {
+    border-bottom: none;
+}
+
+.po-fees-panel-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.85rem;
+    background: #fffbef;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #412402;
+    text-align: left;
+    transition: background 0.12s;
+}
+
+.po-fees-panel-toggle:hover {
+    background: #fef3c7;
+}
+
+.po-fees-panel-toggle.is-open {
+    background: #fef3c7;
+}
+
+.po-fees-panel-icon {
+    width: 1.4rem;
+    text-align: center;
+    color: #b45309;
+    font-size: 0.82rem;
+}
+
+.po-fees-panel-label {
+    flex: 1;
+}
+
+.po-fees-panel-summary {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #1D6B3A;
+    margin-right: 0.35rem;
+    white-space: nowrap;
+}
+
+.po-fees-chevron {
+    font-size: 0.72rem;
+    color: #9ca3af;
+    transition: transform 0.18s;
+}
+
+.po-fees-panel-toggle.is-open .po-fees-chevron {
+    transform: rotate(180deg);
+}
+
+.po-fees-panel-body {
+    padding: 0.85rem;
+    background: #fffdf7;
+    border-top: 1px solid #fde68a;
+}
+
+.po-fees-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem 1rem;
+}
+
+.po-fees-grid--3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.po-fees-grid--4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.po-fees-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.po-fees-field--wide {
+    grid-column: 1 / -1;
+}
+
+.po-fees-field label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b4226;
+}
+
+.po-fees-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.42rem 0.55rem;
+    font-size: 0.85rem;
+    font-family: inherit;
+    background: #fff;
+    transition: border-color 0.12s;
+}
+
+.po-fees-input:focus {
+    outline: none;
+    border-color: #ef9f27;
+    box-shadow: 0 0 0 2px rgba(239,159,39,0.15);
+}
+
+.po-fees-input:disabled {
+    background: #f3f4f6;
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.po-fees-input-error {
+    font-size: 0.75rem;
+    color: #b91c1c;
+}
+
+.po-fees-discount-type-toggle {
+    display: flex;
+    gap: 1.25rem;
+    margin-bottom: 0.65rem;
+}
+
+.po-fees-radio-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.83rem;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+}
+
+/* Save fees row */
+.po-fees-save-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+.po-fees-save-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #1D6B3A;
+    border: 1.5px solid #1D6B3A;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+
+.po-fees-save-btn:hover:not(:disabled) {
+    background: #EAF3DE;
+}
+
+.po-fees-save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.po-fees-saved-hint {
+    font-size: 0.78rem;
+    color: #047857;
+    font-weight: 600;
+}
+
+/* ── Live Calculation Panel ────────────────────────────────────────────────── */
+.po-calc-panel {
+    background: #fff;
+    border: 1.5px solid #1D6B3A;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 0.85rem;
+}
+
+.po-calc-panel-title {
+    margin: 0;
+    padding: 0.55rem 0.85rem;
+    background: #1D6B3A;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.po-calc-body {
+    padding: 0.65rem 0.85rem;
+}
+
+.po-calc-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.22rem 0;
+    font-size: 0.83rem;
+    color: #374151;
+}
+
+.po-calc-row--add .po-calc-label { color: #1D6B3A; }
+.po-calc-row--deduct .po-calc-label { color: #7c2d12; }
+.po-calc-row--subtotal .po-calc-label,
+.po-calc-row--taxable .po-calc-label { color: #111827; font-weight: 600; }
+.po-calc-row--net .po-calc-label { color: #1D6B3A; font-weight: 700; font-size: 0.9rem; }
+
+.po-calc-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.po-calc-value--add    { color: #15803d; font-weight: 500; }
+.po-calc-value--deduct { color: #b45309; font-weight: 500; }
+.po-calc-value--strong { color: #111827; font-weight: 700; }
+.po-calc-value--taxable { color: #1e40af; font-weight: 600; }
+.po-calc-value--net    { color: #1D6B3A; font-weight: 800; font-size: 1rem; }
+
+.po-calc-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 0.35rem 0;
+}
+
+@media (max-width: 900px) {
+    .po-fees-grid--4 { grid-template-columns: repeat(2, 1fr); }
+    .po-fees-grid--3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+    .po-fees-grid,
+    .po-fees-grid--3,
+    .po-fees-grid--4 { grid-template-columns: 1fr; }
+    .po-fees-panel-toggle { font-size: 0.82rem; }
+}
+
+/* ── Tax & Withholding panel (5th accordion) ─────────────────────────────── */
+.po-tax-panel-body[hidden] { display: none; }
+.po-tax-panel-body {
+    padding: 1rem 1.25rem;
+    background: #fffbef;
+    border-top: 2px solid #fde68a;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.po-tax-type-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+}
+
+.po-tax-type-row .po-fees-field {
+    flex: 1 1 260px;
+    min-width: 220px;
+}
+
+.po-tax-apply-btn {
+    flex-shrink: 0;
+    align-self: flex-end;
+    padding: 0.45rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.po-tax-apply-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.po-tax-vat-badge-wrap {
+    flex: 0 0 100%;
+    margin-top: -0.3rem;
+}
+
+.po-tax-vat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    color: #065f46;
+    background: #d1fae5;
+    border: 1px solid #6ee7b7;
+    border-radius: 4px;
+    padding: 0.25rem 0.65rem;
+    font-weight: 500;
+}
+
+.po-tax-required {
+    color: #b91c1c;
+    font-size: 0.85rem;
+    margin-left: 1px;
+}
+
+/* Keep the existing tax table/breakdown/notes inside the panel with minor spacing */
+.po-tax-panel-body .comptroller-tax-table-wrap { margin-top: 0; }
+.po-tax-panel-body .comptroller-tax-quick-add { margin-top: 0.5rem; }
+.po-tax-panel-body .comptroller-tax-breakdown { margin-top: 0.5rem; }
+.po-tax-panel-body .comptroller-tax-notes-label { margin-top: 0.25rem; }
+.po-tax-panel-body .comptroller-tax-notes { margin-top: 0; }
+.po-tax-panel-body .comptroller-tax-action-panel { margin-top: 0.5rem; }
+
 @media print {
     .po-no-print,
     .requisition-close-btn,
     .po-action-bar,
     .comptroller-tax-pending-notice,
     .comptroller-divider,
-    .comptroller-section {
+    .comptroller-section,
+    .po-fees-accordion,
+    .po-fees-save-row,
+    .po-calc-panel {
         display: none !important;
     }
 

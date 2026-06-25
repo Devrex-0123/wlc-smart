@@ -476,6 +476,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (tinInput) {
                     tinInput.value = supplier.tin || '';
                 }
+                const vatCheckbox = document.getElementById('supplier_vat_registered');
+                if (vatCheckbox) vatCheckbox.checked = Boolean(Number(supplier.vat_registered || 0));
                 statusInput.value = supplier.status || 'Active';
 
                 setSupplierImagePreview(

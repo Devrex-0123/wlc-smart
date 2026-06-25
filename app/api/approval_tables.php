@@ -475,6 +475,47 @@ function ensurePurchaseOrderTables(PDO $db): void
     require_once __DIR__ . '/../helpers/user_notifications.php';
     cwirmsEnsurePoTaxStatusColumns($db);
     ensureUserNotificationsTable($db);
+    ensurePurchaseOrderFeeColumns($db);
+}
+
+function ensurePurchaseOrderFeeColumns(PDO $db): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    $columns = [
+        'shipping_fee'              => "ADD COLUMN shipping_fee              DECIMAL(12,2) NOT NULL DEFAULT 0.00  AFTER total_amount",
+        'shipping_method'           => "ADD COLUMN shipping_method           VARCHAR(100)  NULL DEFAULT NULL       AFTER shipping_fee",
+        'shipping_address'          => "ADD COLUMN shipping_address          TEXT          NULL DEFAULT NULL       AFTER shipping_method",
+        'handling_fee'              => "ADD COLUMN handling_fee              DECIMAL(12,2) NOT NULL DEFAULT 0.00  AFTER shipping_address",
+        'insurance_fee'             => "ADD COLUMN insurance_fee             DECIMAL(12,2) NOT NULL DEFAULT 0.00  AFTER handling_fee",
+        'installation_fee'          => "ADD COLUMN installation_fee          DECIMAL(12,2) NOT NULL DEFAULT 0.00  AFTER insurance_fee",
+        'other_charges'             => "ADD COLUMN other_charges             DECIMAL(12,2) NOT NULL DEFAULT 0.00  AFTER installation_fee",
+        'other_charges_description' => "ADD COLUMN other_charges_description VARCHAR(255)  NULL DEFAULT NULL       AFTER other_charges",
+        'discount_amount'           => "ADD COLUMN discount_amount           DECIMAL(12,2) NOT NULL DEFAULT 0.00  AFTER other_charges_description",
+        'discount_percentage'       => "ADD COLUMN discount_percentage       DECIMAL(5,2)  NOT NULL DEFAULT 0.00  AFTER discount_amount",
+        'discount_reason'           => "ADD COLUMN discount_reason           VARCHAR(255)  NULL DEFAULT NULL       AFTER discount_percentage",
+        'taxable_amount'            => "ADD COLUMN taxable_amount            DECIMAL(12,2) NULL DEFAULT NULL       AFTER discount_reason",
+        'payment_terms'             => "ADD COLUMN payment_terms             VARCHAR(100)  NULL DEFAULT NULL       AFTER taxable_amount",
+        'payment_due_date'          => "ADD COLUMN payment_due_date          DATE          NULL DEFAULT NULL       AFTER payment_terms",
+        'transaction_type'          => "ADD COLUMN transaction_type          VARCHAR(100)  NULL DEFAULT NULL       AFTER payment_due_date",
+    ];
+
+    $chk = $db->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME   = 'purchase_orders'
+           AND COLUMN_NAME  = ?"
+    );
+    foreach ($columns as $col => $ddl) {
+        $chk->execute([$col]);
+        if ((int) $chk->fetchColumn() === 0) {
+            $db->exec("ALTER TABLE purchase_orders {$ddl}");
+        }
+    }
 }
 
 function ensurePreferredSupplierItemQuotesTable(PDO $db): void
