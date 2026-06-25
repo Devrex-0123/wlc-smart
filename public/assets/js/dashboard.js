@@ -35,7 +35,7 @@ function setMeta(id, text) {
 function applySummary(summary) {
   animateCount(document.getElementById('totalAssetsCount'), summary.total_assets);
   animateCount(document.getElementById('activeRequestsCount'), summary.active_requests);
-  animateCount(document.getElementById('pendingDeliveryCount'), summary.pending_delivery);
+  animateCount(document.getElementById('awaitingReceiptCount'), summary.awaiting_receipt_count);
   animateCount(document.getElementById('deptsActiveCount'), summary.depts_with_active_requests);
 
   const deptCount = Number(summary.total_departments) || 0;
@@ -48,10 +48,10 @@ function applySummary(summary) {
     awaiting === 1 ? '1 awaiting validation' : `${formatCount(awaiting)} awaiting validation`
   );
 
-  const arriving = Number(summary.arriving_this_week) || 0;
+  const receiptCount = Number(summary.awaiting_receipt_count) || 0;
   setMeta(
-    'pendingDeliveryMeta',
-    arriving === 1 ? '1 arriving this week' : `${formatCount(arriving)} arriving this week`
+    'awaitingReceiptMeta',
+    receiptCount === 1 ? '1 purchase order' : `${formatCount(receiptCount)} purchase orders`
   );
 }
 
@@ -60,7 +60,7 @@ function applyPipeline(pipeline = {}) {
   const canvass = pipeline.canvass || {};
   const pr = pipeline.pr || {};
   const po = pipeline.po || {};
-  const delivery = pipeline.delivery || {};
+  const receipt = pipeline.receipt || {};
 
   animateCount(document.getElementById('pipelineRequestSubmitted'), request.submitted);
   animateCount(document.getElementById('pipelineRequestAwaiting'), request.awaiting);
@@ -70,8 +70,8 @@ function applyPipeline(pipeline = {}) {
   animateCount(document.getElementById('pipelinePrAwaiting'), pr.awaiting);
   animateCount(document.getElementById('pipelinePoSubmitted'), po.submitted);
   animateCount(document.getElementById('pipelinePoAwaiting'), po.awaiting);
-  animateCount(document.getElementById('pipelineDeliveryTransit'), delivery.in_transit);
-  animateCount(document.getElementById('pipelineDeliveryReceiving'), delivery.pending_receiving);
+  animateCount(document.getElementById('pipelineReceiptReleased'), receipt.released);
+  animateCount(document.getElementById('pipelineReceiptPending'), receipt.pending);
 }
 
 function renderRecentRequisitions(items = []) {

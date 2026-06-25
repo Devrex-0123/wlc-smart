@@ -72,7 +72,7 @@ $initials = strtoupper(substr((string)($user['Email'] ?? 'D'), 0, 1));
         </article>
     </section>
 
-    <div class="dean-dashboard-panels" aria-label="Requests and pipeline">
+    <div class="dean-dashboard-panels dean-dashboard-panels--solo" aria-label="Recent requests">
         <section class="dashboard-panel dashboard-panel--recent dean-recent-panel" aria-label="Recent requests">
             <header class="dashboard-panel__head dashboard-panel__head--split dean-recent-panel__head">
                 <h2 class="dashboard-panel__title"><i class="fas fa-clock" aria-hidden="true"></i> Pending Requests</h2>
@@ -80,103 +80,6 @@ $initials = strtoupper(substr((string)($user['Email'] ?? 'D'), 0, 1));
                     <i class="fas fa-plus" aria-hidden="true"></i> Request Item
                 </button>
             </header>
-        </section>
-
-        <section class="dashboard-panel dashboard-panel--pipeline dean-pipeline-panel" aria-label="Procurement pipeline">
-            <header class="dashboard-panel__head">
-                <h2 class="dashboard-panel__title"><i class="fas fa-diagram-project" aria-hidden="true"></i> Procurement Pipeline</h2>
-                <div class="dashboard-panel__legend" aria-hidden="true">
-                    <span class="dashboard-panel__legend-item"><span class="dashboard-panel__legend-dot dashboard-panel__legend-dot--submitted"></span> Submitted</span>
-                    <span class="dashboard-panel__legend-item"><span class="dashboard-panel__legend-dot dashboard-panel__legend-dot--awaiting"></span> Awaiting validation</span>
-                </div>
-            </header>
-
-            <div class="dashboard-pipeline__stages">
-                <article class="pipeline-stage pipeline-stage--request">
-                    <div class="pipeline-stage__head">
-                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-file-circle-plus"></i></span>
-                        <span class="pipeline-stage__label">Request</span>
-                    </div>
-                    <div class="pipeline-stage__metrics">
-                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
-                            <span class="pipeline-stage__metric-value" id="deanPipelineRequestSubmitted">0</span>
-                            <span class="pipeline-stage__metric-label">submitted</span>
-                        </div>
-                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
-                            <span class="pipeline-stage__metric-value" id="deanPipelineRequestAwaiting">0</span>
-                            <span class="pipeline-stage__metric-label">awaiting validation</span>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="pipeline-stage pipeline-stage--canvass">
-                    <div class="pipeline-stage__head">
-                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-table-list"></i></span>
-                        <span class="pipeline-stage__label">Canvass</span>
-                    </div>
-                    <div class="pipeline-stage__metrics">
-                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
-                            <span class="pipeline-stage__metric-value" id="deanPipelineCanvassSubmitted">0</span>
-                            <span class="pipeline-stage__metric-label">submitted</span>
-                        </div>
-                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
-                            <span class="pipeline-stage__metric-value" id="deanPipelineCanvassAwaiting">0</span>
-                            <span class="pipeline-stage__metric-label">awaiting validation</span>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="pipeline-stage pipeline-stage--pr">
-                    <div class="pipeline-stage__head">
-                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-file-lines"></i></span>
-                        <span class="pipeline-stage__label">PR</span>
-                    </div>
-                    <div class="pipeline-stage__metrics">
-                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
-                            <span class="pipeline-stage__metric-value" id="deanPipelinePrSubmitted">0</span>
-                            <span class="pipeline-stage__metric-label">submitted</span>
-                        </div>
-                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
-                            <span class="pipeline-stage__metric-value" id="deanPipelinePrAwaiting">0</span>
-                            <span class="pipeline-stage__metric-label">awaiting validation</span>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="pipeline-stage pipeline-stage--po">
-                    <div class="pipeline-stage__head">
-                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-cart-shopping"></i></span>
-                        <span class="pipeline-stage__label">PO</span>
-                    </div>
-                    <div class="pipeline-stage__metrics">
-                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
-                            <span class="pipeline-stage__metric-value" id="deanPipelinePoSubmitted">0</span>
-                            <span class="pipeline-stage__metric-label">submitted</span>
-                        </div>
-                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
-                            <span class="pipeline-stage__metric-value" id="deanPipelinePoAwaiting">0</span>
-                            <span class="pipeline-stage__metric-label">awaiting validation</span>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="pipeline-stage pipeline-stage--delivery">
-                    <div class="pipeline-stage__head">
-                        <span class="pipeline-stage__icon" aria-hidden="true"><i class="fas fa-truck"></i></span>
-                        <span class="pipeline-stage__label">Delivery</span>
-                    </div>
-                    <div class="pipeline-stage__metrics">
-                        <div class="pipeline-stage__metric pipeline-stage__metric--primary">
-                            <span class="pipeline-stage__metric-value" id="deanPipelineDeliveryTransit">0</span>
-                            <span class="pipeline-stage__metric-label">in transit</span>
-                        </div>
-                        <div class="pipeline-stage__metric pipeline-stage__metric--accent">
-                            <span class="pipeline-stage__metric-value" id="deanPipelineDeliveryReceiving">0</span>
-                            <span class="pipeline-stage__metric-label">pending receiving</span>
-                        </div>
-                    </div>
-                </article>
-            </div>
         </section>
     </div>
 </main>
