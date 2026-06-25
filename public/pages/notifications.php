@@ -66,6 +66,6 @@ $deanActivePage = 'notifications.php';
 <?php require __DIR__ . '/partials/dean_sidebar_scripts.php'; ?>
 <script src="../assets/js/logout.js?v=wlc2"></script>
 <script src="../assets/js/requester_notifications.js?v=2"></script>
-<script src="../assets/js/requester_notifications_page.js?v=1"></script>
+<script src="../assets/js/requester_notifications_page.js?v=2"></script>
 </body>
 </html>
