@@ -49,7 +49,12 @@ function assertPresidentPr(PDO $db): void
 
 function requestHasPurchaseRequisitionLines(PDO $db, int $requestId): bool
 {
-    $stmt = $db->prepare('SELECT COUNT(*) FROM request_approval_suggested_supplier_item WHERE request_id = ?');
+    $stmt = $db->prepare(
+        'SELECT COUNT(*)
+         FROM requisition_line_awards rla
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rla.requisition_line_id
+         WHERE rl.request_id = ?'
+    );
     $stmt->execute([$requestId]);
 
     return (int) $stmt->fetchColumn() > 0;
@@ -259,7 +264,15 @@ function loadPurchaseRequisitionSnapshotData(PDO $db, int $requestId): ?array
         $unitPrice = isset($line['unit_price']) && is_numeric($line['unit_price'])
             ? (float) $line['unit_price']
             : 0.0;
-        $amount = round($qty * $unitPrice, 2);
+        $discountPercent = cwirmsNormalizeCanvassSupplierDiscountPercent($line['discount_percent'] ?? null);
+        $discountFactor = $discountPercent !== null ? (1 - $discountPercent / 100) : 1.0;
+        $effectiveUnitPrice = round($unitPrice * $discountFactor, 2);
+        // Use pre-calculated approved_line_total which already applies discount and accepted_qty
+        if (isset($line['approved_line_total']) && is_numeric($line['approved_line_total'])) {
+            $amount = round((float) $line['approved_line_total'], 2);
+        } else {
+            $amount = round($qty * $effectiveUnitPrice, 2);
+        }
         $grandTotal += $amount;
 
         $supplierName = trim((string) ($line['supplier_name'] ?? ''));
@@ -274,7 +287,7 @@ function loadPurchaseRequisitionSnapshotData(PDO $db, int $requestId): ?array
             ],
             'qty' => $qty,
             'supplier_name' => $supplierName !== '' ? $supplierName : '—',
-            'unit_price' => $unitPrice,
+            'unit_price' => $effectiveUnitPrice,
             'amount' => $amount,
         ];
     }

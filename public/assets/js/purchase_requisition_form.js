@@ -111,6 +111,15 @@
         approveBtn.textContent = st === 'accept' ? 'Accepted' : 'Accept';
         rejectBtn.textContent = st === 'reject' ? 'Rejected' : 'Reject';
         undoBtn.style.display = decided ? 'inline-flex' : 'none';
+
+        if (isPresidentVerifier) {
+            const invSt = String(s.inventory_status || '').trim().toLowerCase();
+            const invApproved = invSt === 'accept';
+            approveBtn.disabled = !invApproved;
+            rejectBtn.disabled = !invApproved;
+            approveBtn.title = invApproved ? '' : 'Inventory Manager must approve first.';
+            rejectBtn.title = invApproved ? '' : 'Inventory Manager must approve first.';
+        }
     }
 
     function setVerifierCircle(roleEl, rawStatus) {
@@ -408,6 +417,10 @@
                 grandTotalEl.textContent = formatMoney(data.grand_total || 0);
             }
             renderApprovalSummary(data.approval_summary || {});
+            const requesterLineEl = document.getElementById('prRequesterLine');
+            if (requesterLineEl) {
+                requesterLineEl.textContent = data.requester || '—';
+            }
             resetRejectPanel();
             const noteEl = getRejectNoteEl();
             if (noteEl) {
