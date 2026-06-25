@@ -454,6 +454,16 @@ if ($accessError === null && $requestId > 0) {
     }
     $hasGsdCanvassedQuoteData = cwirmsRequestHasGsdCanvassedQuoteData($db, $requestId);
     $gsdVerified = ($cvWfGsdStatus === 'accept');
+    // Check whether the requester submitted any preferred quotes (Section A).
+    $prefChkStmt = $db->prepare(
+        "SELECT 1
+         FROM requisition_line_quotes rlq
+         INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
+         WHERE rl.request_id = ? AND rlq.quote_type = 'preferred'
+         LIMIT 1"
+    );
+    $prefChkStmt->execute([$requestId]);
+    $hasRequesterPreferredQuoteData = (bool) $prefChkStmt->fetchColumn();
 }
 
 $isGsdOutcomeReadonlyRole = $isInventoryManagerCanvassReview
@@ -464,7 +474,10 @@ $isGsdOutcomeReadonlyRole = $isInventoryManagerCanvassReview
     || $isRequesterOwnedCanvass;
 $showGsdOutcomeReadonlyView = $gsdVerified && $isGsdOutcomeReadonlyRole;
 $showGsdCanvassOutcomeShell = $isGsdCanvassReview || $showGsdOutcomeReadonlyView;
-$gsdOutcomeSectionsInitiallyHidden = $showGsdCanvassOutcomeShell && !$hasGsdCanvassedQuoteData;
+// Sections start hidden only when neither preferred (A) nor canvassed (B) quotes exist yet.
+$gsdOutcomeSectionsInitiallyHidden = $showGsdCanvassOutcomeShell
+    && !$hasGsdCanvassedQuoteData
+    && !($hasRequesterPreferredQuoteData ?? false);
 
 if ($accessError === null && $requestId > 0 && ($canViewQtyPricingOverview || $isGsdCanvassReview)) {
     require_once __DIR__ . '/../../app/api/approval_tables.php';
@@ -495,7 +508,7 @@ if ($accessError === null && $requestId > 0 && ($canViewQtyPricingOverview || $i
         );
         $gsdAbstractStmt->execute([$requestId]);
         $gsdAbstractStatus = strtolower(trim((string) ($gsdAbstractStmt->fetchColumn() ?: 'pending'))) ?: 'pending';
-        if ($gsdAbstractStatus === 'accept' && cwirmsRequestHasGsdCanvassedQuoteData($db, $requestId)) {
+        if ($gsdAbstractStatus === 'accept' && (cwirmsRequestHasGsdCanvassedQuoteData($db, $requestId) || ($hasRequesterPreferredQuoteData ?? false))) {
             $hasComptrollerAbstractData = true;
         }
     }
@@ -540,7 +553,8 @@ if ($accessError === null && $requestId > 0 && ($canViewQtyPricingOverview || $i
     }
 }
 if ($showComptrollerPricingOverview && !$isGsdCanvassReview) {
-    if (!$gsdVerified || !$hasGsdCanvassedQuoteData) {
+    $hasAnyQuoteData = $hasGsdCanvassedQuoteData || ($hasRequesterPreferredQuoteData ?? false);
+    if (!$gsdVerified || !$hasAnyQuoteData) {
         $showComptrollerPricingOverview = false;
     }
 }

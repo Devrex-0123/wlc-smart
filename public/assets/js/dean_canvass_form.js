@@ -3327,6 +3327,10 @@
         renderPreferredTable();
     }
 
+    function gsdHasSectionAData(lines) {
+        return (lines || []).some((line) => (line.preferred_quotes || []).length > 0);
+    }
+
     function gsdHasSectionBData(lines) {
         return (lines || []).some((line) =>
             (line.canvassed_quotes || []).some((q) => {
@@ -3340,24 +3344,27 @@
         if (!gsdReviewView && !gsdOutcomeReadonlyView) {
             return;
         }
+        const hasA = gsdHasSectionAData(lines);
         const hasB = gsdHasSectionBData(lines);
+        const hasAny = hasA || hasB;
         const sectionB = document.getElementById('cvGsdSectionB');
         const sectionC = document.getElementById('cvGsdSectionC');
         const abstractSection = document.getElementById('cvGsdAbstractTotalSection');
 
-        // Section B is where GSD adds canvassed quotes — keep it always visible
-        // in review/edit mode so GSD can add quotes even when starting from scratch.
+        // Section B: always visible in GSD edit mode so they can add quotes.
+        // In readonly mode show it whenever any supplier data exists (A or B), so the
+        // "No G.S.D. canvassed quotes were recorded." message is visible even when
+        // only preferred (Section A) quotes are present.
         if (sectionB) {
-            sectionB.hidden = gsdReviewView ? false : !hasB;
+            sectionB.hidden = gsdReviewView ? false : !hasAny;
         }
-        // Section C (suggest supplier) and pricing abstract only make sense once
-        // there are actual quotes to compare.
+        // Section C and pricing abstract show whenever ANY supplier exists in A or B.
         [sectionC, abstractSection].forEach((el) => {
-            if (el) el.hidden = !hasB;
+            if (el) el.hidden = !hasAny;
         });
         const pricingSection = document.getElementById('cvPricingOverviewSection');
         if (pricingSection) {
-            pricingSection.hidden = !hasB;
+            pricingSection.hidden = !hasAny;
         }
     }
 

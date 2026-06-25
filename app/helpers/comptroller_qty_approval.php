@@ -301,16 +301,16 @@ function cwirmsComptrollerCheckedByLabel(PDO $db, int $userId): string
 }
 
 /**
- * True when every canvassed line has a GSD award in requisition_line_awards.
+ * True when every line that has any quote (canvassed or preferred) has a GSD award in requisition_line_awards.
  */
 function cwirmsComptrollerRequestHasSuggestedSuppliersPerItem(PDO $db, int $requestId): bool
 {
-    // Count lines that have canvassed quotes (these require a GSD award).
+    // Count lines that have any quote (canvassed or preferred — GSD may select from either).
     $totalStmt = $db->prepare(
         "SELECT COUNT(DISTINCT rlq.requisition_line_id)
          FROM requisition_line_quotes rlq
          INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
-         WHERE rl.request_id = ? AND rlq.quote_type = 'canvassed'"
+         WHERE rl.request_id = ? AND rlq.quote_type IN ('canvassed', 'preferred')"
     );
     $totalStmt->execute([$requestId]);
     $total = (int) $totalStmt->fetchColumn();

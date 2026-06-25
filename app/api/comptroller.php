@@ -47,7 +47,7 @@ function requestHasSuggestedSuppliersPerItem(PDO $db, int $requestId): bool
         "SELECT COUNT(DISTINCT rlq.requisition_line_id)
          FROM requisition_line_quotes rlq
          INNER JOIN requisition_line rl ON rl.requisition_line_id = rlq.requisition_line_id
-         WHERE rl.request_id = ? AND rlq.quote_type = 'canvassed'"
+         WHERE rl.request_id = ? AND rlq.quote_type IN ('canvassed', 'preferred')"
     );
     $totalStmt->execute([$requestId]);
     $total = (int) $totalStmt->fetchColumn();
