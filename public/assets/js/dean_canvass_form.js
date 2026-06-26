@@ -6721,116 +6721,176 @@
             items:   [],
         });
         renderSection();
-        clearCombo();
         showSupToast('"' + s.name + '" added to quotation.');
         return true;
     }
 
-    // ── Combobox ──────────────────────────────────────────────────────────────
-    function buildComboboxList(filter) {
+    // ── Supplier modal — GSD-style ────────────────────────────────────────────
+    var _cvSupRegPanelOpen = false;
+
+    function _cvSupSetHint(text) {
+        var el = document.getElementById('supplier-modal-hint-text');
+        if (el) el.textContent = text;
+    }
+
+    function _cvSupCheckSaveState() {
+        var btn = document.getElementById('supplier-modal-save');
+        if (!btn) return;
+        var nameVal = ((document.getElementById('sup-reg-name') || {}).value || '').trim();
+        btn.disabled = !(_selectedSupplier || (_cvSupRegPanelOpen && nameVal.length > 0));
+    }
+
+    function _cvSupCloseRegPanel() {
+        _cvSupRegPanelOpen = false;
+        var panel = document.getElementById('cv-sup-reg-panel');
+        if (panel) panel.style.display = 'none';
+        ['sup-reg-name','sup-reg-contact','sup-reg-phone','sup-reg-email','sup-reg-address','sup-reg-tin'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        _cvSupCheckSaveState();
+    }
+
+    function _cvSupOpenRegPanel(prefill) {
+        _cvSupRegPanelOpen = true;
+        _selectedSupplier = null;
+        var panel = document.getElementById('cv-sup-reg-panel');
+        if (panel) panel.style.display = '';
+        var nameInp = document.getElementById('sup-reg-name');
+        if (nameInp) { nameInp.value = prefill || ''; setTimeout(function () { nameInp.focus(); }, 40); }
+        _cvSupSetHint('Fill in supplier details');
+        _cvSupCheckSaveState();
+    }
+
+    function _cvSupRenderResults(query) {
         var sups    = window._cvAvailableSuppliers || [];
         var usedIds = activeSuppliers.map(function (s) { return String(s.id); });
-        var q       = (filter || '').trim().toLowerCase();
-        var list    = document.getElementById('supplier-combobox-list');
-        var regRow  = document.getElementById('supplier-combobox-register');
-        if (!list) return;
-
-        // Require at least 2 characters before showing anything
-        if (q.length < 2) {
-            list.innerHTML = '';
-            list.style.display = 'none';
-            if (regRow) regRow.style.display = 'none';
-            return;
-        }
+        var q       = (query || '').trim().toLowerCase();
+        var container = document.getElementById('supplier-combobox-list');
+        if (!container) return;
 
         var filtered = sups.filter(function (s) {
             var sid = String(s.id != null ? s.id : s.supplier_id || '');
             if (!sid || usedIds.includes(sid)) return false;
+            if (!q) return true;
             return (s.name || s.supplier_name || '').toLowerCase().includes(q);
         });
 
-        list.innerHTML = '';
+        container.innerHTML = '';
 
         if (!filtered.length) {
-            list.style.display = 'none';
-            if (regRow) regRow.style.display = 'flex';
+            container.innerHTML = '<div class="gsd-sup-empty-state">' +
+                '<i class="fas fa-search-slash" aria-hidden="true"></i>' +
+                '<span class="gsd-sup-empty-text">No supplier found' + (q ? ' for &ldquo;' + escHtml(q) + '&rdquo;' : '') + '</span>' +
+                '<button type="button" class="gsd-sup-empty-reg-btn">' +
+                (q ? '+ Register &ldquo;' + escHtml(q) + '&rdquo;' : '+ Register new supplier') +
+                '</button></div>';
+            container.querySelector('.gsd-sup-empty-reg-btn').addEventListener('click', function () {
+                _cvSupOpenRegPanel(q);
+            });
             return;
         }
-
-        if (regRow) regRow.style.display = 'none';
-        list.style.display = 'block';
 
         filtered.forEach(function (raw) {
             var s = normalizeSupplierEntry(raw);
             if (!s) return;
-            var btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'sup-combo-item';
-            btn.dataset.supplierId = s.id;
-
             var imgSrc = getSupplierImg(s.image);
-            var avatarInner = imgSrc
-                ? '<img src="' + escHtml(imgSrc) + '" class="sup-combo-logo" alt=""' +
-                  ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'inline-flex\'">' +
-                  '<span class="sup-combo-initials" style="display:none">' + escHtml(getInitials(s.name)) + '</span>'
-                : '<span class="sup-combo-initials">' + escHtml(getInitials(s.name)) + '</span>';
-
-            btn.innerHTML = avatarInner + '<span class="sup-combo-label">' + escHtml(s.name) + '</span>';
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
+            var initials = escHtml(getInitials(s.name));
+            var avatarHtml = imgSrc
+                ? '<div class="gsd-sup-avatar-sq"><img src="' + escHtml(imgSrc) + '" class="gsd-sup-av-img" alt=""' +
+                  ' onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + initials + '\'"></div>'
+                : '<div class="gsd-sup-avatar-sq">' + initials + '</div>';
+            var meta = [s.tin ? 'TIN: ' + s.tin : '', s.address].filter(Boolean).join(' · ');
+            var isSelected = _selectedSupplier && String(_selectedSupplier.id) === String(s.id);
+            var row = document.createElement('div');
+            row.className = 'gsd-sup-row' + (isSelected ? ' gsd-sup-selected' : '');
+            row.innerHTML = avatarHtml +
+                '<div class="gsd-sup-row-info">' +
+                '<div class="gsd-sup-row-name">' + escHtml(s.name) + '</div>' +
+                (meta ? '<div class="gsd-sup-row-meta">' + escHtml(meta) + '</div>' : '') +
+                '</div>' +
+                '<i class="fas fa-circle-check gsd-sup-row-check" aria-hidden="true"></i>';
+            row.addEventListener('click', function () {
                 _selectedSupplier = s;
-                renderSelectionPreview(s);
-                pickAndAddSupplier(s);
+                _cvSupCloseRegPanel();
+                _cvSupRenderResults(document.getElementById('supplier-combobox-input') ? document.getElementById('supplier-combobox-input').value : '');
+                _cvSupSetHint('"' + s.name + '" selected');
+                _cvSupCheckSaveState();
             });
-            list.appendChild(btn);
+            container.appendChild(row);
         });
-    }
 
-    function selectSupplierCombo(s) {
-        var norm = normalizeSupplierEntry(s);
-        if (!norm) return;
-        _selectedSupplier = norm;
-        var inp = document.getElementById('supplier-combobox-input');
-        if (inp) inp.value = norm.name;
-        renderSelectionPreview(norm);
-        var list = document.getElementById('supplier-combobox-list');
-        if (list) list.style.display = 'none';
-        var regRow = document.getElementById('supplier-combobox-register');
-        if (regRow) regRow.style.display = 'none';
-    }
-
-    function clearCombo() {
-        _selectedSupplier = null;
-        var inp = document.getElementById('supplier-combobox-input');
-        if (inp) inp.value = '';
-        var list = document.getElementById('supplier-combobox-list');
-        if (list) list.style.display = 'none';
-        var regRow = document.getElementById('supplier-combobox-register');
-        if (regRow) regRow.style.display = 'none';
-        hideSelectionPreview();
+        var hintRow = document.createElement('div');
+        hintRow.className = 'gsd-sup-register-hint-row';
+        hintRow.innerHTML = '<i class="fas fa-circle-info" aria-hidden="true"></i> Not here?&nbsp;' +
+            '<button type="button" class="gsd-sup-register-hint-btn">Register as new supplier</button>';
+        hintRow.querySelector('.gsd-sup-register-hint-btn').addEventListener('click', function () {
+            var inp = document.getElementById('supplier-combobox-input');
+            _cvSupOpenRegPanel(inp ? inp.value.trim() : '');
+        });
+        container.appendChild(hintRow);
     }
 
     // ── Modal ─────────────────────────────────────────────────────────────────
     function openModal() {
-        clearCombo();
+        _selectedSupplier = null;
+        _cvSupCloseRegPanel();
+        var inp = document.getElementById('supplier-combobox-input');
+        if (inp) inp.value = '';
+        _cvSupSetHint('Search to find a supplier');
+        _cvSupCheckSaveState();
+        _cvSupRenderResults('');
         var ov = document.getElementById('supplier-modal-overlay');
         if (ov) ov.style.display = 'flex';
-        var inp = document.getElementById('supplier-combobox-input');
         if (inp) setTimeout(function () { inp.focus(); }, 60);
     }
 
     function closeModal() {
         var ov = document.getElementById('supplier-modal-overlay');
         if (ov) ov.style.display = 'none';
+        _cvSupCloseRegPanel();
     }
 
     function addSupplier() {
-        if (!_selectedSupplier) {
-            showSupToast('Please select a supplier from the list.', 'error');
+        if (_selectedSupplier) {
+            pickAndAddSupplier(_selectedSupplier);
+            closeModal();
             return;
         }
-        pickAndAddSupplier(_selectedSupplier);
+        if (!_cvSupRegPanelOpen) return;
+        var name = ((document.getElementById('sup-reg-name') || {}).value || '').trim();
+        if (!name) { showSupToast('Supplier name is required.', 'error'); return; }
+        var emailVal = ((document.getElementById('sup-reg-email') || {}).value || '').trim();
+        if (emailVal && !isValidEmail(emailVal)) { showSupToast('Invalid email format.', 'error'); return; }
+        if (!_requestId) { showSupToast('Missing request reference. Reload and try again.', 'error'); return; }
+        var btn = document.getElementById('supplier-modal-save');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        var body = new URLSearchParams();
+        body.set('action', 'add_preferred');
+        body.set('request_id', String(_requestId));
+        body.set('supplier_name', name);
+        body.set('contact_person', ((document.getElementById('sup-reg-contact') || {}).value || ''));
+        body.set('phone_number',   ((document.getElementById('sup-reg-phone')   || {}).value || ''));
+        body.set('email',          emailVal);
+        body.set('address',        ((document.getElementById('sup-reg-address') || {}).value || ''));
+        body.set('tin',            ((document.getElementById('sup-reg-tin')     || {}).value || ''));
+        body.set('shop_url', ''); body.set('city', ''); body.set('country', ''); body.set('postal_code', '');
+        fetch(_canvassApi, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString(), credentials: 'include' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) { showSupToast(data.message || 'Could not register supplier.', 'error'); return; }
+            var newSup = data.supplier || {};
+            var entry = normalizeSupplierEntry({ supplier_id: newSup.supplier_id, supplier_name: newSup.supplier_name || name, contact_person: newSup.contact_person || '', tin: newSup.tin || '', address: newSup.address || '', supplier_image: newSup.supplier_image || '' });
+            if (entry && entry.id) {
+                var existing = window._cvAvailableSuppliers || [];
+                if (!existing.find(function (s) { return String(s.id != null ? s.id : s.supplier_id || '') === String(entry.id); })) { existing.push(entry); window._cvAvailableSuppliers = existing; }
+                pickAndAddSupplier(entry);
+                closeModal();
+                showSupToast('"' + entry.name + '" registered and added.');
+            } else { showSupToast('Supplier registered but could not be selected. Search for it manually.', 'error'); closeModal(); }
+        })
+        .catch(function () { showSupToast('Network error. Please try again.', 'error'); })
+        .finally(function () { if (btn) { btn.disabled = false; btn.textContent = 'Add supplier'; } });
     }
 
     function removeSupplier(suppId) {
@@ -7129,104 +7189,6 @@
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     }
 
-    function openRegisterModal() {
-        var form = document.getElementById('sup-register-form');
-        if (form) form.reset();
-        var ov = document.getElementById('sup-register-overlay');
-        if (ov) ov.style.display = 'flex';
-        var inp = document.getElementById('sup-register-name');
-        if (inp) setTimeout(function () { inp.focus(); }, 60);
-    }
-
-    function closeRegisterModal() {
-        var ov = document.getElementById('sup-register-overlay');
-        if (ov) ov.style.display = 'none';
-    }
-
-    function submitRegisterSupplier() {
-        var nameEl = document.getElementById('sup-register-name');
-        var name = nameEl ? nameEl.value.trim() : '';
-        if (!name) {
-            showSupToast('Supplier name is required.', 'error');
-            if (nameEl) nameEl.focus();
-            return;
-        }
-
-        var email = (document.getElementById('sup-register-email') || {}).value || '';
-        if (!isValidEmail(email)) {
-            showSupToast('Invalid email format.', 'error');
-            return;
-        }
-
-        if (!_requestId) {
-            showSupToast('Missing request reference. Reload the page and try again.', 'error');
-            return;
-        }
-
-        var body = new URLSearchParams();
-        body.set('action', 'add_preferred');
-        body.set('request_id', String(_requestId));
-        body.set('supplier_name', name);
-        body.set('contact_person', (document.getElementById('sup-register-contact') || {}).value || '');
-        body.set('phone_number',   (document.getElementById('sup-register-phone')   || {}).value || '');
-        body.set('email',          email.trim());
-        body.set('address',        (document.getElementById('sup-register-address') || {}).value || '');
-        body.set('tin',            (document.getElementById('sup-register-tin')     || {}).value || '');
-        body.set('shop_url', '');
-        body.set('city', '');
-        body.set('country', '');
-        body.set('postal_code', '');
-
-        var btnSave = document.getElementById('sup-register-save');
-        if (btnSave) { btnSave.disabled = true; btnSave.textContent = 'Saving…'; }
-
-        fetch(_canvassApi, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body.toString(),
-            credentials: 'include'
-        })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            if (!data.success) {
-                showSupToast(data.message || 'Could not register supplier.', 'error');
-                return;
-            }
-            var newSup = data.supplier || {};
-            var entry = normalizeSupplierEntry({
-                supplier_id:   newSup.supplier_id,
-                supplier_name: newSup.supplier_name || name,
-                contact_person: newSup.contact_person || '',
-                tin:           newSup.tin || '',
-                address:       newSup.address || '',
-                supplier_image: newSup.supplier_image || '',
-            });
-            if (entry && entry.id) {
-                var existing = window._cvAvailableSuppliers || [];
-                if (!existing.find(function (s) {
-                    var sid = String(s.id != null ? s.id : s.supplier_id || '');
-                    return sid === entry.id;
-                })) {
-                    existing.push(entry);
-                    window._cvAvailableSuppliers = existing;
-                }
-                closeRegisterModal();
-                pickAndAddSupplier(entry);
-                var inp = document.getElementById('supplier-combobox-input');
-                if (inp) {
-                    inp.focus();
-                    buildComboboxList('');
-                }
-            } else {
-                showSupToast('Supplier registered but could not be selected. Search for it manually.', 'error');
-                closeRegisterModal();
-            }
-        })
-        .catch(function () { showSupToast('Network error. Please try again.', 'error'); })
-        .finally(function () {
-            if (btnSave) { btnSave.disabled = false; btnSave.textContent = 'Register'; }
-        });
-    }
 
     // ── Init ──────────────────────────────────────────────────────────────────
     function init() {
@@ -7249,42 +7211,24 @@
         if (comboInp) {
             comboInp.addEventListener('input', function () {
                 _selectedSupplier = null;
-                hideSelectionPreview();
-                buildComboboxList(this.value);
+                _cvSupCloseRegPanel();
+                _cvSupSetHint('Search to find a supplier');
+                _cvSupCheckSaveState();
+                _cvSupRenderResults(this.value);
             });
             comboInp.addEventListener('focus', function () {
-                buildComboboxList(this.value);
-            });
-            // Close list when clicking outside combobox (do not close the modal)
-            document.addEventListener('click', function (e) {
-                var wrap = document.getElementById('supplier-combobox');
-                var modal = document.getElementById('supplier-modal-overlay');
-                if (!wrap || !modal || modal.style.display === 'none') return;
-                if (!wrap.contains(e.target)) {
-                    var list = document.getElementById('supplier-combobox-list');
-                    if (list) list.style.display = 'none';
-                }
+                _cvSupRenderResults(this.value);
             });
         }
 
-        var modalInner = document.querySelector('#supplier-modal-overlay .supplier-modal');
-        if (modalInner) {
-            modalInner.addEventListener('click', function (e) {
-                e.stopPropagation();
-            });
-        }
-
-        // Register Supplier modal wiring
-        var btnRegLink    = document.getElementById('btn-register-supplier-link');
-        var btnRegClose   = document.getElementById('sup-register-close');
-        var btnRegCancel  = document.getElementById('sup-register-cancel');
-        var btnRegSave    = document.getElementById('sup-register-save');
-        var regOverlay    = document.getElementById('sup-register-overlay');
-        if (btnRegLink)   btnRegLink.addEventListener('click', openRegisterModal);
-        if (btnRegClose)  btnRegClose.addEventListener('click', closeRegisterModal);
-        if (btnRegCancel) btnRegCancel.addEventListener('click', closeRegisterModal);
-        if (btnRegSave)   btnRegSave.addEventListener('click', submitRegisterSupplier);
-        if (regOverlay)   regOverlay.addEventListener('click', function (e) { if (e.target === this) closeRegisterModal(); });
+        // Inline registration panel wiring
+        var regClose  = document.getElementById('cv-sup-reg-close');
+        var regNameInp = document.getElementById('sup-reg-name');
+        if (regClose) regClose.addEventListener('click', function () {
+            _cvSupCloseRegPanel();
+            _cvSupSetHint(_selectedSupplier ? '"' + _selectedSupplier.name + '" selected' : 'Search to find a supplier');
+        });
+        if (regNameInp) regNameInp.addEventListener('input', _cvSupCheckSaveState);
 
         renderSection();
     }

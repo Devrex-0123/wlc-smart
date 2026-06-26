@@ -439,12 +439,12 @@ try {
     if (cwirmsApprovalTableExists($db, 'purchase_requisition_approval')) {
         ensurePurchaseRequisitionApprovalRow($db, $requestId);
         $approvalStmt = $db->prepare(
-            'SELECT pr_inv_status, pr_pres_status FROM purchase_requisition_approval WHERE request_id = ? LIMIT 1'
+            'SELECT pr_inv_status, pr_pres_status, pr_inv_at, pr_pres_at FROM purchase_requisition_approval WHERE request_id = ? LIMIT 1'
         );
         $approvalStmt->execute([$requestId]);
         $approval = $approvalStmt->fetch(PDO::FETCH_ASSOC) ?: [];
     } else {
-        $approval = ['pr_inv_status' => 'pending', 'pr_pres_status' => 'pending'];
+        $approval = ['pr_inv_status' => 'pending', 'pr_pres_status' => 'pending', 'pr_inv_at' => null, 'pr_pres_at' => null];
     }
 
     sendJson([
@@ -459,6 +459,8 @@ try {
         'approval_summary' => [
             'inventory_status' => (string) ($approval['pr_inv_status'] ?? 'pending'),
             'president_status' => (string) ($approval['pr_pres_status'] ?? 'pending'),
+            'inv_decided_at'   => $approval['pr_inv_at'] ?? null,
+            'pres_decided_at'  => $approval['pr_pres_at'] ?? null,
         ],
     ]);
 } catch (Throwable $e) {

@@ -1,0 +1,540 @@
+/* ── Unit Management — styled to match Item Management ── */
+
+.unit-management-container {
+    animation: fadeIn 0.5s ease;
+}
+
+/* ── Filter / toolbar row ── */
+.filter-section {
+    background: white;
+    padding: 1.5rem 2rem;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    animation: slideDown 0.5s ease;
+}
+
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* ── Search bar ── */
+.search-container {
+    position: relative;
+    flex: 1;
+    min-width: 250px;
+    max-width: 350px;
+}
+
+.search-container i {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+    font-size: 0.88rem;
+}
+
+.search-input {
+    width: 100%;
+    padding: 0.6rem 0.75rem 0.6rem 2.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    color: #1e293b;
+    background: #fff;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    box-sizing: border-box;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.search-input::placeholder {
+    color: #cbd5e1;
+}
+
+.filter-controls .btn-filter {
+    padding: 0.6rem 1.5rem;
+    background: #16a34a;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.filter-controls .btn-filter:hover {
+    background: #15803d;
+    transform: translateY(-2px);
+}
+
+/* ── Table ── */
+.table-container {
+    animation: fadeInUp 0.6s ease;
+}
+
+.table-wrapper table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table-wrapper th,
+.table-wrapper td {
+    padding: 0.9rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.table-wrapper thead th {
+    font-weight: 700;
+    font-size: 0.82rem;
+}
+
+/* ── Abbreviation pill ── */
+.unit-abbr-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border: 1px solid #bbf7d0;
+}
+
+/* ── Action buttons ── */
+.action-btn {
+    padding: 8px 10px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    margin: 0 4px;
+    transition: 0.25s ease;
+}
+
+.action-btn.edit {
+    background: #10b981;
+    color: white;
+}
+
+.action-btn.edit:hover {
+    background: #059669;
+}
+
+.action-btn.delete {
+    background: #ef4444;
+    color: white;
+}
+
+.action-btn.delete:hover {
+    background: #dc2626;
+}
+
+/* ── Add/Edit Modal overlay ── */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+    animation: fadeIn 0.3s;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.show {
+    display: flex;
+}
+
+.modal-content {
+    background: #fff;
+    position: relative;
+    width: 90%;
+    max-width: 480px;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.close-modal {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 1.8rem;
+    cursor: pointer;
+    color: #94a3b8;
+    transition: color 0.3s ease;
+    line-height: 1;
+}
+
+.close-modal:hover {
+    color: #1e293b;
+}
+
+.modal-content h2 {
+    margin: 0 0 1.25rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+/* ── Form fields ── */
+.form-group {
+    margin-bottom: 1.2rem;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 0.4rem;
+    color: #374151;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+    font-size: 0.95rem;
+    transition: border 0.3s;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #16a34a;
+}
+
+.btn-save {
+    width: 100%;
+    padding: 0.9rem;
+    background: #16a34a;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.btn-save:hover {
+    background: #15803d;
+    transform: translateY(-2px);
+}
+
+/* ── Delete confirmation modal ── */
+.unit-delete-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.unit-delete-modal.is-open {
+    display: flex;
+}
+
+.unit-delete-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.unit-delete-card {
+    position: relative;
+    z-index: 1;
+    width: min(380px, calc(100% - 2rem));
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.22);
+    padding: 2rem 1.75rem 1.5rem;
+    text-align: center;
+    animation: unitModalIn 0.2s ease;
+}
+
+@keyframes unitModalIn {
+    from { opacity: 0; transform: scale(0.94) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.unit-delete-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.85rem;
+    background: transparent;
+    border: none;
+    font-size: 1.6rem;
+    color: #94a3b8;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+}
+
+.unit-delete-close:hover { color: #475569; }
+
+.unit-delete-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #fee2e2, #fecaca);
+    color: #dc2626;
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+}
+
+.unit-delete-title {
+    margin: 0 0 0.5rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.unit-delete-desc {
+    margin: 0 0 0.5rem;
+    font-size: 0.88rem;
+    color: #64748b;
+    line-height: 1.5;
+}
+
+.unit-delete-name {
+    margin: 0 0 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.unit-delete-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+
+.unit-delete-btn {
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s ease, transform 0.12s ease;
+    font-family: inherit;
+}
+
+.unit-delete-btn:hover { transform: translateY(-1px); }
+
+.unit-delete-btn-cancel {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.unit-delete-btn-cancel:hover { background: #e2e8f0; }
+
+.unit-delete-btn-delete {
+    background: #dc2626;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.unit-delete-btn-delete:hover { background: #b91c1c; }
+
+/* ── Success modal ── */
+.unit-success-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.unit-success-modal.is-open {
+    display: flex;
+}
+
+.unit-success-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.unit-success-card {
+    position: relative;
+    z-index: 1;
+    width: min(360px, calc(100% - 2rem));
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.22);
+    padding: 2rem 1.75rem 1.5rem;
+    text-align: center;
+    animation: unitModalIn 0.2s ease;
+}
+
+.unit-success-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #dcfce7, #bbf7d0);
+    color: #16a34a;
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+}
+
+.unit-success-title {
+    margin: 0 0 0.5rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.unit-success-desc {
+    margin: 0 0 1.25rem;
+    font-size: 0.9rem;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.unit-success-actions { display: flex; justify-content: center; }
+
+.unit-success-btn {
+    padding: 0.6rem 1.75rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    background: #16a34a;
+    color: #fff;
+    font-family: inherit;
+    transition: background 0.15s ease;
+}
+
+.unit-success-btn:hover { background: #15803d; }
+
+/* ── Toast ── */
+#toastContainer {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 99999;
+}
+
+.toast {
+    min-width: 300px;
+    margin-bottom: 12px;
+    padding: 14px 20px;
+    color: white;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    animation: slideInRight 0.5s, fadeOut 0.5s 3s forwards;
+}
+
+.toast.success { background: #16a34a; }
+.toast.error   { background: #ef4444; }
+
+/* ── Keyframes ── */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(100%); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fadeOut {
+    to { opacity: 0; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .filter-section {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-controls {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .filter-controls .btn-filter {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .modal-content {
+        margin: 0 auto;
+        width: 95%;
+    }
+
+    .table-wrapper {
+        overflow-x: auto;
+    }
+
+    .table-wrapper table {
+        min-width: 550px;
+    }
+}

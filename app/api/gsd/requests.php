@@ -316,7 +316,7 @@ try {
         }
 
         $stmt = $db->prepare('
-            SELECT canvas_status, canvassed_by, canvassed_at, canvas_assignee_user_id, suggested_supplier_id, suggested_supplier_name, comp_status, checked_by, checked_at, gsd_status, pres_status
+            SELECT canvas_status, canvassed_by, canvassed_at, canvas_assignee_user_id, suggested_supplier_id, suggested_supplier_name, comp_status, checked_by, checked_at, gsd_status, verified_at, pres_status
             FROM canvass_verification_approval
             WHERE request_id = ?
             LIMIT 1
@@ -337,6 +337,7 @@ try {
                     'checked_by' => null,
                     'checked_at' => null,
                     'gsd_status' => null,
+                    'verified_at' => null,
                     'pres_status' => null,
                 ],
             ]);
@@ -355,6 +356,7 @@ try {
                 'checked_by' => $row['checked_by'],
                 'checked_at' => $row['checked_at'],
                 'gsd_status' => $row['gsd_status'],
+                'verified_at' => $row['verified_at'] ?? null,
                 'pres_status' => $row['pres_status'],
             ],
         ]);
