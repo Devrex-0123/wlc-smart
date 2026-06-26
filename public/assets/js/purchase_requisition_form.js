@@ -5,6 +5,16 @@
     const isInventoryVerifier = Boolean(cfg.isInventoryVerifier);
     const isPresidentVerifier = Boolean(cfg.isPresidentVerifier);
 
+    const UNDO_WINDOW_MS = 24 * 60 * 60 * 1000;
+    let undoHideTimer = null;
+
+    function undoWindowRemainingMs(timestampStr) {
+        if (!timestampStr) return 0;
+        const decided = new Date(timestampStr.replace(' ', 'T'));
+        if (isNaN(decided.getTime())) return 0;
+        return Math.max(0, UNDO_WINDOW_MS - (Date.now() - decided.getTime()));
+    }
+
     const requestNoEl = document.getElementById('prRequestNo');
     const requesterEl = document.getElementById('prRequester');
     const locationEl = document.getElementById('prLocation');
@@ -110,9 +120,24 @@
         const decided = st === 'accept' || st === 'reject';
         approveBtn.textContent = st === 'accept' ? 'Accepted' : 'Accept';
         rejectBtn.textContent = st === 'reject' ? 'Rejected' : 'Reject';
-        undoBtn.style.display = decided ? 'inline-flex' : 'none';
+        clearTimeout(undoHideTimer);
+        const decidedAt = isInventoryVerifier ? s.inv_decided_at : s.pres_decided_at;
+        const remaining = decided ? undoWindowRemainingMs(decidedAt) : 0;
+        const withinWindow = remaining > 0;
+        approveBtn.style.display = withinWindow ? 'none' : '';
+        rejectBtn.style.display = withinWindow ? 'none' : '';
+        undoBtn.style.display = withinWindow ? 'inline-flex' : 'none';
+        undoBtn.classList.toggle('undo-btn--decided', withinWindow);
+        if (withinWindow) {
+            undoHideTimer = setTimeout(() => {
+                undoBtn.style.display = 'none';
+                undoBtn.classList.remove('undo-btn--decided');
+                approveBtn.style.display = '';
+                rejectBtn.style.display = '';
+            }, remaining);
+        }
 
-        if (isPresidentVerifier) {
+        if (isPresidentVerifier && !withinWindow) {
             const invSt = String(s.inventory_status || '').trim().toLowerCase();
             const invApproved = invSt === 'accept';
             approveBtn.disabled = !invApproved;

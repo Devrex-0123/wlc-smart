@@ -10,6 +10,16 @@
     const requestId = cfg.requestId;
     const gsdApi = cfg.gsdApi;
 
+    const UNDO_WINDOW_MS = 24 * 60 * 60 * 1000;
+    let undoHideTimer = null;
+
+    function undoWindowRemainingMs(timestampStr) {
+        if (!timestampStr) return 0;
+        const decided = new Date(timestampStr.replace(' ', 'T'));
+        if (isNaN(decided.getTime())) return 0;
+        return Math.max(0, UNDO_WINDOW_MS - (Date.now() - decided.getTime()));
+    }
+
     const gsdAssigneesLiveRef = { list: [] };
     let gsdCanvasAssigneesCache = null;
     let gsdApprovalState = null;
@@ -522,14 +532,23 @@
         const awardsReady = typeof window.__cwirmsGsdAllAwardsReady === 'function'
             ? window.__cwirmsGsdAllAwardsReady()
             : false;
-        approveBtn.disabled = gsdDone ? false : !awardsReady;
-        rejectBtn.disabled = false;
         approveBtn.textContent = st === 'accept' ? 'Verified' : 'Verify';
         rejectBtn.textContent = st === 'reject' ? 'Rejected' : 'Reject';
         approveBtn.title = '';
+        clearTimeout(undoHideTimer);
+        const remaining = gsdDone
+            ? undoWindowRemainingMs(approval && approval.verified_at)
+            : 0;
+        const withinWindow = remaining > 0;
+        approveBtn.style.display = withinWindow ? 'none' : '';
+        rejectBtn.style.display = withinWindow ? 'none' : '';
+        approveBtn.disabled = withinWindow ? false : (gsdDone ? false : !awardsReady);
+        rejectBtn.disabled = false;
         if (hintEl) {
             if (st === 'accept') {
-                hintEl.textContent = 'Already verified at GSD. Use Undo decision if you need to reopen.';
+                hintEl.textContent = withinWindow
+                    ? 'Already verified at GSD. Use Undo decision if you need to reopen.'
+                    : 'Already verified at GSD.';
                 hintEl.className = 'gsd-verify-hint gsd-verify-hint-done';
             } else if (!gsdDone) {
                 hintEl.textContent = 'Select a quote for every line item, then click Verify.';
@@ -537,7 +556,19 @@
             }
         }
         if (undoBtn) {
-            undoBtn.style.display = st === 'accept' || st === 'reject' ? 'inline-flex' : 'none';
+            undoBtn.style.display = withinWindow ? 'inline-flex' : 'none';
+            undoBtn.classList.toggle('undo-btn--decided', withinWindow);
+            if (withinWindow) {
+                undoHideTimer = setTimeout(() => {
+                    undoBtn.style.display = 'none';
+                    undoBtn.classList.remove('undo-btn--decided');
+                    approveBtn.style.display = '';
+                    rejectBtn.style.display = '';
+                    if (hintEl && st === 'accept') {
+                        hintEl.textContent = 'Already verified at GSD.';
+                    }
+                }, remaining);
+            }
         }
     }
 

@@ -1140,80 +1140,79 @@ $pageTitle = $rfRequestId > 0
                     </div>
                 </div>
 
-                <div class="supplier-modal-overlay" id="supplier-modal-overlay" style="display:none">
+                <div class="supplier-modal-overlay" id="supplier-modal-overlay"
+                     style="display:none" role="dialog" aria-modal="true" aria-labelledby="supplierModalTitle">
                     <div class="supplier-modal">
                         <div class="supplier-modal-head">
-                            <span>Add supplier</span>
-                            <button class="supplier-modal-close" id="supplier-modal-close">&times;</button>
+                            <span class="supplier-modal-hd-left">
+                                <i class="fas fa-store" aria-hidden="true"></i>
+                                <span id="supplierModalTitle">Add supplier</span>
+                            </span>
+                            <button type="button" class="supplier-modal-close" id="supplier-modal-close" aria-label="Close">&times;</button>
                         </div>
                         <div class="supplier-modal-body">
-                            <label class="supplier-field-label">Select supplier <span class="req-star">*</span></label>
-                            <div class="supplier-combobox" id="supplier-combobox">
-                                <div class="supplier-combobox-input-wrap">
-                                    <i class="fas fa-search sup-combo-search-icon" aria-hidden="true"></i>
-                                    <input type="text" id="supplier-combobox-input" placeholder="Search supplier…" autocomplete="off">
+                            <div class="supplier-combobox-input-wrap">
+                                <i class="fas fa-magnifying-glass sup-combo-search-icon" aria-hidden="true"></i>
+                                <input type="text" id="supplier-combobox-input" class="gsd-sup-search-inp"
+                                       placeholder="Search supplier name..." autocomplete="off" maxlength="150">
+                            </div>
+                            <div id="supplier-combobox-list" class="gsd-sup-results-list"></div>
+                            <!-- Inline registration panel -->
+                            <div id="cv-sup-reg-panel" class="gsd-sup-reg-panel" style="display:none">
+                                <div class="gsd-sup-reg-hd">
+                                    <span class="gsd-sup-reg-hd-left">
+                                        <i class="fas fa-user-plus" aria-hidden="true"></i>
+                                        Register new supplier
+                                    </span>
+                                    <button type="button" id="cv-sup-reg-close" class="gsd-sup-reg-x" aria-label="Close">&times;</button>
                                 </div>
-                                <div class="supplier-combobox-list" id="supplier-combobox-list" style="display:none"></div>
-                                <div class="supplier-combobox-register" id="supplier-combobox-register" style="display:none">
-                                    <span>Supplier not found.</span>
-                                    <button type="button" id="btn-register-supplier-link" class="sup-combo-register-btn">+ Register Supplier</button>
-                                </div>
-                                <div id="supplier-combobox-selection" class="supplier-combobox-selection" hidden>
-                                    <div class="supplier-combobox-selection-label">Selected supplier</div>
-                                    <div id="supplier-combobox-selection-body" class="supplier-combobox-selection-body"></div>
+                                <div class="gsd-sup-reg-body">
+                                    <div class="gsd-sup-reg-field">
+                                        <label>Supplier name <span style="color:#dc2626">*</span></label>
+                                        <input type="text" id="sup-reg-name" class="gsd-sup-reg-inp"
+                                               placeholder="e.g. Lazada, SM Stationery" maxlength="150" autocomplete="organization">
+                                    </div>
+                                    <div class="gsd-sup-reg-2col">
+                                        <div class="gsd-sup-reg-field">
+                                            <label>Contact person</label>
+                                            <input type="text" id="sup-reg-contact" class="gsd-sup-reg-inp" maxlength="100" autocomplete="name">
+                                        </div>
+                                        <div class="gsd-sup-reg-field">
+                                            <label>Phone</label>
+                                            <input type="text" id="sup-reg-phone" class="gsd-sup-reg-inp" maxlength="50" autocomplete="tel">
+                                        </div>
+                                    </div>
+                                    <div class="gsd-sup-reg-2col">
+                                        <div class="gsd-sup-reg-field">
+                                            <label>Email</label>
+                                            <input type="email" id="sup-reg-email" class="gsd-sup-reg-inp" maxlength="100" autocomplete="email">
+                                        </div>
+                                        <div class="gsd-sup-reg-field">
+                                            <label>TIN <span style="font-weight:400;color:#999">(optional)</span></label>
+                                            <input type="text" id="sup-reg-tin" class="gsd-sup-reg-inp"
+                                                   maxlength="50" placeholder="e.g. 123-456-789-000">
+                                        </div>
+                                    </div>
+                                    <div class="gsd-sup-reg-field">
+                                        <label>Address</label>
+                                        <input type="text" id="sup-reg-address" class="gsd-sup-reg-inp" maxlength="200" autocomplete="street-address">
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         <div class="supplier-modal-foot">
-                            <button class="btn-modal-cancel" id="supplier-modal-cancel">Cancel</button>
-                            <button class="btn-modal-save" id="supplier-modal-save">&#10003; Add supplier</button>
+                            <span class="supplier-modal-hint">
+                                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                                <span id="supplier-modal-hint-text">Search to find a supplier</span>
+                            </span>
+                            <div class="supplier-modal-foot-btns">
+                                <button type="button" class="btn-secondary btn-modal-cancel" id="supplier-modal-cancel">Cancel</button>
+                                <button type="button" class="btn-submit btn-modal-save" id="supplier-modal-save" disabled>Add supplier</button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Register new supplier modal -->
-                <div class="supplier-modal-overlay" id="sup-register-overlay" style="display:none">
-                    <div class="supplier-modal" style="width:420px;max-width:95vw;">
-                        <div class="supplier-modal-head">
-                            <span>Register New Supplier</span>
-                            <button class="supplier-modal-close" id="sup-register-close">&times;</button>
-                        </div>
-                        <div class="supplier-modal-body sup-register-body">
-                            <form id="sup-register-form" onsubmit="return false">
-                                <div class="sup-register-field">
-                                    <label class="supplier-field-label">Supplier name <span class="req-star">*</span></label>
-                                    <input type="text" id="sup-register-name" placeholder="e.g. Lazada, SM Stationery" maxlength="100" autocomplete="organization">
-                                </div>
-                                <div class="sup-register-field">
-                                    <label class="supplier-field-label">Contact person</label>
-                                    <input type="text" id="sup-register-contact" maxlength="100" autocomplete="name">
-                                </div>
-                                <div class="sup-register-grid">
-                                    <div class="sup-register-field">
-                                        <label class="supplier-field-label">Phone</label>
-                                        <input type="text" id="sup-register-phone" maxlength="30" autocomplete="tel">
-                                    </div>
-                                    <div class="sup-register-field">
-                                        <label class="supplier-field-label">Email</label>
-                                        <input type="email" id="sup-register-email" maxlength="100" autocomplete="email">
-                                    </div>
-                                </div>
-                                <div class="sup-register-field">
-                                    <label class="supplier-field-label">Address</label>
-                                    <input type="text" id="sup-register-address" maxlength="255" autocomplete="street-address">
-                                </div>
-                                <div class="sup-register-field">
-                                    <label class="supplier-field-label">TIN <span style="font-weight:400;color:#999">(optional)</span></label>
-                                    <input type="text" id="sup-register-tin" maxlength="20" placeholder="e.g. 123-456-789-000" autocomplete="off">
-                                </div>
-                            </form>
-                        </div>
-                        <div class="supplier-modal-foot">
-                            <button class="btn-modal-cancel" id="sup-register-cancel">Cancel</button>
-                            <button class="btn-modal-save" id="sup-register-save">Register</button>
-                        </div>
-                    </div>
-                </div>
             </section>
             <?php endif; ?>
 
@@ -1360,10 +1359,11 @@ $pageTitle = $rfRequestId > 0
         <p id="gsdVerifyHint" class="gsd-verify-hint" aria-live="polite"></p>
         <?php elseif ($isComptrollerCanvassReview || $isPresidentCanvassReview): ?>
         <?php $reviewerCurrentStatus = $isComptrollerCanvassReview ? $comptrollerCompStatus : $cvWfPresStatus; ?>
+        <?php $cvRevDecided = in_array($reviewerCurrentStatus, ['accept', 'reject'], true); ?>
         <div class="comptroller-approve-wrapper gsd-on-cv-actions verifier-decision-bar rf-form-actions">
-            <button type="button" id="comptrollerApproveBtn" class="btn-submit"><i class="fas fa-check" aria-hidden="true"></i> Approve</button>
-            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
-            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="<?php echo in_array($reviewerCurrentStatus, ['accept', 'reject'], true) ? 'display:inline-flex;' : 'display:none;'; ?>"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
+            <button type="button" id="comptrollerApproveBtn" class="btn-submit" style="<?php echo $cvRevDecided ? 'display:none;' : ''; ?>"><i class="fas fa-check" aria-hidden="true"></i> Approve</button>
+            <button type="button" id="comptrollerRejectBtn" class="btn-secondary comptroller-reject-btn" style="<?php echo $cvRevDecided ? 'display:none;' : ''; ?>"><i class="fas fa-xmark" aria-hidden="true"></i> Reject</button>
+            <button type="button" id="comptrollerUndoBtn" class="btn-secondary comptroller-undo-btn" style="<?php echo $cvRevDecided ? 'display:inline-flex;' : 'display:none;'; ?>"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo decision</button>
         </div>
         <?php endif; ?>
 

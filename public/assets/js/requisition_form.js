@@ -1,3 +1,13 @@
+const UNDO_WINDOW_MS = 24 * 60 * 60 * 1000;
+let undoHideTimer = null;
+
+function undoWindowRemainingMs(timestampStr) {
+    if (!timestampStr) return 0;
+    const decided = new Date(timestampStr.replace(' ', 'T'));
+    if (isNaN(decided.getTime())) return 0;
+    return Math.max(0, UNDO_WINDOW_MS - (Date.now() - decided.getTime()));
+}
+
 const itemNameSuggestions = document.getElementById('itemNameSuggestions');
 const requestedItemsBody = document.getElementById('requestedItemsBody');
 const rfAddItemBtn = document.getElementById('rfAddItemBtn');
@@ -640,12 +650,28 @@ function setComptrollerApprovalButtonsState(approval) {
         return;
     }
     const st = String((approval && approval.comp_status) || 'pending').trim();
-    approveBtn.disabled = false;
-    rejectBtn.disabled = false;
     approveBtn.textContent = st === 'accept' ? 'Approved' : 'Approve';
     rejectBtn.textContent = st === 'reject' ? 'Rejected' : 'Reject';
+    clearTimeout(undoHideTimer);
+    const remaining = (st === 'accept' || st === 'reject')
+        ? undoWindowRemainingMs(approval && approval.checked_at)
+        : 0;
+    const withinWindow = remaining > 0;
+    approveBtn.disabled = false;
+    rejectBtn.disabled = false;
+    approveBtn.style.display = withinWindow ? 'none' : '';
+    rejectBtn.style.display = withinWindow ? 'none' : '';
     if (undoBtn) {
-        undoBtn.style.display = st === 'accept' || st === 'reject' ? 'inline-flex' : 'none';
+        undoBtn.style.display = withinWindow ? 'inline-flex' : 'none';
+        undoBtn.classList.toggle('undo-btn--decided', withinWindow);
+        if (withinWindow) {
+            undoHideTimer = setTimeout(() => {
+                undoBtn.style.display = 'none';
+                undoBtn.classList.remove('undo-btn--decided');
+                approveBtn.style.display = '';
+                rejectBtn.style.display = '';
+            }, remaining);
+        }
     }
 }
 
@@ -671,12 +697,28 @@ function setGsdApprovalButtonsState(approval) {
         return;
     }
     const st = String((approval && approval.gsd_status) || 'pending').trim();
-    approveBtn.disabled = false;
-    rejectBtn.disabled = false;
     approveBtn.textContent = st === 'accept' ? 'Verified' : 'Verify';
     rejectBtn.textContent = st === 'reject' ? 'Rejected' : 'Reject';
+    clearTimeout(undoHideTimer);
+    const remaining = (st === 'accept' || st === 'reject')
+        ? undoWindowRemainingMs(approval && approval.verified_at)
+        : 0;
+    const withinWindow = remaining > 0;
+    approveBtn.disabled = false;
+    rejectBtn.disabled = false;
+    approveBtn.style.display = withinWindow ? 'none' : '';
+    rejectBtn.style.display = withinWindow ? 'none' : '';
     if (undoBtn) {
-        undoBtn.style.display = st === 'accept' || st === 'reject' ? 'inline-flex' : 'none';
+        undoBtn.style.display = withinWindow ? 'inline-flex' : 'none';
+        undoBtn.classList.toggle('undo-btn--decided', withinWindow);
+        if (withinWindow) {
+            undoHideTimer = setTimeout(() => {
+                undoBtn.style.display = 'none';
+                undoBtn.classList.remove('undo-btn--decided');
+                approveBtn.style.display = '';
+                rejectBtn.style.display = '';
+            }, remaining);
+        }
     }
 }
 
@@ -702,12 +744,28 @@ function setPresidentApprovalButtonsState(approval) {
         return;
     }
     const st = String((approval && approval.pres_status) || 'pending').trim();
-    approveBtn.disabled = false;
-    rejectBtn.disabled = false;
     approveBtn.textContent = st === 'accept' ? 'Approved' : 'Approve';
     rejectBtn.textContent = st === 'reject' ? 'Rejected' : 'Reject';
+    clearTimeout(undoHideTimer);
+    const remaining = (st === 'accept' || st === 'reject')
+        ? undoWindowRemainingMs(approval && approval.approved_at)
+        : 0;
+    const withinWindow = remaining > 0;
+    approveBtn.disabled = false;
+    rejectBtn.disabled = false;
+    approveBtn.style.display = withinWindow ? 'none' : '';
+    rejectBtn.style.display = withinWindow ? 'none' : '';
     if (undoBtn) {
-        undoBtn.style.display = st === 'accept' || st === 'reject' ? 'inline-flex' : 'none';
+        undoBtn.style.display = withinWindow ? 'inline-flex' : 'none';
+        undoBtn.classList.toggle('undo-btn--decided', withinWindow);
+        if (withinWindow) {
+            undoHideTimer = setTimeout(() => {
+                undoBtn.style.display = 'none';
+                undoBtn.classList.remove('undo-btn--decided');
+                approveBtn.style.display = '';
+                rejectBtn.style.display = '';
+            }, remaining);
+        }
     }
 }
 
@@ -1230,13 +1288,30 @@ function setInventoryReviewButtonsState(review, approval) {
     if (rejectReasonInput) {
         rejectReasonInput.disabled = locked;
     }
+    clearTimeout(undoHideTimer);
     if (undoBtn) {
         if (locked) {
             undoBtn.style.display = 'none';
             undoBtn.disabled = true;
+            undoBtn.classList.remove('undo-btn--decided');
         } else {
             undoBtn.disabled = false;
-            undoBtn.style.display = st === 'accept' || st === 'reject' ? 'inline-flex' : 'none';
+            const remaining = (st === 'accept' || st === 'reject')
+                ? undoWindowRemainingMs(review && review.requisition_reviewed_at)
+                : 0;
+            const withinWindow = remaining > 0;
+            approveBtn.style.display = withinWindow ? 'none' : '';
+            rejectBtn.style.display = withinWindow ? 'none' : '';
+            undoBtn.style.display = withinWindow ? 'inline-flex' : 'none';
+            undoBtn.classList.toggle('undo-btn--decided', withinWindow);
+            if (withinWindow) {
+                undoHideTimer = setTimeout(() => {
+                    undoBtn.style.display = 'none';
+                    undoBtn.classList.remove('undo-btn--decided');
+                    approveBtn.style.display = '';
+                    rejectBtn.style.display = '';
+                }, remaining);
+            }
         }
     }
 }

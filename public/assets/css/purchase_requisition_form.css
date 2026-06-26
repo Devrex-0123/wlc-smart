@@ -404,6 +404,22 @@ body.page-purchase-requisition-form {
     box-shadow: none;
 }
 
+.page-purchase-requisition-form .rf-form-actions .comptroller-undo-btn.undo-btn--decided {
+    background: #fffbeb;
+    color: #92400e;
+    border: 1.5px dashed #f59e0b;
+    box-shadow: none;
+    font-weight: 700;
+}
+
+.page-purchase-requisition-form .rf-form-actions .comptroller-undo-btn.undo-btn--decided:hover:not(:disabled) {
+    background: #fef3c7;
+    border-color: #d97706;
+    color: #78350f;
+    transform: none;
+    box-shadow: none;
+}
+
 .page-purchase-requisition-form .pr-rejection-panel {
     border-radius: 6px;
     border: 0.5px solid var(--pr-border);

@@ -9,6 +9,17 @@
 
     const requestId = cfg.requestId;
     const apiBase = cfg.role === 'president' ? cfg.presidentApi : cfg.comptrollerApi;
+
+    const UNDO_WINDOW_MS = 24 * 60 * 60 * 1000;
+    let undoHideTimer = null;
+
+    function undoWindowRemainingMs(timestampStr) {
+        if (!timestampStr) return 0;
+        const decided = new Date(timestampStr.replace(' ', 'T'));
+        if (isNaN(decided.getTime())) return 0;
+        return Math.max(0, UNDO_WINDOW_MS - (Date.now() - decided.getTime()));
+    }
+
     if (!apiBase) {
         return;
     }
@@ -87,12 +98,31 @@
         }
         const key = cfg.role === 'president' ? 'pres_status' : 'comp_status';
         const st = String((approval && approval[key]) || 'pending').trim();
-        approveBtn.disabled = false;
-        rejectBtn.disabled = false;
         approveBtn.textContent = st === 'accept' ? 'Approved' : 'Approve';
         rejectBtn.textContent = st === 'reject' ? 'Rejected' : 'Reject';
+        clearTimeout(undoHideTimer);
+        const decidedAt = cfg.role === 'president'
+            ? (approval && approval.approved_at)
+            : (approval && approval.checked_at);
+        const remaining = (st === 'accept' || st === 'reject')
+            ? undoWindowRemainingMs(decidedAt)
+            : 0;
+        const withinWindow = remaining > 0;
+        approveBtn.disabled = false;
+        rejectBtn.disabled = false;
+        approveBtn.style.display = withinWindow ? 'none' : '';
+        rejectBtn.style.display = withinWindow ? 'none' : '';
         if (undoBtn) {
-            undoBtn.style.display = st === 'accept' || st === 'reject' ? 'inline-flex' : 'none';
+            undoBtn.style.display = withinWindow ? 'inline-flex' : 'none';
+            undoBtn.classList.toggle('undo-btn--decided', withinWindow);
+            if (withinWindow) {
+                undoHideTimer = setTimeout(() => {
+                    undoBtn.style.display = 'none';
+                    undoBtn.classList.remove('undo-btn--decided');
+                    approveBtn.style.display = '';
+                    rejectBtn.style.display = '';
+                }, remaining);
+            }
         }
     }
 
@@ -200,6 +230,9 @@
                 await postApproval('pending');
             });
         }
+
+        // Sync button visibility immediately on page load (handles 24h window correctly)
+        void syncButtonsFromServer();
     }
 
     async function syncButtonsFromServer() {
