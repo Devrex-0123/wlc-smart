@@ -63,6 +63,11 @@ $imIsActive = static function (string $page) use ($imActivePage): string {
                 </a>
             </li>
             <li>
+                <a href="unit_management.php" class="internal-link<?php echo $imIsActive('unit_management.php'); ?>">
+                    <i class="fas fa-ruler"></i> <span>Unit Management</span>
+                </a>
+            </li>
+            <li>
                 <a href="facility_management.php" class="internal-link<?php echo $imIsActive('facility_management.php'); ?>">
                     <i class="fas fa-building"></i> <span>Facility Management</span>
                 </a>
