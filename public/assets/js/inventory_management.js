@@ -405,25 +405,57 @@ inventoryTableBody.addEventListener('click', function handleInventoryTableClick(
     }
 
     if(deleteBtn){
-        if(confirm('Are you sure you want to delete this inventory item?')){
-            const inventoryId = deleteBtn.dataset.id;
-            const form = new FormData();
-            form.append('action','delete');
-            form.append('inventory_id', inventoryId);
-            
-            fetch('../../app/api/inventory_management.php',{
-                method:'POST',
-                body: form,
-                credentials:'include'
-            })
-            .then(res=>res.json())
-            .then(data=>{
-                if(data.success){ 
-                    showToast('Inventory deleted'); 
-                    // Reload current facility's inventory if navigating through hierarchy
-                    if(window.inventoryHierarchy && window.inventoryHierarchy.getCurrentFacilityId) {
+        openInvDeleteModal(deleteBtn.dataset.id, deleteBtn.dataset.name || '');
+    }
+});
+
+// ============= INVENTORY DELETE MODAL =============
+const invDeleteModal   = document.getElementById('invDeleteModal');
+const invDeleteNameEl  = document.getElementById('invDeleteName');
+const invDeleteConfirm = document.getElementById('invDeleteConfirmBtn');
+const invDeleteCancel  = document.getElementById('invDeleteCancelBtn');
+const invDeleteClose   = document.getElementById('invDeleteClose');
+const invDeleteBackdrop = document.getElementById('invDeleteBackdrop');
+
+let pendingDeleteId = null;
+
+function openInvDeleteModal(inventoryId, inventoryName) {
+    pendingDeleteId = inventoryId;
+    if (invDeleteNameEl) invDeleteNameEl.textContent = inventoryName || '';
+    if (invDeleteModal) { invDeleteModal.classList.add('is-open'); invDeleteModal.setAttribute('aria-hidden','false'); }
+}
+
+function closeInvDeleteModal() {
+    pendingDeleteId = null;
+    if (invDeleteModal) { invDeleteModal.classList.remove('is-open'); invDeleteModal.setAttribute('aria-hidden','true'); }
+}
+
+if (invDeleteCancel)  invDeleteCancel.addEventListener('click', closeInvDeleteModal);
+if (invDeleteClose)   invDeleteClose.addEventListener('click', closeInvDeleteModal);
+if (invDeleteBackdrop) invDeleteBackdrop.addEventListener('click', closeInvDeleteModal);
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && invDeleteModal && invDeleteModal.classList.contains('is-open')) closeInvDeleteModal();
+});
+
+if (invDeleteConfirm) {
+    invDeleteConfirm.addEventListener('click', () => {
+        if (!pendingDeleteId) return;
+        invDeleteConfirm.disabled = true;
+
+        const form = new FormData();
+        form.append('action', 'delete');
+        form.append('inventory_id', pendingDeleteId);
+
+        fetch('../../app/api/inventory_management.php', { method: 'POST', body: form, credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+                closeInvDeleteModal();
+                if (data.success) {
+                    showToast('Inventory deleted');
+                    if (window.inventoryHierarchy && window.inventoryHierarchy.getCurrentFacilityId) {
                         const facilityId = window.inventoryHierarchy.getCurrentFacilityId();
-                        if(facilityId) {
+                        if (facilityId) {
                             window.inventoryHierarchy.viewFacilityInventory(facilityId, 'Current Facility');
                         } else {
                             loadInventory();
@@ -431,16 +463,18 @@ inventoryTableBody.addEventListener('click', function handleInventoryTableClick(
                     } else {
                         loadInventory();
                     }
-                } 
-                else showToast('Failed to delete inventory','error');
+                } else {
+                    showToast('Failed to delete inventory', 'error');
+                }
             })
             .catch(err => {
                 console.error('Delete error:', err);
-                showToast('Error deleting inventory','error');
-            });
-        }
-    }
-});
+                closeInvDeleteModal();
+                showToast('Error deleting inventory', 'error');
+            })
+            .finally(() => { invDeleteConfirm.disabled = false; });
+    });
+}
 
 // Initialize
 loadDropdowns();

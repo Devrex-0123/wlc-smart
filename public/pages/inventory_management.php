@@ -32,128 +32,154 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
 <?php $imActivePage = 'inventory_management.php'; require __DIR__ . '/partials/inventory_manager_sidebar.php'; ?>
 
 <main class="main-content inventory-management-container">
-    <div class="page-header">
-        <h1>Inventory Management</h1>
-        <p>Manage and track inventory items assigned to facilities. The office list is ordered by total inventory and paginated five per page.</p>
-    </div>
-
-    <!-- Breadcrumb Navigation -->
-    <div class="breadcrumb-nav" id="breadcrumb">
-        <div class="breadcrumb-item active" id="breadcrumb-home">
-            <i class="fas fa-home"></i> Offices
-        </div>
-        <div class="breadcrumb-item hidden" id="breadcrumb-facility">
-            <i class="fas fa-chevron-right"></i> <span id="breadcrumb-facility-text"></span>
-        </div>
-        <div class="breadcrumb-item hidden" id="breadcrumb-inventory">
-            <i class="fas fa-chevron-right"></i> Inventory
+    <div class="module-page-header im-page-header">
+        <div class="im-page-header__top">
+            <div class="im-page-header__text">
+                <h1 class="module-page-header__title">Inventory Management</h1>
+                <p class="module-page-header__subtitle">Manage and track inventory items assigned to facilities.</p>
+            </div>
+            <div class="im-page-header__actions">
+                <div class="offices-search-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="officeSearch" placeholder="Search" class="offices-search-input" aria-label="Search offices">
+                </div>
+                <button type="button" class="im-add-inventory-btn hidden" id="addInventoryBtn"><i class="fas fa-plus"></i> Add Inventory</button>
+            </div>
         </div>
     </div>
 
     <!-- Offices View -->
     <div id="officesView">
-        <div class="filter-section">
-            <div class="filter-section-lead">
-                <h3>Offices</h3>
-                <p class="filter-hint">Offices are ranked by total inventory (highest first). Five per page; use Previous / Next to browse.</p>
-            </div>
-            <div class="filter-controls">
-                <input type="text" id="officeSearch" placeholder="Search offices..." aria-label="Search offices" />
-                <button class="btn-filter" id="officeSearchBtn"><i class="fas fa-search"></i> Search</button>
-                <button class="btn-filter" id="officeSortBtn" data-sort="total-desc">Sort: TOTAL ▼</button>
-            </div>
-        </div>
-        <div class="table-container">
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Office Name</th>
-                            <th>Total Labs</th>
-                            <th>Total Rooms</th>
-                            <th>TOTAL</th>
-                            <th>Total Inventory</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="officeTableBody">
-                        <tr>
-                            <td colspan="7" class="loading-cell">Loading Offices...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="pagination-controls" id="officePagination" aria-label="Office list pages">
-                <button type="button" id="deptPrevPageBtn" class="pagination-btn" disabled>
-                    <i class="fas fa-chevron-left"></i> Previous
-                </button>
-                <span id="deptPageInfo" class="page-info">Page 1</span>
-                <button type="button" id="deptNextPageBtn" class="pagination-btn" disabled>
-                    Next <i class="fas fa-chevron-right"></i>
-                </button>
+        <div class="offices-list-card">
+            <div class="table-container">
+                <h2 class="table-header-title">School Facilities</h2>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>School Facilities</th>
+                                <th>Total Labs</th>
+                                <th>Total Rooms</th>
+                                <th>TOTAL</th>
+                                <th>Total Inventory</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="officeTableBody">
+                            <tr>
+                                <td colspan="7" class="loading-cell">Loading Offices...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <footer class="table-panel-footer" id="officePagination" aria-label="Office list pages">
+                    <p class="table-panel-footer__info" id="deptPageInfo">Showing 0 to 0 of 0 offices</p>
+                    <div class="table-panel-footer__pagination">
+                        <button type="button" class="table-panel-footer__page-btn" id="deptPrevPageBtn" disabled aria-label="Previous page">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span class="table-panel-footer__page-num" id="deptPageNum">1</span>
+                        <button type="button" class="table-panel-footer__page-btn" id="deptNextPageBtn" disabled aria-label="Next page">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </footer>
             </div>
         </div>
     </div>
 
     <!-- Facilities View -->
     <div id="facilitiesView" class="hidden">
-        <div class="filter-section">
-            <h3 id="facilityViewTitle">Rooms and Labs</h3>
-        </div>
-        <div class="table-container">
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Building</th>
-                            <th>Code</th>
-                            <th>Floor</th>
-                            <th>Laboratory</th>
-                            <th>Room</th>
-                            <th>Type</th>
-                            <th>Total Inventory</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="facilityTableBody">
-                        <tr>
-                            <td colspan="9" class="loading-cell">Loading...</td>
-                        </tr>
-                    </tbody>
-                </table>
+        <div class="offices-list-card">
+            <div class="offices-list-card__header">
+                <h3 id="facilityViewTitle" class="offices-list-card__title">Rooms and Laboratory</h3>
+                <button type="button" class="im-back-btn" id="facilityBackBtn">
+                    <i class="fas fa-chevron-left"></i> Back to Offices
+                </button>
+            </div>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Building</th>
+                                <th>Code</th>
+                                <th>Floor</th>
+                                <th>Laboratory</th>
+                                <th>Room</th>
+                                <th>Type</th>
+                                <th>Total Inventory</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="facilityTableBody">
+                            <tr>
+                                <td colspan="9" class="loading-cell">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <footer class="table-panel-footer" id="facilityPagination" aria-label="Facility list pages">
+                    <p class="table-panel-footer__info" id="facilityPageInfo">Showing 0 to 0 of 0 facilities</p>
+                    <div class="table-panel-footer__pagination">
+                        <button type="button" class="table-panel-footer__page-btn" id="facilityPrevPageBtn" disabled aria-label="Previous page">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span class="table-panel-footer__page-num" id="facilityPageNum">1</span>
+                        <button type="button" class="table-panel-footer__page-btn" id="facilityNextPageBtn" disabled aria-label="Next page">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </footer>
             </div>
         </div>
     </div>
 
     <!-- Inventory View -->
     <div id="inventoryView" class="hidden">
-        <div class="filter-section">
-            <h3>Inventory in CICTE</h3>
-            <button class="btn-filter" id="addInventoryBtn"><i class="fas fa-plus"></i> Add Inventory</button>
-        </div>
-        <div class="table-container">
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Name</th>
-                            <th>Item component</th>
-                            <th>Item code</th>
-                            <th>Quantity</th>
-                            <th>Condition</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="inventoryTableBody">
-                        <tr>
-                            <td colspan="8" class="loading-cell">Loading Inventory...</td>
-                        </tr>
-                    </tbody>
-                </table>
+        <div class="offices-list-card">
+            <div class="offices-list-card__header">
+                <h3 id="inventoryViewTitle" class="offices-list-card__title">Inventory</h3>
+                <button type="button" class="im-back-btn" id="inventoryBackBtn">
+                    <i class="fas fa-chevron-left"></i> Back to Rooms and Laboratory
+                </button>
+            </div>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Item Component</th>
+                                <th>Item Code</th>
+                                <th>Quantity</th>
+                                <th>Condition</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            <tr>
+                                <td colspan="8" class="loading-cell">Loading Inventory...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <footer class="table-panel-footer" id="inventoryPagination" aria-label="Inventory list pages">
+                    <p class="table-panel-footer__info" id="inventoryPageInfo">Showing 0 to 0 of 0 items</p>
+                    <div class="table-panel-footer__pagination">
+                        <button type="button" class="table-panel-footer__page-btn" id="inventoryPrevPageBtn" disabled aria-label="Previous page">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span class="table-panel-footer__page-num" id="inventoryPageNum">1</span>
+                        <button type="button" class="table-panel-footer__page-btn" id="inventoryNextPageBtn" disabled aria-label="Next page">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </footer>
             </div>
         </div>
     </div>
@@ -326,6 +352,26 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
                 <p class="text-sm text-secondary components-help">Each piece from the item catalog with its own code, quantity, condition, and status (same layout as when editing).</p>
                 <div id="detailComponentsList" class="components-container">
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="inv-delete-modal" id="invDeleteModal" aria-hidden="true">
+        <div class="inv-delete-backdrop" id="invDeleteBackdrop"></div>
+        <div class="inv-delete-card" role="dialog" aria-modal="true" aria-labelledby="invDeleteTitle" aria-describedby="invDeleteDesc">
+            <button type="button" class="inv-delete-close" id="invDeleteClose" aria-label="Close">&times;</button>
+            <div class="inv-delete-icon" aria-hidden="true">
+                <i class="fas fa-trash-alt"></i>
+            </div>
+            <h3 id="invDeleteTitle" class="inv-delete-title">Delete this inventory item?</h3>
+            <p id="invDeleteDesc" class="inv-delete-desc">This will permanently remove the inventory item and all its parts. This action cannot be undone.</p>
+            <p class="inv-delete-name" id="invDeleteName"></p>
+            <div class="inv-delete-actions">
+                <button type="button" class="inv-delete-btn inv-delete-btn-cancel" id="invDeleteCancelBtn">Cancel</button>
+                <button type="button" class="inv-delete-btn inv-delete-btn-delete" id="invDeleteConfirmBtn">
+                    <i class="fas fa-trash-alt"></i> Delete item
+                </button>
             </div>
         </div>
     </div>

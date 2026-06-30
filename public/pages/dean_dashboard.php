@@ -14,8 +14,8 @@ $initials = strtoupper(substr((string)($user['Email'] ?? 'D'), 0, 1));
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dean Dashboard - IMRMS</title>
-<link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc34">
-<link rel="stylesheet" href="../assets/css/dean_dashboard.css?v=13">
+<link rel="stylesheet" href="../assets/css/dashboard.css?v=wlc38">
+<link rel="stylesheet" href="../assets/css/dean_dashboard.css?v=14">
 <link rel="stylesheet" href="../assets/css/requester_notifications.css?v=1">
 <link rel="stylesheet" href="../assets/css/loading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -72,14 +72,46 @@ $initials = strtoupper(substr((string)($user['Email'] ?? 'D'), 0, 1));
         </article>
     </section>
 
-    <div class="dean-dashboard-panels dean-dashboard-panels--solo" aria-label="Recent requests">
-        <section class="dashboard-panel dashboard-panel--recent dean-recent-panel" aria-label="Recent requests">
-            <header class="dashboard-panel__head dashboard-panel__head--split dean-recent-panel__head">
-                <h2 class="dashboard-panel__title"><i class="fas fa-clock" aria-hidden="true"></i> Pending Requests</h2>
+    <div class="dashboard-tables-split">
+        <section class="dashboard-panel-card dashboard-panel-card--recent" aria-label="Pending requests">
+            <header class="dashboard-panel-card__header">
+                <div class="dashboard-panel-card__header-main">
+                    <span class="dashboard-panel-card__icon dashboard-panel-card__icon--recent" aria-hidden="true">
+                        <i class="fas fa-clock"></i>
+                    </span>
+                    <div class="dashboard-panel-card__header-text">
+                        <h2 class="dashboard-panel-card__title">Pending Requests</h2>
+                        <p class="dashboard-panel-card__desc">Recent requisitions awaiting action or approval.</p>
+                    </div>
+                </div>
                 <button id="requestItemBtn" class="dean-request-btn" type="button" onclick="window.location.href='<?php echo $isDepartmentLogin ? 'department_requisition_form.php' : 'dean_requisition_form.php'; ?>?from=dashboard';">
                     <i class="fas fa-plus" aria-hidden="true"></i> Request Item
                 </button>
             </header>
+            <div class="dashboard-panel-card__body">
+                <ul class="dashboard-recent__list" id="deanPendingList">
+                    <li class="dashboard-recent__empty">Loading…</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="dashboard-panel-card dashboard-panel-card--awaiting" aria-label="Awaiting item receipt">
+            <header class="dashboard-panel-card__header">
+                <div class="dashboard-panel-card__header-main">
+                    <span class="dashboard-panel-card__icon dashboard-panel-card__icon--awaiting" aria-hidden="true">
+                        <i class="fas fa-box-open"></i>
+                    </span>
+                    <div class="dashboard-panel-card__header-text">
+                        <h2 class="dashboard-panel-card__title">Awaiting Item Receipt</h2>
+                        <p class="dashboard-panel-card__desc">Purchase orders with payment released, pending physical receipt.</p>
+                    </div>
+                </div>
+            </header>
+            <div class="dashboard-panel-card__body">
+                <ul class="dashboard-recent__list" id="deanAwaitingReceiptList">
+                    <li class="dashboard-recent__empty">Loading…</li>
+                </ul>
+            </div>
         </section>
     </div>
 </main>
@@ -97,6 +129,6 @@ $initials = strtoupper(substr((string)($user['Email'] ?? 'D'), 0, 1));
 <!-- Logout Script -->
 <script src="../assets/js/logout.js?v=wlc2"></script>
 <script src="../assets/js/requester_notifications.js?v=2"></script>
-<script src="../assets/js/dean_dashboard.js?v=4"></script>
+<script src="../assets/js/dean_dashboard.js?v=5"></script>
 </body>
 </html>

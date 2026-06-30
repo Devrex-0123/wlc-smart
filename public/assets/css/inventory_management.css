@@ -1,6 +1,560 @@
 .inventory-management-container {
     animation: fadeIn 0.5s ease;
+    min-width: 0;
+    overflow-x: clip;
+    display: flex;
+    flex-direction: column;
 }
+
+/* ====== PAGE HEADER WITH SEARCH (matches supplier page) ====== */
+.im-page-header__top {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.im-page-header__text {
+    flex: 1 1 280px;
+    min-width: 0;
+}
+
+.im-page-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 0 1 auto;
+    margin-left: auto;
+    margin-top: 0.35rem;
+    padding-bottom: 0.1rem;
+}
+
+/* Search in page header — identical to supplier-page-header__search */
+.offices-search-container {
+    position: relative;
+    width: min(320px, 42vw);
+    min-width: 200px;
+}
+
+.offices-search-container i {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.offices-search-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 0.75rem 0 2.1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    color: #334155;
+    background: #fff;
+    box-sizing: border-box;
+    font-family: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.offices-search-input:focus {
+    outline: none;
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.offices-search-input::placeholder {
+    color: #94a3b8;
+}
+
+/* Card header — used by offices and facilities cards */
+.offices-list-card__header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.offices-list-card__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.offices-list-card__header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.im-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #166534;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.2s;
+    flex-shrink: 0;
+}
+
+.im-back-btn:hover {
+    color: #14532d;
+}
+
+/* ====== OFFICES UNIFIED CARD (matches supplier .suppliers-list-card) ====== */
+.offices-list-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    animation: slideDown 0.5s ease;
+}
+
+
+.table-header-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+    padding: 1rem 1.25rem 0.5rem;
+    margin: 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.offices-list-card .table-container {
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    overflow: hidden;
+    animation: none;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.offices-list-card .table-wrapper {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: hidden;
+}
+
+.offices-list-card .table-wrapper table {
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+}
+
+/* Table header — solid dark green (matches supplier) */
+.inventory-management-container .offices-list-card .table-wrapper thead th {
+    background: #106b44 !important;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.72rem;
+    padding: 0.55rem 0.55rem;
+    white-space: nowrap;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.16);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+.inventory-management-container .offices-list-card .table-wrapper thead th:last-child {
+    border-right: none;
+}
+
+/* Table body rows */
+.offices-list-card .table-wrapper td {
+    padding: 0.6rem 0.55rem;
+    text-align: center;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.84rem;
+}
+
+.offices-list-card .table-wrapper tbody tr {
+    background: #ffffff;
+    transition: background-color 0.15s ease;
+}
+
+.offices-list-card .table-wrapper tbody tr:hover {
+    background: #ecfdf5 !important;
+}
+
+/* Spacer rows keep the card a fixed height regardless of row count */
+.offices-list-card .table-wrapper tbody tr.list-row-spacer td {
+    height: 44px;
+    padding: 0;
+    border-bottom: none;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* ====== OFFICES TABLE — matches approval_workflow design ====== */
+#officesView .offices-list-card {
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+}
+
+#officesView .offices-list-card .table-wrapper tbody tr {
+    height: 5.25rem;
+    border: none !important;
+}
+
+#officesView .offices-list-card .table-wrapper tbody td {
+    height: 5.25rem;
+    min-height: 5.25rem;
+    padding: 0.65rem 0.5rem;
+    vertical-align: middle;
+    border-bottom: none;
+    font-size: 0.84rem;
+}
+
+#officesView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer) td {
+    border-bottom: 1px solid #f1f5f9 !important;
+}
+
+#officesView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer):last-child td,
+#officesView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer):has(+ tr.list-row-spacer) td {
+    border-bottom: none !important;
+}
+
+#officesView .offices-list-card .table-wrapper tbody tr.list-row-spacer td {
+    height: 5.25rem;
+    min-height: 5.25rem;
+    border-bottom: none !important;
+    background: #fff;
+}
+
+#officesView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer):hover td {
+    background: #f8fffb !important;
+}
+
+/* ====== FACILITIES TABLE — matches approval_workflow design ====== */
+#facilitiesView .offices-list-card {
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+}
+
+#facilitiesView .offices-list-card .table-wrapper tbody tr {
+    height: 5.25rem;
+    border: none !important;
+}
+
+#facilitiesView .offices-list-card .table-wrapper tbody td {
+    height: 5.25rem;
+    min-height: 5.25rem;
+    padding: 0.65rem 0.5rem;
+    vertical-align: middle;
+    border-bottom: none;
+    font-size: 0.84rem;
+}
+
+#facilitiesView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer) td {
+    border-bottom: 1px solid #f1f5f9 !important;
+}
+
+#facilitiesView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer):last-child td,
+#facilitiesView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer):has(+ tr.list-row-spacer) td {
+    border-bottom: none !important;
+}
+
+#facilitiesView .offices-list-card .table-wrapper tbody tr.list-row-spacer td {
+    height: 5.25rem;
+    min-height: 5.25rem;
+    border-bottom: none !important;
+    background: #fff;
+}
+
+#facilitiesView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer):hover td {
+    background: #f8fffb !important;
+}
+
+/* ====== INVENTORY TABLE — matches approval_workflow design ====== */
+#inventoryView .offices-list-card {
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+}
+
+#inventoryView .offices-list-card .table-wrapper tbody tr {
+    height: 5.25rem;
+    border: none !important;
+}
+
+#inventoryView .offices-list-card .table-wrapper tbody td {
+    height: 5.25rem;
+    min-height: 5.25rem;
+    padding: 0.65rem 0.5rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9 !important;
+    font-size: 0.84rem;
+}
+
+/* Part sub-rows styling */
+#inventoryView .offices-list-card .table-wrapper tbody tr.inventory-table-part-row td {
+    background: #fafafa;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+/* Spacer rows — no border, no background change */
+#inventoryView .offices-list-card .table-wrapper tbody tr.list-row-spacer td {
+    height: 5.25rem;
+    min-height: 5.25rem;
+    border-bottom: none !important;
+    background: #fff;
+    pointer-events: none;
+}
+
+/* Last real row before spacers loses its border */
+#inventoryView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer):has(+ tr.list-row-spacer) td,
+#inventoryView .offices-list-card .table-wrapper tbody tr:not(.list-row-spacer):last-child td {
+    border-bottom: none !important;
+}
+
+/* Hover on parent rows only */
+#inventoryView .offices-list-card .table-wrapper tbody tr.inventory-table-parent-row:hover td {
+    background: #f8fffb !important;
+}
+
+.im-add-inventory-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 38px;
+    padding: 0 1rem;
+    background: #16a34a;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.2s ease, transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.im-add-inventory-btn:hover {
+    background: #15803d;
+    transform: translateY(-1px);
+}
+
+/* ====== INVENTORY DELETE MODAL ====== */
+.inv-delete-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+}
+
+.inv-delete-modal.is-open { display: flex; }
+
+.inv-delete-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    animation: fadeIn 0.18s ease;
+}
+
+.inv-delete-card {
+    position: relative;
+    width: min(420px, 100%);
+    background: #fff;
+    border-radius: 18px;
+    padding: 2rem 1.75rem 1.75rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+    text-align: center;
+    animation: slideDown 0.22s ease;
+    z-index: 1;
+}
+
+.inv-delete-close {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    font-size: 1.2rem;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease, background 0.2s ease;
+}
+
+.inv-delete-close:hover { color: #475569; background: #f1f5f9; }
+
+.inv-delete-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    color: #dc2626;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+.inv-delete-title {
+    margin: 0 0 0.5rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+
+.inv-delete-desc {
+    margin: 0 0 0.85rem;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: #64748b;
+}
+
+.inv-delete-name {
+    margin: 0 0 1.15rem;
+    padding: 0.6rem 0.85rem;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #991b1b;
+    word-break: break-word;
+}
+
+.inv-delete-name:empty { display: none; }
+
+.inv-delete-actions {
+    display: flex;
+    gap: 0.65rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.inv-delete-btn {
+    flex: 1;
+    min-width: 130px;
+    padding: 0.65rem 1rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.inv-delete-btn:active { transform: scale(0.98); }
+.inv-delete-btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+
+.inv-delete-btn-cancel {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.inv-delete-btn-cancel:hover:not(:disabled) { background: #e2e8f0; color: #1e293b; }
+
+.inv-delete-btn-delete {
+    background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(220,38,38,0.35);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+}
+
+.inv-delete-btn-delete:hover:not(:disabled) {
+    background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%);
+    box-shadow: 0 4px 12px rgba(220,38,38,0.45);
+    transform: translateY(-1px);
+}
+
+/* ====== PAGINATION FOOTER (matches supplier .table-panel-footer) ====== */
+.table-panel-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem 0.95rem;
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
+    margin: 0;
+}
+
+.table-panel-footer__info {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.table-panel-footer__pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.table-panel-footer__page-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    color: #475569;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+}
+
+.table-panel-footer__page-btn:hover:not(:disabled) {
+    background: #f0fdf4;
+    border-color: #16a34a;
+    color: #16a34a;
+}
+
+.table-panel-footer__page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 
 .filter-section {
     background: white;
@@ -58,77 +612,6 @@
     animation: fadeInUp 0.6s ease;
 }
 
-/* Offices list: table + pagination in one card (matches requisition / history pages) */
-#officesView .table-container {
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-}
-
-#officesView .pagination-controls {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1.5rem;
-    padding: 1.5rem;
-    background: white;
-    border-top: 1px solid #e2e8f0;
-}
-
-#officesView .pagination-btn {
-    padding: 0.65rem 1.5rem;
-    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.9rem;
-    transition: all 0.3s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
-}
-
-#officesView .pagination-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, #15803d 0%, #166534 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(22, 163, 74, 0.35);
-}
-
-#officesView .pagination-btn:active:not(:disabled) {
-    transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(22, 163, 74, 0.2);
-}
-
-#officesView .pagination-btn:disabled {
-    background: #cbd5e1;
-    color: #94a3b8;
-    cursor: not-allowed;
-    box-shadow: none;
-}
-
-#officesView .page-info {
-    color: #1e293b;
-    font-weight: 600;
-    min-width: 120px;
-    text-align: center;
-    font-size: 0.9rem;
-}
-
-@media (max-width: 768px) {
-    #officesView .pagination-controls {
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    #officesView .pagination-btn {
-        width: 100%;
-        justify-content: center;
-    }
-}
 
 .table-wrapper table {
     width: 100%;
@@ -889,6 +1372,11 @@ img.component-list-thumb-zoomable {
 }
 
 /* ========== STAT BADGES ========== */
+.stat-badge--labs      { background: #dbeafe !important; color: #1e40af !important; }
+.stat-badge--rooms     { background: #ede9fe !important; color: #5b21b6 !important; }
+.stat-badge--total     { background: #ffedd5 !important; color: #9a3412 !important; }
+.stat-badge--inventory { background: #dcfce7 !important; color: #166534 !important; }
+
 .stat-badge {
     display: inline-flex;
     align-items: center;

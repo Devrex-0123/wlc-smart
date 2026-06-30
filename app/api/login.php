@@ -33,6 +33,9 @@ if (isset($result['success']) && $result['success']) {
     if (isset($_SESSION['login_type'])) {
         $result['login_type'] = $_SESSION['login_type'];
     }
+    if (isset($_SESSION['dashboard_url'])) {
+        $result['dashboard_url'] = $_SESSION['dashboard_url'];
+    }
 
     if (($_SESSION['login_type'] ?? 'user') === 'user' && isset($_SESSION['user_id'])) {
         try {
