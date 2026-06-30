@@ -23,11 +23,35 @@ try {
     $db = Database::connect();
     ensureUserNotificationsTable($db);
 
-    if (!isset($_SESSION['user_id'])) {
-        sendJson(['success' => false, 'message' => 'Unauthorized']);
+    $userId = null;
+
+    if (isset($_SESSION['user_id'])) {
+        $userId = (int) $_SESSION['user_id'];
+    } elseif (
+        isset($_SESSION['login_type']) &&
+        $_SESSION['login_type'] === 'department' &&
+        !empty($_SESSION['department_id'])
+    ) {
+        require_once __DIR__ . '/../helpers/dean_office_context.php';
+        $deptStmt = $db->prepare(
+            'SELECT department_abbreviation, department_name FROM departments WHERE department_id = ? LIMIT 1'
+        );
+        $deptStmt->execute([(int) $_SESSION['department_id']]);
+        $dept = $deptStmt->fetch(PDO::FETCH_ASSOC);
+        if ($dept) {
+            $office = cwirms_resolve_office_for_department($db, $dept);
+            if ($office) {
+                $actingId = cwirms_find_dean_user_id_for_office($db, (int) $office['office_id']);
+                if ($actingId) {
+                    $userId = $actingId;
+                }
+            }
+        }
     }
 
-    $userId = (int) $_SESSION['user_id'];
+    if (!$userId) {
+        sendJson(['success' => false, 'message' => 'Unauthorized']);
+    }
     $action = trim((string) ($_GET['action'] ?? $_POST['action'] ?? ''));
 
     if ($action === 'count_unread') {

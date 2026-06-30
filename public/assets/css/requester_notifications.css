@@ -45,6 +45,10 @@
     line-height: 1;
 }
 
+.requester-notifications-badge[hidden] {
+    display: none;
+}
+
 .requester-notifications-panel {
     position: absolute;
     top: calc(100% + 0.45rem);

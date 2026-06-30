@@ -52,12 +52,13 @@ $initials = strtoupper(substr($user['Email'], 0, 1));
     <div id="officesView">
         <div class="offices-list-card">
             <div class="table-container">
+                <h2 class="table-header-title">School Facilities</h2>
                 <div class="table-wrapper">
                     <table>
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Office Name</th>
+                                <th>School Facilities</th>
                                 <th>Total Labs</th>
                                 <th>Total Rooms</th>
                                 <th>TOTAL</th>
